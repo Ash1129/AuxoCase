@@ -1,6 +1,6 @@
 # Evaluation report
 
-Generated 2026-10-28T16:40:55 UTC. Live model: `demo-v1`.
+Generated 2026-10-28T17:01:10 UTC. Live model: `demo-v1`.
 
 All precision figures are computed on leads an SDR actually worked, because unworked leads have no label. They are biased by the SDRs' past choices until the exploration slice has run for a few months (knowledge base L05).
 
