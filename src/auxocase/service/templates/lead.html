@@ -1,0 +1,27 @@
+{% extends "base.html" %}{% block title %}Lead {{ c.id }}{% endblock %}
+{% block body %}
+<h1>{{ c.job_title or 'Contact' }} <span class="muted small">#{{ c.id }}</span></h1>
+<p class="sub">{{ co.name if co else 'No company' }}{% if co and co.num_employees %} · {{ co.num_employees }} employees{% endif %}{% if co and co.industry %} · {{ co.industry }}{% endif %} · {{ c.country }} · channel: {{ c.channel }} · source: {{ c.hs_analytics_source }} {{ c.hs_analytics_source_data_1 }}</p>
+<div class="cards">
+  <div class="card"><div class="k">Demo likelihood</div><div class="v">{{ (100*(c.auxo_probability or 0))|round(1) }}%</div></div>
+  <div class="card"><div class="k">Rank in pool</div><div class="v">{{ c.auxo_rank or '–' }}{% if score %}<span class="muted small"> / {{ score.pool_size }}</span>{% endif %}</div></div>
+  <div class="card"><div class="k">HubSpot points</div><div class="v">{{ c.hubspot_score }}</div></div>
+  <div class="card"><div class="k">Model</div><div class="v small">{{ c.auxo_model_version }}</div></div>
+</div>
+<h2>Why</h2>
+<p>{{ c.auxo_reason }}</p>
+{% if score %}
+<table><tr><th>Driver</th><th class="num">Effect on the odds</th></tr>
+{% for k, v in score.contributions %}<tr><td>{{ k }}</td><td class="num {{ 'good' if v>0 else 'bad' }}">{{ '%+.2f'|format(v) }}</td></tr>{% endfor %}
+</table>
+{% if score.signals.signals %}<h2>What the notes said</h2><table><tr><th>Signal</th><th>Exact words</th><th class="num">Points</th></tr>
+{% for g in score.signals.signals %}<tr><td>{{ g.type|replace('_',' ') }}</td><td class="quote">“{{ g.quote }}”</td><td class="num">{{ '%+d'|format(g.points) }}</td></tr>{% endfor %}</table>
+<p class="small muted">Reader: {{ score.signals.llm }} · adjustment applied: {{ '%+d'|format(score.signals.adjustment) }} points (capped at ±10){% if score.signals.dropped %} · {{ score.signals.dropped|length }} claimed signal(s) dropped because the words were not in the notes{% endif %}</p>{% endif %}
+{% endif %}
+{% if c.notes %}<h2>Notes on record</h2><p class="small">{{ c.notes }}</p>{% endif %}
+<h2>History</h2>
+<table><tr><th>When</th><th>What</th><th>Who</th><th>Note</th></tr>
+{% for r in routing %}<tr><td class="small">{{ r.created_at }}</td><td>{{ r.decision }}</td><td>{{ r.owner_id or '' }}</td><td class="small muted">{{ r.reason }}</td></tr>{% endfor %}
+{% for r in history %}<tr><td class="small">{{ r.created_at }}</td><td>SDR: {{ r.action }}</td><td>{{ r.owner_id }}</td><td class="small muted">{{ r.note }} (score {{ r.score_at_time }}, rank {{ r.rank_at_time }})</td></tr>{% endfor %}
+</table>
+{% endblock %}

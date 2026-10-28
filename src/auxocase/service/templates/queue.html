@@ -1,0 +1,23 @@
+{% extends "base.html" %}{% block title %}{{ owner.name }} · queue{% endblock %}
+{% block body %}
+<h1>{{ owner.name }}'s queue</h1>
+<p class="sub">Best first. The percentage is the model's calibrated chance this lead books a demo if you work it. You make the final call: mark it worked, skip it with a reason, or move it a few places.{% if hit %} This period the ranked leads you all worked booked {{ (100*hit.rate)|round(0) }}% of the time ({{ hit.booked }} of {{ hit.n }}).{% endif %}</p>
+<table>
+<tr><th class="num">Rank</th><th>Lead</th><th>Channel</th><th class="num">Demo</th><th>Why it is ranked here</th><th>Your call</th></tr>
+{% for c in leads %}
+<tr>
+<td class="num">{{ c.auxo_rank }}</td>
+<td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a><div class="small muted">{{ c.country }} · {{ 'webinar attended' if c.webinar_attended else ('webinar registered' if c.webinar_registered else '') }}{% if c.auxo_holdout %} · <span class="pill accent">calibration lead</span>{% endif %}{% if c.auxo_review_flag %} · <span class="pill warn">{{ c.auxo_review_flag }}</span>{% endif %}</div></td>
+<td>{{ c.channel }}</td>
+<td class="num"><strong>{{ (100*(c.auxo_probability or 0))|round(0)|int }}%</strong></td>
+<td class="reason small">{{ c.auxo_reason }}
+{% set s = signals.get(c.id, {}) %}{% if s.signals %}<div class="quote">{% for g in s.signals %}“{{ g.quote }}” ({{ g.type|replace('_',' ') }}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}</td>
+<td>
+<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><button name="action" value="worked">Worked</button><button class="quiet" name="action" value="junk">Junk</button></form>
+<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><select name="note"><option value="">reason…</option><option>wrong fit</option><option>already a customer</option><option>no contact details</option><option>timing</option><option>other</option></select><button class="quiet" name="action" value="skipped">Skip</button></form>
+<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="move" value="3"><input name="note" placeholder="why move it" size="12"><button class="quiet" name="action" value="promote">↑3</button><button class="quiet" name="action" value="demote">↓3</button></form>
+</td>
+</tr>
+{% else %}<tr><td colspan="6" class="muted">Nothing assigned right now.</td></tr>{% endfor %}
+</table>
+{% endblock %}

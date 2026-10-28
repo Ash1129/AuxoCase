@@ -1,0 +1,19 @@
+We are BrightPath Payroll Services, a B2B SaaS company. Our platform runs outsourced payroll and HR administration for companies with 50 to 500 employees, similar to Gusto or Workday. We sell to employers, not to their staff. We are a platform business with no in-person service delivery and we are not restricted by geography.
+
+Our problem is the handoff between marketing and sales.
+
+Marketing generates about 6,000 new leads a month from six channels: website demo requests, webinars, paid ads on Google and YouTube, email campaigns, events, and referrals from existing customers and partners. Every lead lands in HubSpot, which is our CRM for both teams. HubSpot scores leads with a points system: points for job title, company size and pages visited, and anything above 50 points becomes a marketing qualified lead (MQL) and is passed to sales. About 1,500 leads a month cross that line.
+
+Sales does not trust those MQLs. We have 12 sales development reps (SDRs) and they only have capacity to work about 500 of the 1,500 MQLs each month, roughly a third. There is no system for deciding which third. Each rep cherry-picks by gut feel. Good leads can sit untouched for days and go cold, and the other 1,000 MQLs are never contacted at all.
+
+Sales judges a lead with one binary test: did the prospect agree to book a product demo meeting or not. Of the 500 MQLs worked, about 180 book a meeting and 320 are rejected as junk. Of the 180, about 20 percent close, so we win roughly 36 new customers a month at an average annual contract value of about 24,000 dollars.
+
+We know the HubSpot scoring is wrong in at least one place. Leads from partner referrals and webinars convert two to three times better than the other channels, but they score low in the current points model, so sales often never sees them. The website is our largest channel at about 35 percent.
+
+Marketing is measured on lead volume and sales is measured on revenue, so the two teams are frustrated with each other and neither trusts the other's numbers.
+
+What we want: higher quality leads reaching sales, a higher share of MQLs that actually book meetings, more closed deals, a bigger funnel overall, and less friction between marketing and sales. We are not planning layoffs, though if the funnel runs well we may later ask whether we need 12 SDRs.
+
+Constraints: the budget is 100,000 to 300,000 dollars, so model and token cost is not a concern. We have three months to get a live solution working in HubSpot with real leads, not a demo. The system must read lead and activity data from HubSpot and write scores, rankings and routing back into HubSpot so SDRs work inside the tool they already use. Leads contain business contact details, so personal data is involved. SDRs should still make the final call on who to contact and what to say, but we are open to the system automatically prioritising, assigning and alerting. We have an IT team and developers who can run it. We want sales to be able to see why a lead was ranked where it was, and we want feedback on which leads booked meetings and which closed to flow back into the scoring over time, so both teams work from one shared number.
+
+Runs happen continuously as new leads arrive, hundreds per day.

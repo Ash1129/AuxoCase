@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "auxocase",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": ["scripts/serve.sh"],
+      "port": 8000
+    }
+  ]
+}

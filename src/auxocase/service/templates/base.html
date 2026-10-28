@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}AuxoCase{% endblock %}</title>
+<style>
+:root { --bg:#0f1115; --panel:#171a21; --ink:#e8e9ec; --muted:#9aa3b2; --line:#2a2f3a; --accent:#7cc4ff; --good:#5fd38d; --warn:#f5c26b; --bad:#f28b82; }
+@media (prefers-color-scheme: light) { :root { --bg:#f7f8fa; --panel:#fff; --ink:#15181e; --muted:#5b6472; --line:#e1e5ec; --accent:#0b67c2; --good:#1c8f4a; --warn:#a86b00; --bad:#b3261e; } }
+* { box-sizing: border-box; }
+body { margin:0; background:var(--bg); color:var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
+header { display:flex; gap:18px; align-items:center; padding:12px 20px; border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap; }
+header a { color:var(--ink); text-decoration:none; font-weight:600; } header a.brand { color:var(--accent); font-size:18px; }
+header .meta { margin-left:auto; color:var(--muted); font-size:13px; }
+main { max-width:1180px; margin:0 auto; padding:20px 16px 60px; }
+h1 { font-size:24px; margin:0 0 6px; } h2 { font-size:17px; margin:26px 0 10px; } .sub { color:var(--muted); margin:0 0 18px; }
+table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:var(--muted); font-weight:600; font-size:13px; }
+tr:last-child td { border-bottom:none; }
+.num { text-align:right; font-variant-numeric: tabular-nums; }
+.pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid var(--line); color:var(--muted); }
+.pill.good { color:var(--good); border-color:var(--good);} .pill.warn { color:var(--warn); border-color:var(--warn);} .pill.bad { color:var(--bad); border-color:var(--bad);} .pill.accent { color:var(--accent); border-color:var(--accent);}
+.cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:12px; margin:14px 0 6px; }
+.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; } .card .k { color:var(--muted); font-size:12px; } .card .v { font-size:22px; font-weight:700; }
+form.inline { display:inline-flex; gap:6px; flex-wrap:wrap; align-items:center; }
+input, select, button, textarea { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); }
+button { cursor:pointer; background:var(--accent); color:#fff; border-color:var(--accent); } button.quiet { background:transparent; color:var(--ink); }
+.reason { max-width:520px; } .quote { color:var(--muted); font-style:italic; }
+.muted { color:var(--muted); } .small { font-size:13px; }
+code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:13px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">AuxoCase</a>
+  <a href="/">Overview</a>
+  <a href="/held">Manager</a>
+  <a href="/model">Model &amp; approvals</a>
+  <span class="meta">Live model: {{ live.version if live else 'points table (cold start)' }} · reader: {{ llm }}{% if line is not none %} · capacity line: {{ (100*line)|round(1) }}%{% endif %}</span>
+</header>
+<main>{% block body %}{% endblock %}</main>
+</body>
+</html>

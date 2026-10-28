@@ -1,0 +1,16 @@
+{% extends "base.html" %}{% block title %}Manager · held queue{% endblock %}
+{% block body %}
+<h1>Held queue</h1>
+<p class="sub">Leads that could not be assigned because every SDR was at their limit. Assign one by hand, or raise a limit and re-run routing. Nothing is assigned past a limit without a named person.</p>
+<table><tr><th>Lead</th><th class="num">Demo</th><th>Held since</th><th>Assign to</th></tr>
+{% for r in rows %}{% set c = leads[r.contact_id] %}
+<tr><td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a> <span class="muted small">{{ c.channel }}</span></td><td class="num">{{ (100*(c.auxo_probability or 0))|round(0)|int }}%</td><td class="small">{{ r.held_at }}</td>
+<td><form class="inline" method="post" action="/held/{{ c.id }}/release"><select name="owner_id">{% for o in owners %}<option value="{{ o.id }}">{{ o.name }} ({{ counts.get(o.id,0) }}/{{ o.capacity_limit }})</option>{% endfor %}</select><input name="released_by" placeholder="your name" required><input name="note" placeholder="reason"><button>Assign</button></form></td></tr>
+{% else %}<tr><td colspan="4" class="muted">Nothing held.</td></tr>{% endfor %}
+</table>
+<h2>Assigned but untouched past the SLA</h2>
+<p class="sub small">Speed to lead: assigned leads with no first contact within 24 hours. A reminder task is created for each on the next re-alert run.</p>
+<table><tr><th>Lead</th><th>SDR</th><th>Assigned</th></tr>
+{% for s in stale %}<tr><td><a href="/lead/{{ s.contact_id }}">#{{ s.contact_id }}</a></td><td>{{ s.owner_id }}</td><td class="small">{{ s.created_at }}</td></tr>{% else %}<tr><td colspan="3" class="muted">None.</td></tr>{% endfor %}
+</table>
+{% endblock %}

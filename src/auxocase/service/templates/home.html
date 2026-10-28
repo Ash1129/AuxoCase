@@ -1,0 +1,23 @@
+{% extends "base.html" %}{% block title %}Overview · AuxoCase{% endblock %}
+{% block body %}
+<h1>Lead scoring and routing in HubSpot</h1>
+<p class="sub">Every new or updated lead is scored (a calibrated chance of booking a demo), ranked in the current pool, assigned within SDR capacity, and the outcomes come back to retrain the model with both teams' approval.</p>
+<div class="cards">
+  <div class="card"><div class="k">Unassigned MQLs in the pool</div><div class="v">{{ pool_size }}</div></div>
+  <div class="card"><div class="k">Held for the manager</div><div class="v">{{ held }}</div></div>
+  <div class="card"><div class="k">SDRs active</div><div class="v">{{ owners|length }}</div></div>
+  <div class="card"><div class="k">Open leads across SDRs</div><div class="v">{{ counts.values()|sum }}</div></div>
+</div>
+<h2>SDR queues</h2>
+<table><tr><th>SDR</th><th class="num">Open leads</th><th class="num">Limit</th><th></th></tr>
+{% for o in owners %}<tr><td>{{ o.name }}</td><td class="num">{{ counts.get(o.id, 0) }}</td><td class="num">{{ o.capacity_limit }}</td><td><a href="/queue/{{ o.id }}">Open queue</a></td></tr>{% endfor %}
+</table>
+<h2>Top of the pool (not yet assigned)</h2>
+<table><tr><th class="num">Rank</th><th>Lead</th><th>Channel</th><th class="num">Demo likelihood</th><th>Why</th></tr>
+{% for c in pool %}<tr><td class="num">{{ c.auxo_rank }}</td><td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a> <span class="muted small">#{{ c.id }}</span></td><td>{{ c.channel }}</td><td class="num">{{ (100*(c.auxo_probability or 0))|round(1) }}%</td><td class="reason small">{{ c.auxo_reason }}</td></tr>{% endfor %}
+</table>
+<h2>Recent runs</h2>
+<table><tr><th>Job</th><th>When</th><th>Status</th><th>Detail</th></tr>
+{% for r in runs %}<tr><td>{{ r.job }}</td><td class="small">{{ r.finished_at }}</td><td><span class="pill {{ 'good' if r.status=='ok' else 'warn' }}">{{ r.status }}</span></td><td class="small muted">{{ r.detail }}</td></tr>{% endfor %}
+</table>
+{% endblock %}

@@ -1,0 +1,32 @@
+{% extends "base.html" %}{% block title %}Model &amp; approvals{% endblock %}
+{% block body %}
+<h1>The shared number</h1>
+<p class="sub">One model scores every lead for both teams. A new version goes live only when one named person from marketing and one from sales approve it, one version at a time, with its numbers beside the live model's.</p>
+{% if hit %}<div class="cards"><div class="card"><div class="k">Ranked leads worked this period</div><div class="v">{{ hit.n }}</div></div><div class="card"><div class="k">…that booked a demo</div><div class="v">{{ (100*hit.rate)|round(0)|int }}%</div></div>{% if speed.n %}<div class="card"><div class="k">Median time to first touch</div><div class="v">{{ speed.median_hours }}h</div></div><div class="card"><div class="k">Touched within 24h</div><div class="v">{{ (100*speed.within_24h)|round(0)|int }}%</div></div>{% endif %}</div>{% endif %}
+{% if shadow %}<p class="small">Shadow check on the last labelled month ({{ shadow.n }} leads): live {{ shadow.live.version }} precision@k {{ shadow.live.precision_at_k }} vs previous {{ shadow.shadow.version }} {{ shadow.shadow.precision_at_k }}.</p>{% endif %}
+<h2>Versions</h2>
+<table><tr><th>Version</th><th>Status</th><th>Family</th><th class="num">Rows / positives</th><th class="num">Precision@K</th><th class="num">HubSpot points @K</th><th class="num">Lift</th><th class="num">AUC-PR (base)</th><th class="num">ECE</th><th>Approvals</th></tr>
+{% for r in regs %}{% set m = r.metrics %}
+<tr><td>{{ r.version }}<div class="small muted">{{ r.trained_at[:10] }} · {{ r.notes or '' }}</div></td>
+<td><span class="pill {{ 'good' if r.status=='live' else ('accent' if r.status=='candidate' else '') }}">{{ r.status }}</span></td>
+<td>{{ 'logistic regression' if r.family=='lr' else 'gradient boosting' }}</td>
+<td class="num">{{ m.rows }} / {{ m.positives }}</td><td class="num">{{ m.precision_at_k }}</td><td class="num">{{ m.hubspot_precision_at_k }}</td><td class="num"><strong>{{ m.lift_at_k }}×</strong></td><td class="num">{{ m.auc_pr }} ({{ m.base_rate }})</td><td class="num">{{ m.ece }}</td>
+<td class="small">{% for a in r.approvals %}{{ a.team }}: {{ a.decision }} by {{ a.approver }}{% if a.note %} ({{ a.note }}){% endif %}<br>{% endfor %}
+{% if r.status=='candidate' %}<form class="inline" method="post" action="/model/{{ r.version }}/approve"><select name="team"><option>marketing</option><option>sales</option></select><input name="approver" placeholder="your name" required><input name="note" placeholder="note"><button name="decision" value="approve">Approve</button><button class="quiet" name="decision" value="send_back">Send back</button></form>{% endif %}</td></tr>
+{% else %}<tr><td colspan="10" class="muted">No trained model yet; the points table is scoring. Run <code>python run.py train</code>.</td></tr>{% endfor %}
+</table>
+{% for r in regs if r.status in ('live','candidate') %}
+<h2>{{ r.version }}: calibration and channels</h2>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+<table><tr><th>Predicted</th><th class="num">n</th><th class="num">Observed</th></tr>{% for b in r.metrics.calibration_bins %}<tr><td>{{ b.lo }}–{{ b.hi }}</td><td class="num">{{ b.n }}</td><td class="num">{{ b.observed }}</td></tr>{% endfor %}</table>
+<table><tr><th>Channel (validation)</th><th class="num">n</th><th class="num">Observed</th><th class="num">Predicted</th></tr>{% for ch, v in r.metrics.by_channel.items() %}<tr><td>{{ ch }}</td><td class="num">{{ v.n }}</td><td class="num">{{ v.observed }}</td><td class="num">{{ v.predicted }}</td></tr>{% endfor %}</table>
+</div>
+{% endfor %}
+<h2>Channel monitor (p-chart, worked leads)</h2>
+<p class="sub small">Observed demo rate per channel and month against the model's predicted rate with 3-sigma limits. Outside the limits is a real shift, inside is noise; under {{ 30 }} worked leads is held, not judged.</p>
+<table><tr><th>Period</th><th>Channel</th><th class="num">Worked</th><th class="num">Demos</th><th class="num">Observed</th><th class="num">Predicted</th><th class="num">Limits</th><th>Flag</th></tr>
+{% for p in monitor %}<tr><td>{{ p.period }}</td><td>{{ p.channel }}</td><td class="num">{{ p.n }}</td><td class="num">{{ p.demos }}</td><td class="num">{{ (p.demo_rate or 0)|round(3) }}</td><td class="num">{{ (p.predicted_rate or 0)|round(3) }}</td><td class="num small">{% if p.lcl is not none %}{{ p.lcl|round(3) }}–{{ p.ucl|round(3) }}{% endif %}</td><td><span class="pill {{ 'good' if p.flag=='ok' else ('warn' if p.flag=='held' else 'bad') }}">{{ p.flag }}</span></td></tr>{% else %}<tr><td colspan="8" class="muted">Run the monitor job.</td></tr>{% endfor %}
+</table>
+<h2>SDR overrides</h2>
+<table><tr><th>Action</th><th class="num">Count</th></tr>{% for o in overrides %}<tr><td>{{ o.action }}</td><td class="num">{{ o.n }}</td></tr>{% else %}<tr><td colspan="2" class="muted">None yet.</td></tr>{% endfor %}</table>
+{% endblock %}
