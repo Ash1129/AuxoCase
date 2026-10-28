@@ -50,9 +50,11 @@ class ClaudeCLI:
         exe = shutil.which("claude")
         if not exe:
             raise RuntimeError("claude CLI not found on PATH")
-        # Run outside the repo so no project CLAUDE.md or settings ride along with the prompt.
+        # Run outside the repo so no project CLAUDE.md or settings ride along with the prompt. The CLI thinks by
+        # default, which turned a three-second draft into thirty; these are short, checked answers, so it is off.
         proc = subprocess.run(self.command(exe, system, user), capture_output=True, text=True,
-                              timeout=self.timeout_s, cwd=tempfile.gettempdir())
+                              timeout=self.timeout_s, cwd=tempfile.gettempdir(),
+                              env={**os.environ, "MAX_THINKING_TOKENS": "0"})
         try:
             data = json.loads(proc.stdout.strip().splitlines()[-1])
         except (json.JSONDecodeError, IndexError) as e:

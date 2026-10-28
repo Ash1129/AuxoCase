@@ -80,6 +80,23 @@ def test_cli_reader_uses_bare_only_with_an_api_key(monkeypatch):
     assert "--bare" in ClaudeCLI().command("claude", "sys", "hi")
 
 
+def test_cli_reader_runs_without_extended_thinking(monkeypatch):
+    """The CLI thinks by default; for a short first email that took thirty seconds instead of three."""
+    import subprocess
+    from types import SimpleNamespace
+    from auxocase.llm import client
+    seen = {}
+
+    def fake_run(cmd, **kw):
+        seen.update(kw)
+        return SimpleNamespace(stdout=json.dumps({"result": "ok", "is_error": False}), stderr="", returncode=0)
+
+    monkeypatch.setattr(client.shutil, "which", lambda _: "/usr/bin/claude")
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    assert client.ClaudeCLI().complete("sys", "hi") == "ok"
+    assert seen["env"]["MAX_THINKING_TOKENS"] == "0" and "PATH" in seen["env"]
+
+
 def test_readers_accept_json_in_a_code_fence():
     """Claude often wraps JSON in ```json fences; the checkers must still read it."""
     from auxocase.llm.loss_reasons import check as loss_check

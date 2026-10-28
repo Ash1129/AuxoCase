@@ -9,7 +9,7 @@
   <div class="card"><div class="k">Model</div><div class="v small">{{ c.auxo_model_version }}</div></div>
 </div>
 <h2>Reach out</h2>
-{% if c.email %}<p><a href="mailto:{{ c.email }}">{{ c.email }}</a>{% if not email %} · <a href="/lead/{{ c.id }}?draft=1">Draft a first email</a>{% endif %}</p>
+{% if c.email %}<p><a href="mailto:{{ c.email }}">{{ c.email }}</a>{% if not email %} · <a href="/lead/{{ c.id }}?draft=1" onclick="this.textContent='Drafting… this takes a few seconds'; this.style.pointerEvents='none'">Draft a first email</a>{% endif %}</p>
 {% if email %}<div class="card draft"><p><b>Subject:</b> {{ email.subject }}</p><p class="draft-body">{{ email.body }}</p>
 <p><a href="{{ email.mailto(c.email) }}"><button type="button">Open in your email app</button></a>
 <span class="small muted">Drafted by {{ 'Claude (' ~ email.llm ~ ')' if email.source == 'llm' else 'the template' }}{% if email.rejected %} · Claude's draft was set aside: {{ email.rejected }}{% endif %}. Edit it before you send; nothing is sent from here.</span></p></div>{% endif %}
