@@ -35,6 +35,16 @@ def test_compare_and_set_owner_refuses_second_assignment(hs):
     assert hs.open_lead_counts() == {"o1": 0, "o2": 1, "o3": 0}
 
 
+def test_first_touch_frees_capacity_but_lead_stays_open(hs):
+    hs.add_contact(_contact(1), emit_event=False)
+    hs.set_owner("c1", "o1", expected_current=None)
+    assert hs.waiting_lead_counts()["o1"] == 1
+    hs.simulate_sdr_activity("c1", "o1", "worked", datetime(2026, 1, 5, 10))
+    assert hs.get_contact("c1").hs_lead_status == "IN_PROGRESS"
+    assert hs.open_lead_counts()["o1"] == 1        # still the SDR's lead
+    assert hs.waiting_lead_counts()["o1"] == 0     # but no longer holding the slot
+
+
 def test_batch_update_chunks_and_multi_status(hs):
     for i in range(250):
         hs.add_contact(_contact(i), emit_event=False)

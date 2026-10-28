@@ -66,3 +66,25 @@ def test_reason_rewrite_rejects_numbers_names_and_new_facts():
 def test_offline_reason_returns_template():
     t = "Held back because the lead is a student."
     assert write_reason(Offline(), t) == (t, "template")
+
+
+def test_cli_reader_uses_bare_only_with_an_api_key(monkeypatch):
+    """--bare never reads a claude.ai sign-in, so a signed-in CLI without a key must not get it."""
+    from auxocase.llm.client import ClaudeCLI
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    cmd = ClaudeCLI().command("claude", "sys", "hi")
+    assert "--bare" not in cmd
+    assert cmd[cmd.index("--tools") + 1] == "" and "--strict-mcp-config" in cmd and "--restricted" in cmd
+    assert cmd[-1] == "hi" and cmd[cmd.index("--system-prompt") + 1] == "sys"
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
+    assert "--bare" in ClaudeCLI().command("claude", "sys", "hi")
+
+
+def test_readers_accept_json_in_a_code_fence():
+    """Claude often wraps JSON in ```json fences; the checkers must still read it."""
+    from auxocase.llm.loss_reasons import check as loss_check
+    fenced = '```json\n' + json.dumps({"signals": [{"type": "budget", "quote": "budget is agreed with finance"}]}) + '\n```'
+    r = check(fenced, NOTES)
+    assert not r.error and [s.type for s in r.signals] == ["budget"]
+    loss = loss_check('```json\n{"category": "price", "quote": "too expensive for us"}\n```', "In the end it was too expensive for us.")
+    assert loss.category == "price" and loss.source == "model"

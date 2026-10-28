@@ -6,10 +6,10 @@
   <div class="card"><div class="k">Unassigned MQLs in the pool</div><div class="v">{{ pool_size }}</div></div>
   <div class="card"><div class="k">Held for the manager</div><div class="v">{{ held }}</div></div>
   <div class="card"><div class="k">SDRs active</div><div class="v">{{ owners|length }}</div></div>
-  <div class="card"><div class="k">Open leads across SDRs</div><div class="v">{{ counts.values()|sum }}</div></div>
+  <div class="card"><div class="k">Leads waiting for a first touch</div><div class="v">{{ counts.values()|sum }}</div></div>
 </div>
 <h2>SDR queues</h2>
-<table><tr><th>SDR</th><th class="num">Open leads</th><th class="num">Limit</th><th></th></tr>
+<table><tr><th>SDR</th><th class="num">Waiting</th><th class="num">Limit</th><th></th></tr>
 {% for o in owners %}<tr><td>{{ o.name }}</td><td class="num">{{ counts.get(o.id, 0) }}</td><td class="num">{{ o.capacity_limit }}</td><td><a href="/queue/{{ o.id }}">Open queue</a></td></tr>{% endfor %}
 </table>
 <h2>Top of the pool (not yet assigned)</h2>

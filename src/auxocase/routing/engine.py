@@ -10,8 +10,8 @@ knowledge base asked for:
   reach in the next week at its monthly capacity; it is what marketing and
   sales negotiate (L03, L10).
 - Small queues (BrightPath answers 4 and 9). An SDR holds one waiting lead
-  (`capacity_limit` on the owner), and routing refills the slot as soon as it
-  is touched, so the best new lead takes the next free slot instead of
+  (`capacity_limit` on the owner, counted over leads not yet touched), and
+  routing refills the slot as soon as it is touched, so the best new lead takes the next free slot instead of
   waiting behind a month of older ones. That is where faster follow-up
   without more SDRs comes from.
 - Freshness. When demand runs ahead of capacity, the pool keeps a backlog of
@@ -106,7 +106,7 @@ class Router:
 
     def free_slots(self) -> tuple[dict[str, int], list[Owner], int]:
         owners = [o for o in self.hs.list_owners(active_only=True) if o.team == self.team]
-        counts = self.hs.open_lead_counts()
+        counts = self.hs.waiting_lead_counts()   # capacity is untouched leads, so a touch frees the slot
         free = sum(max(0, o.capacity_limit - counts.get(o.id, 0)) for o in owners)
         return counts, owners, free
 
@@ -136,7 +136,8 @@ class Router:
             cutoff = now - timedelta(hours=self.hold_after_hours)
             waiting = [c for c in pool if c.id not in held and c.createdate <= cutoff
                        and line_p is not None and priority(self.conn, c.auxo_probability, c.createdate, now) >= line_p]
-            for c in waiting[: self.hold_limit]:
+            room = max(0, self.hold_limit - len(held))   # a cap on the whole queue, not per pass: the scheduler routes every few minutes
+            for c in waiting[:room]:
                 decisions.append(self._assign_one(c, owners, counts, False, now))
             set_setting(self.conn, "last_routing_run", now_iso())
             return decisions

@@ -74,7 +74,7 @@ def check(raw: str, notes: str) -> SignalReading:
         r.error = "unreadable model output"
         return r
     try:
-        data = json.loads(raw[start:])
+        data, _ = json.JSONDecoder().raw_decode(raw, start)   # stops at the object's end: a trailing ``` fence is fine
     except json.JSONDecodeError:
         r.error = "unreadable model output"
         return r

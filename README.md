@@ -16,15 +16,16 @@ Three years of BrightPath-like history, generated to match the brief and BrightP
 | Median hours from lead to first touch | 71 | **17** |
 | Leads touched within 24 hours | 21% | **66%** |
 
-Where the gain comes from, one simulated month each:
+Where the gain comes from, one simulated month per setup, averaged over five seeds (`python run.py queue-limits`; ranges in `docs/blueprint/brief-answers.md`):
 
 | Routing | Touched within 24 h | Demos |
 |---|---|---|
-| Model ranking, deep queues (3 leads per SDR), no freshness | 16% | 216 |
-| + freshness discount (a lead past its first day is worth half) | 30% | 229 |
-| + one waiting lead per SDR, refilled as they touch it | 66% | 283 |
+| Model ranking, deep queues (3 leads per SDR), no freshness | 15% | 216 |
+| + freshness discount (a lead past its first day is worth half) | 31% | 218 |
+| + two waiting leads per SDR | 50% | 255 |
+| + one waiting lead per SDR, refilled as they touch it | 65% | 289 |
 
-The ranking is worth about a quarter more demos on its own. The rest comes from reaching the best leads inside their first day. On the mock, "a lead touched within a day books twice as often" is BrightPath's answer 4 built into the generator. On the real portal it is measured: the report estimates the factor from outcomes (0.46 here, against the 0.5 routing uses).
+The ranking alone is worth about a quarter more demos than the history's 172 a month. The freshness discount doubles how many leads are touched within a day, but by itself it adds no demos while queues are three deep. The rest of the gain comes from small queues, which let SDRs reach the best leads inside their first day. On the mock, "a lead touched within a day books twice as often" is BrightPath's answer 4 built into the generator. On the real portal it is measured: the report estimates the factor from outcomes (0.46 here, against the 0.5 routing uses).
 
 How good is the ranking? Measured only on leads the SDRs chose to work, the model beats HubSpot's points at the capacity line (precision@299 0.448 against 0.375 in the time-ordered validation window), but it barely differs from the service's own channel-aware cold-start table. Across a whole month of MQLs, worked or not, the generator's truth shows the real gap. The model's top third would book at **0.69** if touched promptly, against **0.56** for HubSpot's points and 0.52 at random, with 0.74 the best possible. The worked-leads-only number understates it because the SDRs' past choices hide it (L05). The exploration slice is how real data closes that gap over time. Calibration holds (expected calibration error 0.007).
 
@@ -57,8 +58,11 @@ Step by step:
 | `python run.py losses` | reads new closed-lost reasons into fixed categories (quote checked) |
 | `python run.py simulate --months 3` | replays months in six-hour steps with the system in place: new leads, scoring, routing, SDR touches at the brief's capacity, outcomes, loss reasons, retrain |
 | `python run.py eval` | writes `docs/evaluation.md` |
-| `python run.py serve` | the pages: SDR queues, lead detail, manager's held queue, model & approvals; `/jobs/*` endpoints; `/webhooks/hubspot` |
+| `python run.py queue-limits [--seeds 5]` | builds the demo's starting point, then replays one month per routing setup (freshness discount on or off, queue limit 3, 2 or 1) and seed in parallel; prints the speed and demos table with the range across seeds |
+| `python run.py serve` | the pages: SDR queues, lead detail, manager's held queue, model & approvals; `/jobs/*` endpoints; `/webhooks/hubspot`; the jobs on timers (below) |
 | `pytest -q` | the test suite (offline; no model calls) |
+
+**The scheduler.** `run.py serve` also runs the jobs on timers inside the server: scoring of new or changed leads and routing every 5 minutes, reminders and outcome sync hourly, the channel monitor daily, and a candidate model every 30 days. Each run is one row in the Overview's "Recent runs", a failed job never stops the others, and training only produces a candidate; it still needs both approvals. `AUXO_SCHEDULER=off` in `.env` turns it off, and `AUXO_EVERY_<JOB>_MIN` changes an interval (see `.env.example`). On the demo data the service clock is frozen, so leads never age into new holds or reminders there.
 
 **The reader.** Free-text notes are read by Claude for buying signals. `AUXO_LLM=cli` uses the Claude Code CLI headlessly (`claude -p`), `AUXO_LLM=api` the Anthropic API, and the default `offline` a scripted reader so everything runs without a model. Whatever answers, code verifies every quoted signal against the notes, drops what isn't there, and caps the effect at ±10 points; the model never sets the score.
 

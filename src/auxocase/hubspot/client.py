@@ -41,6 +41,8 @@ class HubSpotClient(Protocol):
     def list_owners(self, active_only: bool = True) -> list[Owner]: ...
     def open_lead_counts(self) -> dict[str, int]:
         """owner_id -> number of contacts with an open lead status."""
+    def waiting_lead_counts(self) -> dict[str, int]:
+        """owner_id -> number of assigned contacts not yet touched (WAITING_LEAD_STATUSES): what capacity counts."""
     def set_owner(self, contact_id: str, owner_id: str, expected_current: Optional[str] = None) -> bool:
         """Compare-and-set the owner. Returns False (and writes nothing) if the current owner isn't `expected_current`."""
     def create_task(self, owner_id: str, contact_id: str, subject: str, body: str, due_at: Optional[datetime] = None) -> Task: ...

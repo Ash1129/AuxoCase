@@ -50,7 +50,7 @@ def check(raw: str, text: str) -> LossReading:
         return LossReading("other", "", "empty")
     start = raw.find("{")
     try:
-        data = json.loads(raw[start:]) if start >= 0 else {}
+        data = json.JSONDecoder().raw_decode(raw, start)[0] if start >= 0 else {}   # ignores a trailing ``` fence
     except json.JSONDecodeError:
         data = {}
     cat = str(data.get("category", "")).strip()

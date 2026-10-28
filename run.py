@@ -9,6 +9,7 @@
   python run.py approve VERSION TEAM NAME  record an approval (both teams -> live)
   python run.py simulate [--months 2]      replay months: score, route, SDRs act, outcomes, retrain
   python run.py eval                       the evaluation report (writes docs/evaluation.md)
+  python run.py queue-limits [--seeds 5]   one simulated month per routing setup and seed: speed and demos
   python run.py serve [--port 8000]        the pages and the webhook endpoint
   python run.py demo                       seed + score + route + sync + train + approve + serve, in one go
 """
@@ -38,17 +39,19 @@ def _ctx(db):
     return conn, hs
 
 
+def _remove_db(db):
+    for ext in ("", "-wal", "-shm"):
+        p = Path(str(db) + ext)
+        if p.exists():
+            p.unlink()
+
+
 def cmd_seed(a):
     from auxocase.data.generate import generate
     if Path(a.db).exists() and not a.force:
         print(f"{a.db} exists; pass --force to regenerate")
         return
-    if Path(a.db).exists():
-        Path(a.db).unlink()
-        for ext in ("-wal", "-shm"):
-            p = Path(str(a.db) + ext)
-            if p.exists():
-                p.unlink()
+    _remove_db(a.db)
     conn, hs = _ctx(a.db)
     summary = generate(conn, months=a.months, seed=a.seed)
     print(json.dumps(summary, indent=1, default=str))
@@ -120,29 +123,33 @@ def cmd_eval(a):
 def cmd_serve(a):
     import uvicorn
     os.environ["AUXO_DB"] = str(a.db)
+    os.environ.setdefault("AUXO_SCHEDULER", "on")      # jobs run on timers unless .env says AUXO_SCHEDULER=off
     from auxocase.service.app import create_app
     uvicorn.run(create_app(a.db), host="127.0.0.1", port=a.port)
 
 
+def cmd_queue_limits(a):
+    from auxocase.data.queue_limits import markdown, run_table
+    runs, summary = run_table(seeds=a.seeds, processes=a.processes)
+    out = Path(a.out)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"runs": runs, "summary": summary}, indent=1))
+    print(markdown(summary))
+    print(f"\nper-run results: {out}")
+
+
 def cmd_demo(a):
-    a.force = True
-    a.months = 36
-    a.seed = 7
-    cmd_seed(a)
+    from auxocase.data.queue_limits import build_demo_base
+    _remove_db(a.db)
+    out = build_demo_base(a.db, months=36, seed=7)
+    print(json.dumps(out["history"], indent=1, default=str))
+    if out["model"]:
+        print(f"live model {out['model']['version']}: lift {out['model']['lift']}x at K={out['model']['k']}")
+    else:
+        print("no model yet:", out.get("model_error"))
+    print(f"scored {out['scored']} leads in the pool")
+    print("routing:", out["routing"])
     conn, hs = _ctx(a.db)
-    fb.sync_outcomes(hs, conn)
-    try:
-        model, m = fb.train_candidate(hs, conn, notes="first model from the last 12 months of history")
-        fb.approve(conn, model.version, "marketing", "demo marketing lead", "approve", "demo")
-        fb.approve(conn, model.version, "sales", "demo sales lead", "approve", "demo")
-        print(f"live model {model.version}: lift {m.lift_at_k}x at K={m.k}")
-    except ValueError as e:
-        print("no model yet:", e)
-    sc = Scorer(hs, conn, load_live_model(conn), make_llm())
-    res = sc.rescore_pool()
-    print(f"scored {len(res)} leads in the pool")
-    d = Router(hs, conn).run()
-    print("routing:", {k: sum(1 for x in d if x.decision == k) for k in {x.decision for x in d}})
     fb.channel_monitor(hs, conn)
     cmd_serve(a)
 
@@ -161,6 +168,8 @@ def main(argv=None):
     s = sub.add_parser("simulate"); s.add_argument("--months", type=int, default=1); s.add_argument("--seed", type=int, default=101); s.set_defaults(fn=cmd_simulate)
     s = sub.add_parser("losses"); s.set_defaults(fn=cmd_losses)
     s = sub.add_parser("eval"); s.set_defaults(fn=cmd_eval)
+    s = sub.add_parser("queue-limits"); s.add_argument("--seeds", type=int, default=5); s.add_argument("--processes", type=int, default=None)
+    s.add_argument("--out", default="outputs/queue_limits.json"); s.set_defaults(fn=cmd_queue_limits)
     s = sub.add_parser("serve"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("demo"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_demo)
     a = p.parse_args(argv)

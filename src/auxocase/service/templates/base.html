@@ -36,7 +36,7 @@ code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:13px;
   <a href="/">Overview</a>
   <a href="/held">Manager</a>
   <a href="/model">Model &amp; approvals</a>
-  <span class="meta">Live model: {{ live.version if live else 'points table (cold start)' }} · reader: {{ llm }}{% if line is not none %} · capacity line: {{ (100*line)|round(1) }}%{% endif %}</span>
+  <span class="meta">Live model: {{ live.version if live else 'points table (cold start)' }} · reader: {{ llm }} · scheduler: {{ scheduler }}{% if line is not none %} · capacity line: {{ (100*line)|round(1) }}%{% endif %}</span>
 </header>
 <main>{% block body %}{% endblock %}</main>
 </body>

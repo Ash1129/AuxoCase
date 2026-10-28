@@ -83,11 +83,11 @@ def test_routing_respects_capacity_round_robin_and_holdout(world):
     conn.execute("UPDATE hs_owners SET capacity_limit=5")   # 60 slots, so a 10% share is measurable
     owners = hs.list_owners()
     router = Router(hs, conn, seed=1, exploration_share=0.1)
-    before = hs.open_lead_counts()
+    before = hs.waiting_lead_counts()
     decisions = router.run()
     assigned = [d for d in decisions if d.decision in ("assigned", "holdout_assigned")]
     assert assigned, decisions[:3]
-    after = hs.open_lead_counts()
+    after = hs.waiting_lead_counts()
     for o in owners:
         assert after.get(o.id, 0) <= o.capacity_limit
     assert sum(after.values()) - sum(before.values()) == len(assigned)

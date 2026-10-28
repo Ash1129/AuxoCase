@@ -46,6 +46,7 @@ import httpx
 from .models import (
     AUXO_PROPERTIES,
     OPEN_LEAD_STATUSES,
+    WAITING_LEAD_STATUSES,
     BatchResult,
     ChangeEvent,
     Company,
@@ -460,9 +461,15 @@ class RealHubSpot:
         return [o for o in owners if o.active] if active_only else list(owners)
 
     def open_lead_counts(self) -> dict[str, int]:
+        return self._owner_counts(OPEN_LEAD_STATUSES)
+
+    def waiting_lead_counts(self) -> dict[str, int]:
+        return self._owner_counts(WAITING_LEAD_STATUSES)
+
+    def _owner_counts(self, statuses: tuple[str, ...]) -> dict[str, int]:
         body = {
             "filterGroups": [{"filters": [
-                {"propertyName": "hs_lead_status", "operator": "IN", "values": list(OPEN_LEAD_STATUSES)},
+                {"propertyName": "hs_lead_status", "operator": "IN", "values": list(statuses)},
                 {"propertyName": "hubspot_owner_id", "operator": "HAS_PROPERTY"},
                 # still the SDR's: once a lead is an opportunity or customer it is the AE's load, not the SDR's
                 {"propertyName": "lifecyclestage", "operator": "IN", "values": ["marketingqualifiedlead", "salesqualifiedlead"]},

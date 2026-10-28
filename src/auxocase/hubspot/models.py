@@ -28,6 +28,10 @@ SENIORITIES = ("c_level", "vp", "director", "manager", "individual", "unknown")
 
 # Lead status values the routing step treats as "open" (an SDR is working it).
 OPEN_LEAD_STATUSES = ("NEW", "OPEN", "IN_PROGRESS", "ATTEMPTED_TO_CONTACT", "CONNECTED")
+# The statuses an assigned lead holds until its first touch. An SDR's capacity
+# limit counts these only (BrightPath answer 4: one waiting lead, refilled the
+# moment it is touched), so working a lead frees the slot.
+WAITING_LEAD_STATUSES = ("NEW", "OPEN")
 # A lead is "worked" once an SDR has moved it past the status an assignment sets (NEW/OPEN): the first touch.
 TOUCHED_STATUSES = ("IN_PROGRESS", "ATTEMPTED_TO_CONTACT", "CONNECTED", "UNQUALIFIED", "QUALIFIED")
 
@@ -134,7 +138,7 @@ class Owner:
     name: str
     email: str
     active: bool = True
-    capacity_limit: int = 45       # open leads at any one time (owner's answer: capacity = open leads)
+    capacity_limit: int = 45       # assigned leads waiting for a first touch (WAITING_LEAD_STATUSES)
     team: str = "sdr"
 
 

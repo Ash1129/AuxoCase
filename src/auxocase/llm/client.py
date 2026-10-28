@@ -1,9 +1,12 @@
 """One small interface over three ways to reach Claude.
 
-- `cli`: the Claude Code CLI in headless mode (`claude -p --output-format json
-  --bare`). This is what the owner asked to use in development; it bills the
+- `cli`: the Claude Code CLI in headless mode (`claude -p --output-format
+  json`). This is what the owner asked to use in development; it bills the
   signed-in Claude account, needs a logged-in CLI on the machine, and is not
   a production path (no per-request isolation, no rate-limit handling).
+  `--bare` would be the leanest call, but it reads only ANTHROPIC_API_KEY and
+  never a claude.ai sign-in, so it is used only when a key is set; otherwise
+  the call switches off tools, MCP servers, skills and settings files itself.
 - `api`: the Anthropic Messages API with an API key, the production path.
 - `offline`: a scripted stand-in with no model at all, used by every test and
   by the demo when no key or CLI is available. It reads the same prompts and
@@ -19,6 +22,7 @@ import json
 import os
 import shutil
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from typing import Optional, Protocol
 
@@ -34,13 +38,21 @@ class ClaudeCLI:
     timeout_s: int = 90
     name: str = "claude-cli"
 
+    def command(self, exe: str, system: str, user: str) -> list[str]:
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            isolation = ["--bare"]       # API-key auth only; skips hooks, plugins, MCP, CLAUDE.md
+        else:                            # a claude.ai sign-in: same isolation, flag by flag
+            isolation = ["--restricted", "--tools", "", "--strict-mcp-config", "--disable-slash-commands"]
+        return [exe, "-p", "--output-format", "json", *isolation, "--no-session-persistence",
+                "--model", self.model, "--system-prompt", system, user]
+
     def complete(self, system: str, user: str, max_tokens: int = 600) -> str:
         exe = shutil.which("claude")
         if not exe:
             raise RuntimeError("claude CLI not found on PATH")
-        cmd = [exe, "-p", "--output-format", "json", "--bare", "--no-session-persistence",
-               "--model", self.model, "--system-prompt", system, user]
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=self.timeout_s)
+        # Run outside the repo so no project CLAUDE.md or settings ride along with the prompt.
+        proc = subprocess.run(self.command(exe, system, user), capture_output=True, text=True,
+                              timeout=self.timeout_s, cwd=tempfile.gettempdir())
         try:
             data = json.loads(proc.stdout.strip().splitlines()[-1])
         except (json.JSONDecodeError, IndexError) as e:

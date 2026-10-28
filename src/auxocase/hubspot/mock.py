@@ -21,6 +21,7 @@ from ..storage.db import get_setting, now_iso, set_setting, tx
 from .models import (
     AUXO_PROPERTIES,
     OPEN_LEAD_STATUSES,
+    WAITING_LEAD_STATUSES,
     BatchResult,
     ChangeEvent,
     Company,
@@ -292,14 +293,20 @@ class MockHubSpot:
         return [_from_row(Owner, r) for r in self.conn.execute(sql).fetchall()]
 
     def open_lead_counts(self) -> dict[str, int]:
+        return self._owner_counts(OPEN_LEAD_STATUSES)
+
+    def waiting_lead_counts(self) -> dict[str, int]:
+        return self._owner_counts(WAITING_LEAD_STATUSES)
+
+    def _owner_counts(self, statuses: tuple[str, ...]) -> dict[str, int]:
         self._count()
         counts = {r["id"]: 0 for r in self.conn.execute("SELECT id FROM hs_owners WHERE active=1")}
-        marks = ", ".join("?" for _ in OPEN_LEAD_STATUSES)
+        marks = ", ".join("?" for _ in statuses)
         rows = self.conn.execute(
             f"SELECT hubspot_owner_id AS o, COUNT(*) AS n FROM hs_contacts "
             f"WHERE hubspot_owner_id IS NOT NULL AND hubspot_owner_id != '' AND hs_lead_status IN ({marks}) "
             f"AND lifecycle_stage IN ('marketingqualifiedlead', 'salesqualifiedlead') GROUP BY o",
-            OPEN_LEAD_STATUSES,
+            statuses,
         ).fetchall()
         for r in rows:
             counts[r["o"]] = r["n"]

@@ -30,14 +30,18 @@ The questions were asked after the first build. The answers are verbatim; under 
 
 > The history now has a 3-day median first touch, and a lead touched after its first day books half as often as one touched inside it.
 >
-> Routing changed with it, in two ways. First, demand runs at about three times capacity, so the pool always holds a backlog of good older leads. Ranked on probability alone they crowd out the new ones, so routing now orders the pool by probability × a freshness discount: `stale_lead_factor`, 0.5 once a lead is past its first day, per this answer. The evaluation measures that factor from outcomes, so it can be kept honest. Second, each SDR holds one waiting lead, refilled the moment they touch it. On the simulator, one month at the brief's capacity:
+> Routing changed with it, in two ways. First, demand runs at about three times capacity, so the pool always holds a backlog of good older leads. Ranked on probability alone they crowd out the new ones, so routing now orders the pool by probability × a freshness discount: `stale_lead_factor`, 0.5 once a lead is past its first day, per this answer. The evaluation measures that factor from outcomes, so it can be kept honest. Second, each SDR holds one waiting lead, refilled the moment they touch it. On the simulator, one month at the brief's capacity, averaged over five seeds with the range in brackets:
 >
 > | Freshness discount | Queue limit | Touched within 24 h | Demos |
 > |---|---|---|---|
-> | off | 3 | 16% | 216 |
-> | on | 3 | 30% | 229 |
-> | on | 2 | 47% | 269 |
-> | on | 1 | 66% | 283 | Speed is now measured from the lead's creation to the first touch. Before this, the routed-lead figure subtracted a wall-clock assignment time from a simulated touch time, so the "1,148 hours" in the first report was not a measurement.
+> | off | 3 | 15% (14–16%) | 216 (191–237) |
+> | on | 3 | 31% (28–33%) | 218 (209–228) |
+> | on | 2 | 50% (47–52%) | 255 (241–272) |
+> | on | 1 | 65% (63–68%) | 289 (274–299) |
+>
+> `python run.py queue-limits --seeds 5` reproduces this: it builds the demo's starting point, then replays one month per setup with seeds 101–105 and the offline reader. On its own, the freshness discount doubles the share of leads touched within a day but books about the same number of demos while each SDR holds three waiting leads. The demos come from the small queues, which let the SDRs reach the leads it puts first while those leads are still fresh.
+>
+> Speed is now measured from the lead's creation to the first touch. Before this, the routed-lead figure subtracted a wall-clock assignment time from a simulated touch time, so the "1,148 hours" in the first report was not a measurement.
 
 **5. Sales cycle.** There is a 30-day business cycle for deals.
 

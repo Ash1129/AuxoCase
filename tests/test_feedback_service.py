@@ -83,3 +83,31 @@ def test_service_pages_and_actions(db):
     assert client.post("/jobs/score?mode=events").json()["model_version"].startswith("demo-v")
     assert "decisions" in client.post("/jobs/route").json()
     assert client.post("/webhooks/hubspot", json=[{"objectId": lead.id, "subscriptionType": "contact.propertyChange", "propertyName": "notes", "occurredAt": 0, "eventId": 1, "attemptNumber": 0}]).json()["accepted"] == 1
+
+
+def test_marking_a_lead_worked_refills_the_sdrs_slot(db):
+    """An SDR at their limit who works their waiting lead gets the next lead straight away (BrightPath answer 4)."""
+    path, conn, hs = db
+    client = TestClient(create_app(path))
+    limits = {o.id: o.capacity_limit for o in hs.list_owners()}
+    try:
+        conn.execute("UPDATE hs_owners SET capacity_limit=0")
+        owner = hs.list_owners()[0]
+        conn.execute("UPDATE hs_owners SET capacity_limit=1 WHERE id=?", (owner.id,))
+        conn.execute("UPDATE hs_contacts SET hs_lead_status='IN_PROGRESS' WHERE hubspot_owner_id=? AND hs_lead_status IN ('NEW','OPEN')", (owner.id,))
+        client.post("/jobs/route")
+        waiting = [c for c in hs.list_contacts() if c.hubspot_owner_id == owner.id and c.hs_lead_status in ("NEW", "OPEN")]
+        assert len(waiting) == 1 and hs.waiting_lead_counts()[owner.id] == 1   # full: one lead waiting, limit one
+        again = client.post("/jobs/route").json()["decisions"]
+        assert not again.get("assigned") and not again.get("holdout_assigned")  # nothing more while it waits
+
+        r = client.post(f"/lead/{waiting[0].id}/action", data={"owner_id": owner.id, "action": "worked"}, follow_redirects=False)
+        assert r.status_code == 303
+        refill = [c for c in hs.list_contacts() if c.hubspot_owner_id == owner.id and c.hs_lead_status in ("NEW", "OPEN")]
+        assert len(refill) == 1 and refill[0].id != waiting[0].id               # a new lead took the freed slot
+        assert hs.get_contact(waiting[0].id).hs_lead_status == "IN_PROGRESS"   # the worked lead stays theirs
+        assert conn.execute("SELECT decision FROM routing_log WHERE contact_id=? ORDER BY id DESC LIMIT 1",
+                            (refill[0].id,)).fetchone()["decision"] in ("assigned", "holdout_assigned")
+    finally:
+        for oid, limit in limits.items():
+            conn.execute("UPDATE hs_owners SET capacity_limit=? WHERE id=?", (limit, oid))

@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -32,6 +33,7 @@ from ..llm.client import make_llm
 from ..routing.engine import Router
 from ..scoring.pipeline import Scorer, load_live_model
 from ..storage.db import DEFAULT_DB, connect, dumps, get_setting, loads, now_iso
+from . import scheduler as sched
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 MAX_RANK_MOVE = 5    # L12: a bounded override buys adoption without handing the queue back to gut feel
@@ -60,21 +62,36 @@ def _make_client(conn) -> HubSpotClient:
     return MockHubSpot(conn)
 
 
-def create_app(db_path=DEFAULT_DB) -> FastAPI:
-    app = FastAPI(title="AuxoCase")
+def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
+    """`scheduler`: run the jobs on timers in this process. None reads AUXO_SCHEDULER (off unless set; `run.py serve`
+    turns it on by default)."""
     st = State(db_path)
+    runner = sched.Scheduler(db_path, hs=st.hs) if (sched.enabled() if scheduler is None else scheduler) else None
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        if runner:
+            runner.start()
+        try:
+            yield
+        finally:
+            if runner:
+                runner.stop()
+
+    app = FastAPI(title="AuxoCase", lifespan=lifespan)
     app.state.st = st
+    app.state.scheduler = runner
 
     def ctx(request: Request, **kw):
         live = fb.live_version(st.conn)
-        return {"request": request, "live": live, "llm": st.llm.name,
+        return {"request": request, "live": live, "llm": st.llm.name, "scheduler": "on" if runner and runner.running else "off",
                 "line": loads(get_setting(st.conn, "capacity_line_probability")), **kw}
 
     # ---------------- pages ----------------
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
         owners = st.hs.list_owners()
-        counts = st.hs.open_lead_counts()
+        counts = st.hs.waiting_lead_counts()
         pool = st.router().pool()
         held = st.conn.execute("SELECT COUNT(*) n FROM held_queue WHERE released_at IS NULL").fetchone()["n"]
         runs = [dict(r) for r in st.conn.execute("SELECT * FROM run_log ORDER BY id DESC LIMIT 8").fetchall()]
@@ -128,6 +145,9 @@ def create_app(db_path=DEFAULT_DB) -> FastAPI:
         elif action in ("promote", "demote") and c.auxo_rank:
             new_rank = max(1, c.auxo_rank - move) if action == "promote" else c.auxo_rank + move
             st.hs.batch_update_contacts([(contact_id, {"auxo_rank": new_rank, "auxo_review_flag": f"rank moved by {owner_id}: {note}"[:200]})])
+        if action in ("worked", "junk"):
+            # The lead has had its first touch, so the SDR's slot is free: refill it now rather than at the next scheduled pass.
+            st.router().run()
         return RedirectResponse(f"/queue/{owner_id}", status_code=303)
 
     @app.get("/held", response_class=HTMLResponse)
@@ -135,7 +155,7 @@ def create_app(db_path=DEFAULT_DB) -> FastAPI:
         rows = [dict(r) for r in st.conn.execute("SELECT * FROM held_queue WHERE released_at IS NULL ORDER BY held_at").fetchall()]
         leads = {r["contact_id"]: st.hs.get_contact(r["contact_id"]) for r in rows}
         owners = st.hs.list_owners()
-        counts = st.hs.open_lead_counts()
+        counts = st.hs.waiting_lead_counts()
         stale = st.router().stale_assignments()
         return TEMPLATES.TemplateResponse(request, "held.html", ctx(request, rows=rows, leads=leads, owners=owners, counts=counts, stale=stale))
 
