@@ -30,6 +30,7 @@ from ..feedback import loop as fb
 from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
 from ..llm.client import make_llm
+from ..llm.first_email import draft_first_email, sender_first_name
 from ..routing.engine import Router
 from ..scoring.pipeline import Scorer, load_live_model
 from ..storage.db import DEFAULT_DB, connect, dumps, get_setting, loads, now_iso
@@ -110,7 +111,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "queue.html", ctx(request, owner=owner, leads=leads, signals=_signals_for(st.conn, [c.id for c in leads]), hit=hit))
 
     @app.get("/lead/{contact_id}", response_class=HTMLResponse)
-    def lead(request: Request, contact_id: str):
+    def lead(request: Request, contact_id: str, draft: int = 0):
         c = st.hs.get_contact(contact_id)
         if not c:
             raise HTTPException(404)
@@ -122,7 +123,15 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             score["signals"] = loads(score["signals"]) or {}
         history = [dict(r) for r in st.conn.execute("SELECT * FROM overrides WHERE contact_id=? ORDER BY id", (contact_id,)).fetchall()]
         routing = [dict(r) for r in st.conn.execute("SELECT * FROM routing_log WHERE contact_id=? ORDER BY id", (contact_id,)).fetchall()]
-        return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, c=c, co=co, score=score, history=history, routing=routing))
+        email = None
+        if draft and c.email:
+            # Drafted on request only: with Claude on, a draft is a model call, too slow for every page view.
+            owner = next((o for o in st.hs.list_owners() if o.id == c.hubspot_owner_id), None)
+            email = draft_first_email(st.llm, first_name=c.first_name, job_title=c.job_title, company=co.name if co else "",
+                                      channel=c.channel, referral_partner=c.referral_partner, reason=c.auxo_reason or "",
+                                      signals=(score or {}).get("signals", {}).get("signals", []), notes=c.notes,
+                                      sender=sender_first_name(owner.name if owner else None))
+        return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, c=c, co=co, score=score, history=history, routing=routing, email=email))
 
     @app.post("/lead/{contact_id}/action")
     def lead_action(contact_id: str, owner_id: str = Form(...), action: str = Form(...), note: str = Form(""), move: int = Form(0)):

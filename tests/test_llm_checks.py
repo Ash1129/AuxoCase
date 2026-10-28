@@ -88,3 +88,74 @@ def test_readers_accept_json_in_a_code_fence():
     assert not r.error and [s.type for s in r.signals] == ["budget"]
     loss = loss_check('```json\n{"category": "price", "quote": "too expensive for us"}\n```', "In the end it was too expensive for us.")
     assert loss.category == "price" and loss.source == "model"
+
+
+# ---------------- first email ----------------
+from urllib.parse import parse_qs, urlparse
+
+from auxocase.llm.first_email import draft_first_email
+
+EMAIL_NOTES = "They told us Granite Logistics is renewing with Gusto in March and want a comparison before then."
+EMAIL_SIGNALS = [{"type": "timeline", "quote": "in March and want a comparison before", "points": 4},
+                 {"type": "researching", "quote": "want a comparison", "points": -4}]
+
+
+class Scripted:
+    """Answers every prompt with one fixed reply, standing in for Claude."""
+    name = "scripted"
+
+    def __init__(self, reply: str):
+        self.reply = reply
+
+    def complete(self, system: str, user: str, max_tokens: int = 600) -> str:
+        assert user.startswith("TASK: first_email") and "renewing with Gusto in March and want a comparison before then." in user
+        return self.reply
+
+
+def _email(llm):
+    return draft_first_email(llm, first_name="Laura", job_title="HR Director", company="Granite Logistics", channel="referral",
+                             referral_partner="Ledgerline CPA", reason="Ranked up because the lead was referred by a partner.",
+                             signals=EMAIL_SIGNALS, notes=EMAIL_NOTES, sender="Alex")
+
+
+def test_first_email_template_uses_the_positive_signals_quoted_words():
+    d = _email(Offline())
+    assert d.source == "template" and not d.rejected
+    assert d.body.startswith("Hi Laura,") and "Ledgerline CPA suggested we talk." in d.body
+    assert '"in March and want a comparison before"' in d.body
+    assert "researching" not in d.body and d.body.count('"') == 2        # the negative signal is no opening line
+    assert d.body.endswith("Alex") and d.subject == "Payroll at Granite Logistics"
+
+
+def test_first_email_from_claude_is_kept_when_it_passes_the_checks():
+    good = json.dumps({"subject": "Before your March renewal",
+                       "body": 'Hi Laura,\n\nLedgerline CPA mentioned you are "renewing with Gusto in March". '
+                               "Could we find a short call this week?\n\nAlex"})
+    d = _email(Scripted(good))
+    assert d.source == "llm" and d.subject == "Before your March renewal"
+
+
+def test_first_email_from_claude_falls_back_to_the_template_when_a_check_fails():
+    def draft(body, subject="Hello"):
+        return _email(Scripted(json.dumps({"subject": subject, "body": body})))
+    cases = {
+        "Hi Laura, you scored in our top tier. Alex": "score",
+        'Hi Laura, you said "we hate our payroll vendor". Alex': "not in the notes",
+        "Hi Laura, see https://brightpath.example. Alex": "link",
+        "Hi Laura, we save teams 40 hours a month. Alex": "number",
+        "Hi there, could we talk? Alex": "by name",
+        "not json at all": "no usable answer",
+    }
+    for body, why in cases.items():
+        d = draft(body) if body != "not json at all" else _email(Scripted(body))
+        assert d.source == "template" and why in d.rejected, (body, d.rejected)
+        assert d.body.startswith("Hi Laura,")
+
+
+def test_first_email_mailto_carries_subject_and_body():
+    d = _email(Offline())
+    url = d.mailto("laura.ali79@granitelogistics.io")
+    parsed = urlparse(url)
+    assert parsed.scheme == "mailto" and parsed.path == "laura.ali79@granitelogistics.io"
+    q = parse_qs(parsed.query)
+    assert q["subject"] == [d.subject] and q["body"] == [d.body]

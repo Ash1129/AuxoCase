@@ -113,6 +113,19 @@ def test_marking_a_lead_worked_refills_the_sdrs_slot(db):
             conn.execute("UPDATE hs_owners SET capacity_limit=? WHERE id=?", (limit, oid))
 
 
+def test_lead_page_offers_an_email_link_and_a_first_email_draft(db):
+    path, conn, hs = db
+    client = TestClient(create_app(path))
+    c = next(c for c in hs.list_contacts() if c.email and c.first_name)
+    page = client.get(f"/lead/{c.id}").text
+    assert f'href="mailto:{c.email}"' in page and f"/lead/{c.id}?draft=1" in page
+    assert "Open in your email app" not in page                       # no draft until asked for
+    page = client.get(f"/lead/{c.id}?draft=1").text
+    assert "Open in your email app" in page and f"Hi {c.first_name}," in page
+    assert "Drafted by the template" in page                          # tests run the offline reader
+    assert f"mailto:{c.email}?subject=" in page
+
+
 def test_decisions_page_lists_model_and_lead_calls(db):
     """Approvals, send-backs and every SDR call show up on one page with who, what and why."""
     path, conn, hs = db
