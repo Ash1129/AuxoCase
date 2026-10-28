@@ -1,0 +1,40 @@
+{% extends "base.html" %}{% block title %}Decisions · AuxoCase{% endblock %}
+{% block body %}
+<h1>Decisions</h1>
+<p class="sub">Every call people made: which model versions marketing and sales approved or sent back, and which leads SDRs worked or turned down. Newest first.</p>
+<div class="cards">
+  <div class="card"><div class="k">Model approvals</div><div class="v">{{ counts.approve }}</div></div>
+  <div class="card"><div class="k">Models sent back</div><div class="v">{{ counts.send_back }}</div></div>
+  <div class="card"><div class="k">Leads worked</div><div class="v">{{ counts.worked }}</div></div>
+  <div class="card"><div class="k">Leads junked</div><div class="v">{{ counts.junk }}</div></div>
+  <div class="card"><div class="k">Leads skipped</div><div class="v">{{ counts.skipped }}</div></div>
+</div>
+
+<h2>Model versions</h2>
+<p class="sub small">A version goes live once one person from marketing and one from sales approve it. Sending it back retires it.</p>
+<table><tr><th>When</th><th>Version</th><th>Team</th><th>Who</th><th>Decision</th><th>Note</th><th>Version now</th></tr>
+{% for a in models %}<tr>
+<td class="small">{{ a.created_at }}</td>
+<td><a href="/model">{{ a.version }}</a></td>
+<td>{{ a.team }}</td>
+<td>{{ a.approver }}</td>
+<td><span class="pill {{ 'good' if a.decision == 'approve' else 'bad' }}">{{ 'Approved' if a.decision == 'approve' else 'Sent back' }}</span></td>
+<td class="small muted">{{ a.note or '' }}</td>
+<td><span class="pill {{ 'good' if a.status == 'live' else ('accent' if a.status == 'candidate' else '') }}">{{ (a.status or 'unknown')|replace('_', ' ') }}</span></td>
+</tr>{% else %}<tr><td colspan="7" class="muted">No model decisions yet.</td></tr>{% endfor %}
+</table>
+
+<h2>Leads</h2>
+<p class="sub small">Worked means the SDR made first contact. Junk and skipped are leads they turned down, with their reason. Score and rank are what the SDR saw at the time.{% if leads|length >= limit %} Showing the latest {{ limit }}.{% endif %}</p>
+<table><tr><th>When</th><th>SDR</th><th>Lead</th><th>Decision</th><th>Reason</th><th class="num">Score then</th><th class="num">Rank then</th></tr>
+{% for o in leads %}<tr>
+<td class="small">{{ o.created_at }}</td>
+<td>{{ owners.get(o.owner_id, o.owner_id) }}</td>
+<td><a href="/lead/{{ o.contact_id }}">{{ titles.get(o.contact_id) or 'Contact' }}</a> <span class="muted small">#{{ o.contact_id }}</span></td>
+<td><span class="pill {{ 'good' if o.action == 'worked' else ('bad' if o.action == 'junk' else 'warn') }}">{{ {'worked': 'Worked', 'junk': 'Junk', 'skipped': 'Skipped'}[o.action] }}</span></td>
+<td class="small muted">{{ o.note or '' }}</td>
+<td class="num">{{ o.score_at_time if o.score_at_time is not none else '' }}</td>
+<td class="num">{{ o.rank_at_time if o.rank_at_time is not none else '' }}</td>
+</tr>{% else %}<tr><td colspan="7" class="muted">No lead decisions yet.</td></tr>{% endfor %}
+</table>
+{% endblock %}

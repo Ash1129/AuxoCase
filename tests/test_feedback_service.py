@@ -111,3 +111,26 @@ def test_marking_a_lead_worked_refills_the_sdrs_slot(db):
     finally:
         for oid, limit in limits.items():
             conn.execute("UPDATE hs_owners SET capacity_limit=? WHERE id=?", (limit, oid))
+
+
+def test_decisions_page_lists_model_and_lead_calls(db):
+    """Approvals, send-backs and every SDR call show up on one page with who, what and why."""
+    path, conn, hs = db
+    client = TestClient(create_app(path))
+    model, _ = fb.train_candidate(hs, conn, notes="for the decisions page")
+    r = client.post(f"/model/{model.version}/approve", data={"team": "sales", "approver": "Dana from sales",
+                                                              "decision": "send_back", "note": "wait for more referral data"}, follow_redirects=False)
+    assert r.status_code == 303
+    owner = hs.list_owners()[0]
+    leads = [c for c in hs.list_contacts() if c.hubspot_owner_id == owner.id][:3]
+    for c, action, note in zip(leads, ("worked", "junk", "skipped"), ("", "", "already a customer")):
+        client.post(f"/lead/{c.id}/action", data={"owner_id": owner.id, "action": action, "note": note}, follow_redirects=False)
+    page = client.get("/decisions")
+    assert page.status_code == 200
+    text = page.text
+    assert "Sent back" in text and "Dana from sales" in text and "wait for more referral data" in text
+    assert "Approved" in text                                         # the fixture's two approvals of the live model
+    assert "already a customer" in text and owner.name in text
+    for c in leads:
+        assert f"/lead/{c.id}" in text
+    assert 'href="/decisions"' in client.get("/").text               # reachable from the navigation

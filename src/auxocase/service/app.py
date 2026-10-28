@@ -178,6 +178,27 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         speed = fb.speed_to_lead(st.conn)
         return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, regs=regs, monitor=monitor, overrides=[dict(o) for o in overrides], shadow=shadow, speed=speed, hit=_hit_rate(st.conn)))
 
+    @app.get("/decisions", response_class=HTMLResponse)
+    def decisions(request: Request, limit: int = 500):
+        """One place for every human call: model approvals and send-backs, and leads SDRs worked or turned down."""
+        limit = max(1, min(limit, 5000))
+        models = [dict(r) for r in st.conn.execute(
+            "SELECT a.*, m.status FROM approvals a LEFT JOIN model_registry m ON m.version = a.version ORDER BY a.created_at DESC, a.id DESC").fetchall()]
+        leads = [dict(r) for r in st.conn.execute(
+            "SELECT * FROM overrides WHERE action IN ('worked', 'junk', 'skipped') ORDER BY created_at DESC, id DESC LIMIT ?", (limit,)).fetchall()]
+        counts = {"approve": 0, "send_back": 0, "worked": 0, "junk": 0, "skipped": 0}
+        for r in st.conn.execute("SELECT decision k, COUNT(*) n FROM approvals GROUP BY decision UNION ALL "
+                                 "SELECT action k, COUNT(*) n FROM overrides GROUP BY action").fetchall():
+            if r["k"] in counts:
+                counts[r["k"]] += r["n"]
+        owners = {o.id: o.name for o in st.hs.list_owners(active_only=False)}
+        titles = {}
+        for cid in {o["contact_id"] for o in leads}:
+            c = st.hs.get_contact(cid)
+            titles[cid] = c.job_title if c else None
+        return TEMPLATES.TemplateResponse(request, "decisions.html", ctx(request, models=models, leads=leads, counts=counts,
+                                                                          owners=owners, titles=titles, limit=limit))
+
     @app.post("/model/{version}/approve")
     def approve(version: str, team: str = Form(...), approver: str = Form(...), decision: str = Form(...), note: str = Form("")):
         try:
