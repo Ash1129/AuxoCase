@@ -52,8 +52,10 @@ def model_dir(conn: sqlite3.Connection) -> Path:
 
 # ---------------------------------------------------------------- outcomes
 def sync_outcomes(hs: HubSpotClient, conn: sqlite3.Connection, since: Optional[datetime] = None) -> dict:
-    """Join HubSpot's view of what happened to every MQL into one row per lead."""
-    contacts = [c for c in hs.list_contacts() if c.lifecycle_stage != "lead"]
+    """Join HubSpot's view of what happened to every MQL into one row per lead. Leads older than `since` (default:
+    the training window plus maturity, ~13 months) keep the rows earlier syncs wrote; their outcomes are settled."""
+    since = since or (clock(conn) - timedelta(days=400))
+    contacts = [c for c in hs.list_contacts(created_since=since) if c.lifecycle_stage != "lead"]
     n_booked = n_won = n_worked = 0
     for c in contacts:
         meetings = hs.meetings_for_contact(c.id)
@@ -70,13 +72,14 @@ def sync_outcomes(hs: HubSpotClient, conn: sqlite3.Connection, since: Optional[d
             # The first change of hs_lead_status is the first SDR touch; HubSpot exposes it through property history (H02).
             first_touch = _first_status_change(conn, c.id)
         conn.execute(
-            "INSERT INTO outcomes(contact_id, worked, first_touch_at, demo_booked, demo_booked_at, closed_won, closed_won_at, closed_lost, closed_lost_at, amount, label_as_of, updated_at) "
-            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET worked=excluded.worked, first_touch_at=COALESCE(excluded.first_touch_at, outcomes.first_touch_at), "
+            "INSERT INTO outcomes(contact_id, worked, first_touch_at, demo_booked, demo_booked_at, closed_won, closed_won_at, closed_lost, closed_lost_at, amount, label_as_of, updated_at, lead_created_at) "
+            "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET worked=excluded.worked, first_touch_at=COALESCE(excluded.first_touch_at, outcomes.first_touch_at), "
+            "lead_created_at=excluded.lead_created_at, "
             "demo_booked=excluded.demo_booked, demo_booked_at=excluded.demo_booked_at, closed_won=excluded.closed_won, closed_won_at=excluded.closed_won_at, "
             "closed_lost=excluded.closed_lost, closed_lost_at=excluded.closed_lost_at, amount=excluded.amount, label_as_of=excluded.label_as_of, updated_at=excluded.updated_at",
             (c.id, worked, first_touch, int(bool(booked)), demo_at.isoformat() if demo_at else None, int(bool(won)),
              won[0].closedate.isoformat() if won and won[0].closedate else None, int(bool(lost)),
-             lost[0].closedate.isoformat() if lost and lost[0].closedate else None, amount, now_iso(), now_iso()))
+             lost[0].closedate.isoformat() if lost and lost[0].closedate else None, amount, now_iso(), now_iso(), c.createdate.isoformat()))
         n_worked += worked
         n_booked += int(bool(booked))
         n_won += int(bool(won))
@@ -102,7 +105,7 @@ def build_training_table(hs: HubSpotClient, conn: sqlite3.Connection, window_mon
     holdouts = {r["contact_id"] for r in conn.execute("SELECT DISTINCT contact_id FROM routing_log WHERE decision='holdout_assigned'").fetchall()}
     rows, states, created, points, hub, closed, ids, hold = [], [], [], [], [], [], [], []
     companies = {}
-    for c in hs.list_contacts():
+    for c in hs.list_contacts(created_since=start):
         if c.lifecycle_stage == "lead" or c.createdate < start or c.createdate > as_of:
             continue
         if c.company_id not in companies:
@@ -150,7 +153,7 @@ def channel_monitor(hs: HubSpotClient, conn: sqlite3.Connection, months: int = 3
     last_scores = {r["contact_id"]: r["probability"] for r in conn.execute(
         "SELECT contact_id, probability FROM scores WHERE id IN (SELECT MAX(id) FROM scores GROUP BY contact_id)").fetchall()}
     groups: dict[tuple[str, str], list[tuple[int, float]]] = {}
-    for c in hs.list_contacts(lifecycle_stage=None):
+    for c in hs.list_contacts(created_since=as_of - timedelta(days=31 * months)):
         o = outcomes.get(c.id)
         if not o or c.createdate < as_of - timedelta(days=31 * months):
             continue
@@ -253,16 +256,126 @@ def shadow_comparison(hs: HubSpotClient, conn: sqlite3.Connection, k: int = 500)
     return out
 
 
-def speed_to_lead(conn: sqlite3.Connection) -> dict:
-    rows = conn.execute("SELECT r.contact_id, r.created_at, o.first_touch_at FROM routing_log r JOIN outcomes o ON o.contact_id=r.contact_id "
-                        "WHERE r.decision IN ('assigned','holdout_assigned') AND o.first_touch_at IS NOT NULL").fetchall()
-    hours = []
+def _hours_to_first_touch(rows) -> list[float]:
+    out = []
     for r in rows:
         try:
-            hours.append((datetime.fromisoformat(r["first_touch_at"]) - datetime.fromisoformat(r["created_at"])).total_seconds() / 3600)
+            out.append((datetime.fromisoformat(r["first_touch_at"]) - datetime.fromisoformat(r["lead_created_at"])).total_seconds() / 3600)
         except (TypeError, ValueError):
             continue
+    return sorted(h for h in out if h >= 0)
+
+
+def _speed(hours: list[float]) -> dict:
     if not hours:
         return {"n": 0}
-    hours.sort()
     return {"n": len(hours), "median_hours": round(hours[len(hours) // 2], 1), "within_24h": round(sum(h <= 24 for h in hours) / len(hours), 3)}
+
+
+def speed_to_lead(conn: sqlite3.Connection) -> dict:
+    """Hours from the lead's creation to the first SDR touch (BrightPath answer 4: the median was 3 days).
+
+    The top-level numbers are for leads this service routed; `baseline` is every worked lead it did not route
+    (the history, picked by gut feel)."""
+    routed = _hours_to_first_touch(conn.execute(
+        "SELECT o.first_touch_at, o.lead_created_at FROM outcomes o WHERE o.worked=1 AND o.contact_id IN "
+        "(SELECT contact_id FROM routing_log WHERE decision IN ('assigned','holdout_assigned'))").fetchall())
+    baseline = _hours_to_first_touch(conn.execute(
+        "SELECT o.first_touch_at, o.lead_created_at FROM outcomes o WHERE o.worked=1 AND o.contact_id NOT IN "
+        "(SELECT contact_id FROM routing_log WHERE decision IN ('assigned','holdout_assigned'))").fetchall())
+    return {**_speed(routed), "baseline": _speed(baseline)}
+
+
+def speed_effect(conn: sqlite3.Connection, fresh_hours: float = 24.0) -> dict:
+    """Demo rate for leads first touched inside the fresh window against after it, from outcomes: the measured
+    value of the router's `stale_lead_factor`. Confounded by which leads got fast touches; read it as a range."""
+    rows = conn.execute("SELECT first_touch_at, lead_created_at, demo_booked FROM outcomes WHERE worked=1 AND first_touch_at IS NOT NULL").fetchall()
+    fast, slow = [0, 0], [0, 0]
+    for r in rows:
+        try:
+            h = (datetime.fromisoformat(r["first_touch_at"]) - datetime.fromisoformat(r["lead_created_at"])).total_seconds() / 3600
+        except (TypeError, ValueError):
+            continue
+        g = fast if h <= fresh_hours else slow
+        g[0] += 1
+        g[1] += r["demo_booked"]
+    if min(fast[0], slow[0]) < 100:
+        return {"n_fast": fast[0], "n_slow": slow[0]}
+    rf, rs = fast[1] / fast[0], slow[1] / slow[0]
+    return {"n_fast": fast[0], "n_slow": slow[0], "rate_fast": round(rf, 3), "rate_slow": round(rs, 3), "factor": round(rs / rf, 2) if rf else None}
+
+
+def success_by_month(conn: sqlite3.Connection) -> list[dict]:
+    """BrightPath answer 9, month by month at the same 12 SDRs: leads worked, demos booked (the SQLs), and how fast
+    the first touch came. A month is 'routed' when most of its first touches were leads this service assigned."""
+    rows = conn.execute(
+        "SELECT substr(o.first_touch_at, 1, 7) month, o.first_touch_at, o.lead_created_at, o.demo_booked, "
+        "CASE WHEN o.contact_id IN (SELECT contact_id FROM routing_log WHERE decision IN ('assigned','holdout_assigned')) THEN 1 ELSE 0 END routed "
+        "FROM outcomes o WHERE o.worked=1 AND o.first_touch_at IS NOT NULL").fetchall()
+    months: dict[str, list] = {}
+    for r in rows:
+        months.setdefault(r["month"], []).append(r)
+    out = []
+    for m in sorted(months):
+        rs = months[m]
+        sp = _speed(_hours_to_first_touch(rs))
+        out.append({"month": m, "worked": len(rs), "demos": sum(r["demo_booked"] for r in rs),
+                    "routed_share": round(sum(r["routed"] for r in rs) / len(rs), 2), **{k: sp.get(k) for k in ("median_hours", "within_24h")}})
+    return out
+
+
+# ---------------------------------------------------------------- loss reasons and the MQL gate
+def classify_losses(hs: HubSpotClient, conn: sqlite3.Connection, llm) -> dict:
+    """Read every closed-lost reason not read yet into a fixed category (llm/loss_reasons.py). Idempotent by deal."""
+    from ..llm.loss_reasons import read_loss_reason
+    done = {r["deal_id"] for r in conn.execute("SELECT deal_id FROM loss_reasons")}
+    counts: dict[str, int] = {}
+    for d in hs.deals_modified_since(datetime(2000, 1, 1)):
+        if d.dealstage != "closedlost" or d.id in done:
+            continue
+        r = read_loss_reason(llm, d.closed_lost_reason or "")
+        conn.execute("INSERT OR REPLACE INTO loss_reasons(deal_id, contact_id, category, quote, source, raw, created_at) VALUES(?,?,?,?,?,?,?)",
+                     (d.id, d.contact_id, r.category, r.quote, r.source, d.closed_lost_reason or "", now_iso()))
+        counts[r.category] = counts.get(r.category, 0) + 1
+    return counts
+
+
+def loss_report(hs: HubSpotClient, conn: sqlite3.Connection) -> dict:
+    """Loss categories by company size band, as the record shows it (blank size is its own column)."""
+    from ..scoring.features import size_band
+    table: dict[str, dict[str, int]] = {}
+    companies: dict = {}
+    for r in conn.execute("SELECT contact_id, category FROM loss_reasons").fetchall():
+        c = hs.get_contact(r["contact_id"])
+        if c is None:
+            continue
+        if c.company_id not in companies:
+            companies[c.company_id] = hs.get_company(c.company_id) if c.company_id else None
+        co = companies[c.company_id]
+        band = size_band(co.num_employees if co else None)
+        table.setdefault(r["category"], {}).setdefault(band, 0)
+        table[r["category"]][band] += 1
+    return table
+
+
+def mql_gate_report(hs: HubSpotClient, conn: sqlite3.Connection, months: int = 3, as_of: Optional[datetime] = None) -> list[dict]:
+    """Per channel: how many leads reach MQL, and how many are missing a title or a company size. Shows where
+    HubSpot's gate, which only the MQLs pass to the pool, drops leads before this service sees them."""
+    as_of = as_of or clock(conn)
+    rows: dict[str, dict] = {}
+    companies: dict = {}
+    for c in hs.list_contacts(created_since=as_of - timedelta(days=31 * months)):
+        if c.company_id not in companies:
+            companies[c.company_id] = hs.get_company(c.company_id) if c.company_id else None
+        co = companies[c.company_id]
+        g = rows.setdefault(c.channel, {"channel": c.channel, "leads": 0, "mql": 0, "no_title": 0, "no_size": 0})
+        g["leads"] += 1
+        g["mql"] += int(c.lifecycle_stage != "lead")
+        g["no_title"] += int(not c.job_title)
+        g["no_size"] += int(not (co and co.num_employees))
+    out = []
+    for g in sorted(rows.values(), key=lambda x: -x["leads"]):
+        n = g["leads"]
+        out.append({"channel": g["channel"], "leads": n, "mql_share": round(g["mql"] / n, 3),
+                    "no_title": round(g["no_title"] / n, 3), "no_size": round(g["no_size"] / n, 3)})
+    return out

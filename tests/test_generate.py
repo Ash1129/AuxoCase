@@ -5,6 +5,8 @@ from datetime import datetime
 import pytest
 
 from auxocase.data.generate import (
+    MQL_THRESHOLD,
+    hubspot_points,
     add_month_of_leads,
     generate,
     generate_notes,
@@ -28,11 +30,34 @@ def test_funnel_matches_brief(world):
     assert 1500 * 0.75 <= s["avg_mql_per_month"] <= 1500 * 1.25
     assert s["avg_worked_per_month"] == 500
     assert 180 * 0.75 <= s["avg_demos_per_month"] <= 180 * 1.25
-    rates = s["demo_rate_by_channel_among_worked"]
-    assert rates["referral"] >= 2 * rates["website"]
-    # Channel shares land where the brief puts them.
+    # Answer 1: referrals and webinar attendees close at 2-3x the average, on the hidden truth.
+    avg = s["true_won_rate_overall"]
+    assert 1.75 * avg <= s["true_won_rate_by_channel_among_mqls"]["referral"] <= 3.5 * avg
+    assert 1.75 * avg <= s["true_won_rate_webinar_attended"] <= 3.5 * avg
+    # Channel shares land where answer 1 puts them.
     share = {c: n / s["contacts"] for c, n in s["contacts_per_channel"].items()}
-    assert abs(share["website"] - 0.35) < 0.03 and abs(share["referral"] - 0.08) < 0.02
+    assert abs(share["website"] - 0.35) < 0.03 and abs(share["referral"] - 0.10) < 0.02
+
+
+def test_missing_fields_follow_the_answers(world):
+    """Answer 2: ~40% of leads miss a title or a size; answer 1: referral and webinar forms miss them most.
+    The record is blank but the truth is kept, and HubSpot's points give nothing for a blank."""
+    conn, _ = world
+    rows = conn.execute(
+        "SELECT c.channel, c.job_title = '' no_title, co.num_employees IS NULL no_size, t.job_title true_title, t.num_employees true_size "
+        "FROM hs_contacts c JOIN hs_companies co ON co.id = c.company_id JOIN sim_truth t ON t.contact_id = c.id").fetchall()
+    assert len(rows) == 18000
+    either = sum(r["no_title"] or r["no_size"] for r in rows) / len(rows)
+    assert 0.32 <= either <= 0.48, either
+    by = {}
+    for r in rows:
+        g = by.setdefault(r["channel"], [0, 0])
+        g[0] += 1
+        g[1] += r["no_title"] or r["no_size"]
+    rate = {ch: m / n for ch, (n, m) in by.items()}
+    assert min(rate["referral"], rate["webinar"]) > 2 * rate["website"], rate
+    assert all(r["true_title"] and r["true_size"] for r in rows)
+    assert hubspot_points("unknown", None, 0, 0) == 0
 
 
 def test_last_month_is_untouched_and_only_it_has_creation_events(world):
@@ -97,7 +122,7 @@ def test_add_month_of_leads_continues_ids_and_emits_events(world):
     assert len(rows) == 300
     assert all(r["hubspot_owner_id"] is None for r in rows)
     assert all(start <= datetime.fromisoformat(r["createdate"]) < datetime(2025, 12, 1) for r in rows)
-    assert all((r["lifecycle_stage"] == "marketingqualifiedlead") == (r["hubspot_score"] >= 50) for r in rows)
+    assert all((r["lifecycle_stage"] == "marketingqualifiedlead") == (r["hubspot_score"] >= MQL_THRESHOLD) for r in rows)
     events = hs.poll_events(500)
     assert len(events) == 300 and {e.subscription_type for e in events} == {"contact.creation"}
 

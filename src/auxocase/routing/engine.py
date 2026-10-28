@@ -4,9 +4,22 @@ Blueprint job 2 as designed (fixed rules, no AI), with three additions the
 knowledge base asked for:
 
 - The capacity line. The brief's team works about 500 of 1,500 MQLs a month.
-  Routing is by rank in the current pool: leads above the line are assigned,
-  the rest are left in the pool and re-ranked as new leads arrive, so the
-  line itself is what marketing and sales negotiate (L03, L10).
+  Routing is by rank in the current pool (pool.py): free SDR slots go to the
+  top of the pool, the rest stay and are re-ranked as new leads arrive. The
+  line drawn for people to see is the probability at the rank the team can
+  reach in the next week at its monthly capacity; it is what marketing and
+  sales negotiate (L03, L10).
+- Small queues (BrightPath answers 4 and 9). An SDR holds one waiting lead
+  (`capacity_limit` on the owner), and routing refills the slot as soon as it
+  is touched, so the best new lead takes the next free slot instead of
+  waiting behind a month of older ones. That is where faster follow-up
+  without more SDRs comes from.
+- Freshness. When demand runs ahead of capacity, the pool keeps a backlog of
+  good older leads; ranked on probability alone they crowd out the new ones.
+  A lead past its fresh window is worth `stale_lead_factor` of what it was
+  (BrightPath measured about 0.5 after a day: answer 4), so routing orders the
+  pool by probability times that factor. The factor is a setting, and the
+  evaluation measures it from outcomes so it can be kept honest.
 - An exploration slice (L05). A fixed share of the assigned slots (default
   8%) goes to leads drawn at random from below the line, marked
   `auxo_holdout`, so next month's model has labels the SDRs' taste didn't
@@ -30,11 +43,24 @@ from typing import Optional
 
 from ..hubspot.client import HubSpotClient
 from ..hubspot.models import Contact, Owner
+from ..pool import pool_contacts
 from ..storage.db import clock, dumps, get_setting, now_iso, set_setting, tx
 
 DEFAULT_EXPLORATION_SHARE = 0.08
 DEFAULT_TASK_DUE_HOURS = 4
 DEFAULT_FIRST_TOUCH_SLA_HOURS = 24
+DEFAULT_TEAM_CAPACITY_PER_MONTH = 500    # the brief: 12 SDRs work about 500 MQLs a month
+DEFAULT_LINE_HORIZON_DAYS = 7
+DEFAULT_HOLD_AFTER_HOURS = 24            # an above-line lead unplaced this long goes to the manager
+DEFAULT_FRESH_HOURS = 24
+
+
+def priority(conn: sqlite3.Connection, probability: Optional[float], created: datetime, now: datetime) -> float:
+    """What touching the lead now is worth: its probability, discounted once it is past the fresh window."""
+    fresh_hours = float(get_setting(conn, "fresh_hours") or DEFAULT_FRESH_HOURS)
+    factor = float(get_setting(conn, "stale_lead_factor") or 1.0)
+    age_hours = (now - created).total_seconds() / 3600
+    return (probability or 0.0) * (1.0 if age_hours <= fresh_hours else factor)
 
 
 @dataclass
@@ -60,19 +86,22 @@ def _missing_fields(c: Contact) -> list[str]:
 class Router:
     def __init__(self, hs: HubSpotClient, conn: sqlite3.Connection, seed: int = 11,
                  exploration_share: float = DEFAULT_EXPLORATION_SHARE,
-                 task_due_hours: int = DEFAULT_TASK_DUE_HOURS, team: str = "sdr", hold_limit: int = 50):
+                 task_due_hours: int = DEFAULT_TASK_DUE_HOURS, team: str = "sdr", hold_limit: int = 50,
+                 hold_after_hours: int = DEFAULT_HOLD_AFTER_HOURS):
         self.hs, self.conn, self.team = hs, conn, team
         self.rng = random.Random(seed)
         self.exploration_share = exploration_share
         self.task_due_hours = task_due_hours
         self.hold_limit = hold_limit
+        self.hold_after_hours = hold_after_hours
 
     # ---- the pool and the line ------------------------------------------------
-    def pool(self) -> list[Contact]:
-        """Scored, unowned MQLs, best first."""
-        rows = [c for c in self.hs.list_contacts(lifecycle_stage="marketingqualifiedlead")
-                if c.hubspot_owner_id is None and c.auxo_probability is not None and c.auxo_route != "incomplete"]
-        rows.sort(key=lambda c: (-(c.auxo_probability or 0), c.createdate))
+    def pool(self, now: Optional[datetime] = None) -> list[Contact]:
+        """Scored leads in the pool, most valuable to touch now first."""
+        now = now or clock(self.conn)
+        rows = [c for c in pool_contacts(self.hs, self.conn)
+                if c.auxo_probability is not None and c.auxo_route != "incomplete"]
+        rows.sort(key=lambda c: (-priority(self.conn, c.auxo_probability, c.createdate, now), c.createdate))
         return rows
 
     def free_slots(self) -> tuple[dict[str, int], list[Owner], int]:
@@ -88,18 +117,50 @@ class Router:
         counts, owners, free = self.free_slots()
         if not owners:
             return decisions
-        pool = self.pool()
-        budget = free if max_assignments is None else min(free, max_assignments)
+        pool = self.pool(now)
+        # A held lead that has left the pool (aged out, or owned some other way) is no longer the manager's to place.
+        in_pool = {c.id for c in pool}
+        for r in self.conn.execute("SELECT contact_id FROM held_queue WHERE released_at IS NULL").fetchall():
+            if r["contact_id"] not in in_pool:
+                self.conn.execute("UPDATE held_queue SET released_at=?, released_by='left the pool' WHERE contact_id=? AND released_at IS NULL",
+                                  (now.isoformat(timespec="seconds"), r["contact_id"]))
         if not pool:
             return decisions
+        line_p = self._line_probability(pool, now)
+        set_setting(self.conn, "capacity_line_probability", dumps(line_p))
+        budget = free if max_assignments is None else min(free, max_assignments)
         if budget <= 0:
-            # Nobody is free. The top of the pool goes to the held queue, bounded so the manager's page stays
-            # readable; everything below stays in the pool for the next run (held_queue ignores repeats).
-            already = {r["contact_id"] for r in self.conn.execute("SELECT contact_id FROM held_queue WHERE released_at IS NULL")}
-            for c in [c for c in pool if c.id not in already][: self.hold_limit]:
+            # Nobody is free. Above-line leads that have waited past the hold time go to the manager's queue,
+            # bounded so the page stays readable; the rest wait for the next free slot.
+            held = {r["contact_id"] for r in self.conn.execute("SELECT contact_id FROM held_queue WHERE released_at IS NULL")}
+            cutoff = now - timedelta(hours=self.hold_after_hours)
+            waiting = [c for c in pool if c.id not in held and c.createdate <= cutoff
+                       and line_p is not None and priority(self.conn, c.auxo_probability, c.createdate, now) >= line_p]
+            for c in waiting[: self.hold_limit]:
                 decisions.append(self._assign_one(c, owners, counts, False, now))
             set_setting(self.conn, "last_routing_run", now_iso())
             return decisions
+
+        # The exploration share of the free slots, rounded at random so small, frequent runs still honour it.
+        expected = budget * self.exploration_share
+        n_explore = int(expected) + (1 if self.rng.random() < expected - int(expected) else 0)
+        n_top = budget - n_explore
+        top = pool[:n_top]
+        below = pool[n_top:]
+        explore = self.rng.sample(below, min(n_explore, len(below))) if n_explore and below else []
+        chosen = [(c, False) for c in top] + [(c, True) for c in explore]
+        for contact, is_holdout in chosen:
+            decisions.append(self._assign_one(contact, owners, counts, is_holdout, now))
+        set_setting(self.conn, "last_routing_run", now_iso())
+        return decisions
+
+    def _line_probability(self, pool: list[Contact], now: datetime) -> Optional[float]:
+        """The value at the rank the team reaches in the line horizon at its monthly capacity."""
+        per_month = float(get_setting(self.conn, "team_capacity_per_month") or DEFAULT_TEAM_CAPACITY_PER_MONTH)
+        days = float(get_setting(self.conn, "capacity_line_days") or DEFAULT_LINE_HORIZON_DAYS)
+        k = max(1, int(round(per_month * days / 30.4)))
+        c = pool[min(k, len(pool)) - 1]
+        return priority(self.conn, c.auxo_probability, c.createdate, now)
 
         n_explore = int(round(budget * self.exploration_share))
         n_top = budget - n_explore
@@ -144,7 +205,7 @@ class Router:
             owner = self._next_owner(owners, counts)
             if owner is None:
                 self.conn.execute("INSERT OR IGNORE INTO held_queue(contact_id, held_at, reason) VALUES(?,?,?)",
-                                  (contact.id, now_iso(), "all SDRs at capacity"))
+                                  (contact.id, now.isoformat(timespec="seconds"), "all SDRs at capacity"))
                 self.hs.batch_update_contacts([(contact.id, {"auxo_route": "held"})])
                 return self._log(RoutingDecision(contact.id, "held", reason="all SDRs at capacity"), counts)
             if not self.hs.set_owner(contact.id, owner.id, expected_current=None):
@@ -156,6 +217,8 @@ class Router:
                 subject = "Calibration lead (please work like any other): " + subject
             task = self.hs.create_task(owner.id, contact.id, subject, contact.auxo_reason or "", due_at=now + timedelta(hours=self.task_due_hours))
             self.hs.batch_update_contacts([(contact.id, {"auxo_route": "assigned", "auxo_holdout": bool(is_holdout)})])
+            self.conn.execute("UPDATE held_queue SET released_at=?, released_by='routing', released_to=? WHERE contact_id=? AND released_at IS NULL",
+                              (now.isoformat(timespec="seconds"), owner.id, contact.id))
         d = RoutingDecision(contact.id, "holdout_assigned" if is_holdout else "assigned", owner_id=owner.id, task_id=task.id,
                             reason="exploration slice" if is_holdout else "above the capacity line")
         return self._log(d, counts, owner)
@@ -163,7 +226,8 @@ class Router:
     def _log(self, d: RoutingDecision, counts: dict[str, int], owner: Optional[Owner] = None) -> RoutingDecision:
         self.conn.execute(
             "INSERT INTO routing_log(contact_id, owner_id, decision, reason, open_count_at_decision, capacity_limit, task_id, created_at) VALUES(?,?,?,?,?,?,?,?)",
-            (d.contact_id, d.owner_id, d.decision, d.reason, counts.get(d.owner_id or "", None), owner.capacity_limit if owner else None, d.task_id, now_iso()))
+            (d.contact_id, d.owner_id, d.decision, d.reason, counts.get(d.owner_id or "", None), owner.capacity_limit if owner else None, d.task_id,
+             clock(self.conn).isoformat(timespec="seconds")))
         return d
 
     # ---- the manager's queue and the SLA ---------------------------------------
@@ -174,7 +238,7 @@ class Router:
                 return False
             task = self.hs.create_task(owner_id, contact_id, "Lead released from the held queue", note, due_at=clock(self.conn) + timedelta(hours=self.task_due_hours))
             self.conn.execute("UPDATE held_queue SET released_at=?, released_by=?, released_to=? WHERE contact_id=?",
-                              (now_iso(), released_by, owner_id, contact_id))
+                              (clock(self.conn).isoformat(timespec="seconds"), released_by, owner_id, contact_id))
             self.hs.batch_update_contacts([(contact_id, {"auxo_route": "assigned"})])
             self._log(RoutingDecision(contact_id, "assigned", owner_id=owner_id, task_id=task.id, reason=f"released by {released_by}"), {})
         return True

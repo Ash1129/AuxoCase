@@ -39,11 +39,21 @@ CREATE TABLE IF NOT EXISTS hs_contacts (
 );
 CREATE INDEX IF NOT EXISTS hs_contacts_modified ON hs_contacts(lastmodifieddate);
 CREATE INDEX IF NOT EXISTS hs_contacts_owner ON hs_contacts(hubspot_owner_id);
+CREATE INDEX IF NOT EXISTS hs_contacts_created ON hs_contacts(createdate);
 CREATE TABLE IF NOT EXISTS hs_deals (
   id TEXT PRIMARY KEY, contact_id TEXT, dealstage TEXT, amount REAL, createdate TEXT, closedate TEXT,
-  hs_is_closed_won INTEGER, owner_id TEXT, lastmodifieddate TEXT
+  hs_is_closed_won INTEGER, owner_id TEXT, lastmodifieddate TEXT, closed_lost_reason TEXT
 );
 CREATE INDEX IF NOT EXISTS hs_deals_contact ON hs_deals(contact_id);
+CREATE TABLE IF NOT EXISTS loss_reasons (
+  deal_id TEXT PRIMARY KEY, contact_id TEXT, category TEXT, quote TEXT, source TEXT, raw TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS enrichment_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, contact_id TEXT, asked TEXT, filled TEXT, provider TEXT, created_at TEXT
+);
+CREATE TABLE IF NOT EXISTS sim_truth (
+  contact_id TEXT PRIMARY KEY, seniority TEXT, job_title TEXT, num_employees INTEGER
+);
 CREATE TABLE IF NOT EXISTS hs_meetings (
   id TEXT PRIMARY KEY, contact_id TEXT, owner_id TEXT, start_time TEXT, outcome TEXT, createdate TEXT
 );
@@ -91,7 +101,7 @@ CREATE TABLE IF NOT EXISTS review_decisions (
 CREATE TABLE IF NOT EXISTS outcomes (
   contact_id TEXT PRIMARY KEY, worked INTEGER DEFAULT 0, first_touch_at TEXT, demo_booked INTEGER DEFAULT 0,
   demo_booked_at TEXT, closed_won INTEGER DEFAULT 0, closed_won_at TEXT, closed_lost INTEGER DEFAULT 0,
-  closed_lost_at TEXT, amount REAL, label_as_of TEXT, updated_at TEXT
+  closed_lost_at TEXT, amount REAL, label_as_of TEXT, updated_at TEXT, lead_created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS model_registry (
   version TEXT PRIMARY KEY, family TEXT, trained_at TEXT, train_rows INTEGER, positives INTEGER,
@@ -120,7 +130,20 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA busy_timeout=5000")
     conn.executescript(SCHEMA)
+    _migrate(conn)
     return conn
+
+
+# Columns added after a database may already exist; CREATE TABLE IF NOT EXISTS does not add them.
+_ADDED_COLUMNS = {"hs_deals": {"closed_lost_reason": "TEXT"}, "outcomes": {"lead_created_at": "TEXT"}}
+
+
+def _migrate(conn: sqlite3.Connection) -> None:
+    for table, cols in _ADDED_COLUMNS.items():
+        have = {r["name"] for r in conn.execute(f"PRAGMA table_info({table})")}
+        for col, kind in cols.items():
+            if col not in have:
+                conn.execute(f"ALTER TABLE {table} ADD COLUMN {col} {kind}")
 
 
 @contextmanager

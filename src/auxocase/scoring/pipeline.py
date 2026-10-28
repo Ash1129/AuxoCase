@@ -25,6 +25,8 @@ from ..llm.client import LLM, make_llm
 from ..llm.reason import write_reason
 from ..llm.signals import SignalReading, read_signals
 from ..storage.db import dumps, get_setting, now_iso, set_setting
+from ..pool import pool_contacts, stages
+from .enrich import Enricher, enrich_lead, make_enricher
 from .explain import Explanation, explain
 from .features import feature_row, input_hash
 from .model import DemoModel
@@ -53,13 +55,15 @@ class ScoredLead:
     input_hash: str = ""
     rank: Optional[int] = None
     pool_size: Optional[int] = None
+    enriched: dict = field(default_factory=dict)
 
 
 class Scorer:
     def __init__(self, hs: HubSpotClient, conn: sqlite3.Connection, model: Optional[DemoModel] = None,
-                 llm: Optional[LLM] = None, average_acv: float = 24000.0):
+                 llm: Optional[LLM] = None, average_acv: float = 24000.0, enricher: Optional[Enricher] = None):
         self.hs, self.conn = hs, conn
         self.model = model
+        self.enricher = enricher or make_enricher(conn)
         self.llm = llm or make_llm()
         self.average_acv = average_acv
 
@@ -70,6 +74,7 @@ class Scorer:
     # ---- one lead ---------------------------------------------------------------
     def score_one(self, c: Contact, cutoff: Optional[float] = None) -> ScoredLead:
         company = self.hs.get_company(c.company_id) if c.company_id else None
+        c, company, enriched = enrich_lead(self.hs, self.conn, self.enricher, c, company)
         missing = [f for f in REQUIRED_FIELDS if not getattr(c, f)]
         row = feature_row(c, company)
         h = input_hash({**row, "notes": c.notes or "", "v": self.model_version})
@@ -94,6 +99,9 @@ class Scorer:
         p = min(0.99, max(0.01, base_p + signals.adjustment / 100.0))
         if signals.signals:
             template += " Notes mention " + ", ".join(s.type.replace("_", " ") for s in signals.signals) + "."
+        if enriched:
+            template += " " + " and ".join({"job_title": "Job title", "num_employees": "Company size"}[k]
+                                           for k in ("job_title", "num_employees") if k in enriched) + " from the enrichment tool."
         reason, source = write_reason(self.llm, template)
         ev = p * p_close * (company.annual_revenue * 0.004 if company and company.annual_revenue else self.average_acv)
 
@@ -101,7 +109,7 @@ class Scorer:
         return ScoredLead(contact_id=c.id, probability=round(p, 4), score=round(100 * p, 1), p_close=round(p_close, 4),
                           expected_value=round(ev, 0), reason=reason, reason_source=source, explanation=expl, signals=signals,
                           base_probability=round(base_p, 4), model_version=self.model_version, review_flag=flag,
-                          incomplete=missing, input_hash=h)
+                          incomplete=missing, input_hash=h, enriched=enriched)
 
     def _review_flag(self, c: Contact, company, p: float, cutoff: Optional[float], signals: SignalReading) -> str:
         flags = []
@@ -120,8 +128,8 @@ class Scorer:
         contacts = list(contacts)
         cutoff = _loads_float(get_setting(self.conn, "capacity_line_probability"))
         results = [self.score_one(c) if cutoff is None else self.score_one(c, cutoff) for c in contacts]
-        # Rank within the current unowned MQL pool, not within the batch.
-        pool = {c.id: c for c in self.hs.list_contacts(lifecycle_stage="marketingqualifiedlead") if c.hubspot_owner_id is None}
+        # Rank within the current pool (pool.py), not within the batch.
+        pool = {c.id: c for c in pool_contacts(self.hs, self.conn)}
         probs = {cid: (c.auxo_probability or 0.0) for cid, c in pool.items()}
         for r in results:
             if r.contact_id in pool:
@@ -183,12 +191,20 @@ class Scorer:
                 if e.property_name.startswith("auxo_"):
                     continue
                 ids.append(e.object_id)
-        contacts = [c for c in (self.hs.get_contact(i) for i in ids) if c is not None and c.lifecycle_stage in ("lead", "marketingqualifiedlead")]
+        in_pool = stages(self.conn)
+        contacts = [c for c in (self.hs.get_contact(i) for i in ids) if c is not None and not c.hubspot_owner_id and c.lifecycle_stage in in_pool]
         return self.score_batch(contacts) if contacts else []
 
+    def refresh_ranks(self) -> int:
+        """Rewrite auxo_rank for the pool as it stands; ranks move as leads arrive and leave without a re-score."""
+        pool = sorted(pool_contacts(self.hs, self.conn), key=lambda c: (-(c.auxo_probability or 0), c.createdate))
+        updates = [(c.id, {"auxo_rank": i + 1}) for i, c in enumerate(pool) if c.auxo_probability is not None and c.auxo_rank != i + 1]
+        if updates:
+            self.hs.batch_update_contacts(updates)
+        return len(updates)
+
     def rescore_pool(self) -> list[ScoredLead]:
-        pool = [c for c in self.hs.list_contacts(lifecycle_stage="marketingqualifiedlead") if c.hubspot_owner_id is None]
-        return self.score_batch(pool)
+        return self.score_batch(pool_contacts(self.hs, self.conn))
 
 
 def _points_to_probability(points: int) -> float:

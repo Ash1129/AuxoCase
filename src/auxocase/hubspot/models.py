@@ -116,6 +116,7 @@ class Deal:
     closedate: Optional[datetime] = None
     hs_is_closed_won: bool = False
     owner_id: Optional[str] = None
+    closed_lost_reason: str = ""        # HubSpot's closed_lost_reason: free text, messy (brief answer 2)
 
 
 @dataclass

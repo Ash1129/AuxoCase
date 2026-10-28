@@ -186,15 +186,28 @@ class MockHubSpot:
         ).fetchall()
         return [_from_row(Contact, r) for r in rows]
 
-    def list_contacts(self, lifecycle_stage: Optional[str] = None) -> list[Contact]:
+    def list_contacts(self, lifecycle_stage: Optional[str] = None, created_since: Optional[datetime] = None) -> list[Contact]:
         self._count()
-        if lifecycle_stage is None:
-            rows = self.conn.execute("SELECT * FROM hs_contacts ORDER BY createdate, id").fetchall()
-        else:
-            rows = self.conn.execute(
-                "SELECT * FROM hs_contacts WHERE lifecycle_stage=? ORDER BY createdate, id", (lifecycle_stage,)
-            ).fetchall()
-        return [_from_row(Contact, r) for r in rows]
+        where, args = [], []
+        if lifecycle_stage is not None:
+            where.append("lifecycle_stage=?"); args.append(lifecycle_stage)
+        if created_since is not None:
+            where.append("createdate>=?"); args.append(created_since.isoformat())
+        sql = "SELECT * FROM hs_contacts" + (" WHERE " + " AND ".join(where) if where else "") + " ORDER BY createdate, id"
+        return [_from_row(Contact, r) for r in self.conn.execute(sql, args).fetchall()]
+
+    def update_company(self, company_id: str, props: dict) -> bool:
+        self._count()
+        allowed = {"num_employees", "annual_revenue", "industry", "country"}
+        props = {k: v for k, v in props.items() if k in allowed}
+        with self._write():
+            if not props or self.conn.execute("SELECT 1 FROM hs_companies WHERE id=?", (company_id,)).fetchone() is None:
+                return False
+            self.conn.execute(f"UPDATE hs_companies SET {', '.join(f'{k}=?' for k in props)} WHERE id=?",
+                              [_encode(v) for v in props.values()] + [company_id])
+            for k, v in props.items():
+                self._history("company", company_id, k, v, now_iso(), "integration")
+        return True
 
     def batch_update_contacts(self, updates: Iterable[tuple[str, dict]]) -> BatchResult:
         """207-style: each chunk of 100 is one request; bad inputs fail alone, the rest land."""
@@ -401,7 +414,7 @@ class MockHubSpot:
 
     def simulate_sdr_activity(
         self, contact_id: str, owner_id: str, outcome: str, at: datetime,
-        amount: float = 0.0, emit_events: bool = True,
+        amount: float = 0.0, emit_events: bool = True, loss_reason: str = "",
     ) -> None:
         """Write what an SDR's actions leave behind in HubSpot (H07).
 
@@ -456,8 +469,8 @@ class MockHubSpot:
                     ).fetchone()
                 self.conn.execute(
                     "UPDATE hs_deals SET dealstage=?, hs_is_closed_won=?, closedate=?, lastmodifieddate=?, "
-                    "amount=CASE WHEN ? > 0 THEN ? ELSE amount END WHERE id=?",
-                    (stage, int(won), at_s, at_s, amount, amount, deal_row["id"]),
+                    "amount=CASE WHEN ? > 0 THEN ? ELSE amount END, closed_lost_reason=CASE WHEN ? THEN ? ELSE closed_lost_reason END WHERE id=?",
+                    (stage, int(won), at_s, at_s, amount, amount, int(not won), loss_reason, deal_row["id"]),
                 )
                 self._history("deal", deal_row["id"], "dealstage", stage, at_s, "sdr")
                 if emit_events:

@@ -99,7 +99,7 @@ _CONTACT_BOOLS = {"webinar_registered", "webinar_attended", "auxo_holdout"}
 _CONTACT_DATETIMES = {"createdate", "lastmodifieddate", "auxo_scored_at"}
 
 COMPANY_PROPERTIES = ["name", "domain", "industry", "numberofemployees", "annualrevenue", "country", "uses_payroll_vendor"]
-DEAL_PROPERTIES = ["dealstage", "amount", "createdate", "closedate", "hs_is_closed_won", "hubspot_owner_id", "hs_lastmodifieddate"]
+DEAL_PROPERTIES = ["dealstage", "amount", "createdate", "closedate", "hs_is_closed_won", "hubspot_owner_id", "hs_lastmodifieddate", "closed_lost_reason"]
 MEETING_PROPERTIES = ["hs_meeting_start_time", "hs_meeting_outcome", "hubspot_owner_id", "hs_timestamp", "hs_createdate"]
 TASK_PROPERTIES = ["hs_task_subject", "hs_task_body", "hs_task_status", "hubspot_owner_id", "hs_timestamp", "hs_createdate"]
 
@@ -269,6 +269,7 @@ class RealHubSpot:
             amount=float(p["amount"]) if p.get("amount") else 0.0,
             createdate=_parse_dt(p.get("createdate")) or datetime.utcnow(), closedate=_parse_dt(p.get("closedate")),
             hs_is_closed_won=_parse_bool(p.get("hs_is_closed_won")), owner_id=p.get("hubspot_owner_id") or None,
+            closed_lost_reason=p.get("closed_lost_reason") or "",
         )
 
     @staticmethod
@@ -337,6 +338,14 @@ class RealHubSpot:
             return None
         return self._contact_from_json(resp.json())
 
+    def update_company(self, company_id: str, props: dict) -> bool:
+        names = {"num_employees": "numberofemployees", "annual_revenue": "annualrevenue", "industry": "industry", "country": "country"}
+        body = {"properties": {names[k]: v for k, v in props.items() if k in names and v is not None}}
+        if not body["properties"]:
+            return False
+        resp = self._request("PATCH", f"/crm/v3/objects/companies/{company_id}", json=body)
+        return resp.status_code < 300
+
     def get_company(self, company_id: str) -> Optional[Company]:
         resp = self._request("GET", f"/crm/v3/objects/companies/{company_id}", params={"properties": ",".join(COMPANY_PROPERTIES)})
         if resp.status_code == 404:
@@ -352,9 +361,11 @@ class RealHubSpot:
         }
         return [self._contact_from_json(o) for o in self._search("contacts", body).get("results", [])]
 
-    def list_contacts(self, lifecycle_stage: Optional[str] = None) -> list[Contact]:
-        """Search-based listing; capped at 10,000 by HubSpot, so callers should filter by stage."""
+    def list_contacts(self, lifecycle_stage: Optional[str] = None, created_since: Optional[datetime] = None) -> list[Contact]:
+        """Search-based listing; capped at 10,000 by HubSpot, so callers filter by stage and creation date."""
         filters = [{"propertyName": "lifecyclestage", "operator": "EQ", "value": lifecycle_stage}] if lifecycle_stage else []
+        if created_since is not None:
+            filters.append({"propertyName": "createdate", "operator": "GTE", "value": str(int(created_since.timestamp() * 1000))})
         body = {
             "filterGroups": [{"filters": filters}] if filters else [],
             "sorts": [{"propertyName": "createdate", "direction": "ASCENDING"}],

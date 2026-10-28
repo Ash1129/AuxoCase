@@ -58,6 +58,7 @@ def cmd_score(a):
     conn, hs = _ctx(a.db)
     sc = Scorer(hs, conn, load_live_model(conn), make_llm())
     res = sc.rescore_pool() if a.all else sc.process_events(max_events=a.max_events)
+    sc.refresh_ranks()
     flagged = sum(1 for r in res if r.review_flag)
     print(f"scored {len(res)} leads with {sc.model_version}; {flagged} flagged for a person; reader: {sc.llm.name}")
 
@@ -104,6 +105,11 @@ def cmd_simulate(a):
         print(json.dumps(simulate_month(conn, hs, seed=a.seed + i), default=str))
 
 
+def cmd_losses(a):
+    conn, hs = _ctx(a.db)
+    print(json.dumps(fb.classify_losses(hs, conn, make_llm())))
+
+
 def cmd_eval(a):
     from auxocase.evaluation import write_report
     conn, hs = _ctx(a.db)
@@ -120,13 +126,13 @@ def cmd_serve(a):
 
 def cmd_demo(a):
     a.force = True
-    a.months = 14
+    a.months = 36
     a.seed = 7
     cmd_seed(a)
     conn, hs = _ctx(a.db)
     fb.sync_outcomes(hs, conn)
     try:
-        model, m = fb.train_candidate(hs, conn, notes="first model from 13 months of history")
+        model, m = fb.train_candidate(hs, conn, notes="first model from the last 12 months of history")
         fb.approve(conn, model.version, "marketing", "demo marketing lead", "approve", "demo")
         fb.approve(conn, model.version, "sales", "demo sales lead", "approve", "demo")
         print(f"live model {model.version}: lift {m.lift_at_k}x at K={m.k}")
@@ -145,7 +151,7 @@ def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default=str(DEFAULT_DB))
     sub = p.add_subparsers(dest="cmd", required=True)
-    s = sub.add_parser("seed"); s.add_argument("--months", type=int, default=14); s.add_argument("--seed", type=int, default=7); s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_seed)
+    s = sub.add_parser("seed"); s.add_argument("--months", type=int, default=36); s.add_argument("--seed", type=int, default=7); s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_seed)
     s = sub.add_parser("score"); s.add_argument("--all", action="store_true"); s.add_argument("--max-events", type=int, default=500); s.set_defaults(fn=cmd_score)
     s = sub.add_parser("route"); s.set_defaults(fn=cmd_route)
     s = sub.add_parser("sync"); s.set_defaults(fn=cmd_sync)
@@ -153,6 +159,7 @@ def main(argv=None):
     s = sub.add_parser("train"); s.add_argument("--notes", default=""); s.add_argument("--prefer", choices=["lr", "hgb"], default=None); s.set_defaults(fn=cmd_train)
     s = sub.add_parser("approve"); s.add_argument("version"); s.add_argument("team"); s.add_argument("name"); s.add_argument("--decision", default="approve"); s.add_argument("--note", default=""); s.set_defaults(fn=cmd_approve)
     s = sub.add_parser("simulate"); s.add_argument("--months", type=int, default=1); s.add_argument("--seed", type=int, default=101); s.set_defaults(fn=cmd_simulate)
+    s = sub.add_parser("losses"); s.set_defaults(fn=cmd_losses)
     s = sub.add_parser("eval"); s.set_defaults(fn=cmd_eval)
     s = sub.add_parser("serve"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("demo"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_demo)

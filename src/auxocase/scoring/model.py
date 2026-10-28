@@ -41,7 +41,7 @@ from .features import CATEGORICAL, FEATURES, NUMERIC, frame
 
 CAPACITY_PER_MONTH = 500          # the brief: 12 SDRs work about 500 MQLs a month
 DEMO_MATURITY_DAYS = 30           # L09: demo booked is observable within ~30 days of MQL
-CLOSE_MATURITY_DAYS = 120         # the generator closes 30-120 days after the demo
+CLOSE_MATURITY_DAYS = 45          # brief answer 5: a 30-day business cycle for deals, with slack
 MIN_POSITIVES = 60                # below this, keep the points model (cold start)
 
 
