@@ -251,7 +251,7 @@ def test_the_cli_reader_tags_calls_for_revenium_and_records_their_metered_cost(w
         assert llm.complete("sys", "TASK: outreach_email\nFACTS: ...") == "ok"
     attrs = dict(kv.split("=", 1) for kv in seen["env"]["OTEL_RESOURCE_ATTRIBUTES"].split(","))
     assert attrs == {"revenium.middleware.source": "revenium-cli", "user.email": "a@b.c", "revenium.product.name": "AuxoCase",
-                     "revenium.task.type": "outreach_email", "revenium.agent.name": "auxocase"}
+                     "revenium.task.type": "outreach_email", "revenium.agent.name": "auxocase", "product.name": "AuxoCase"}
     row = conn.execute("SELECT * FROM llm_usage ORDER BY id DESC LIMIT 1").fetchone()
     assert row["task"] == "outreach_email" and row["reference"] == "333" and row["cost_usd"] == 0.00092 and row["input_tokens"] == 620
     assert row["model"] == "claude-opus-5-5" and row["reader"] == "claude-cli"

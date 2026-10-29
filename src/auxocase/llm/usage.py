@@ -59,7 +59,9 @@ def task_of(user_prompt: str) -> str:
 def resource_attributes(existing: str, task: str) -> str:
     """OTEL_RESOURCE_ATTRIBUTES for one call: what the shell set (Revenium's source and the owner's email), plus
     the product, task and agent Revenium groups by. A later key wins in OTel, so the service's values stand."""
-    ours = {"revenium.product.name": PRODUCT, "revenium.task.type": task, "revenium.agent.name": AGENT}
+    # Revenium's deep-attribution keys (revenium.*) and, for the coding-assistant pipeline that Claude Code telemetry
+    # goes through, the plain product.name its data reference says the cost rollup reads.
+    ours = {"revenium.product.name": PRODUCT, "revenium.task.type": task, "revenium.agent.name": AGENT, "product.name": PRODUCT}
     kept = [kv for kv in (existing or "").split(",") if kv and kv.split("=", 1)[0] not in ours]
     return ",".join(kept + [f"{k}={v}" for k, v in ours.items()])
 
