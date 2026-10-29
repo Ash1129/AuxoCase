@@ -24,6 +24,8 @@ def world(tmp_path, monkeypatch):
     hs.add_contact(Contact(id="1", email="laura@granite.example", first_name="Laura", lifecycle_stage="salesqualifiedlead",
                            hs_lead_status="NEW", hubspot_owner_id="900"), emit_event=False)
     metrics = json.dumps({"rows": 900, "positives": 300, "precision_at_k": 0.45, "by_channel": {}, "calibration_bins": []})
+    conn.execute("INSERT INTO routing_log(contact_id, owner_id, decision, reason, created_at) VALUES('1', '900', 'assigned', 'above the capacity line', ?)",
+                 (now_iso(),))                                                     # AuxoCase handed it out, so it is in the queue
     conn.execute("INSERT INTO model_registry(version, family, trained_at, metrics, status) VALUES('demo-v9', 'lr', ?, ?, 'candidate')",
                  (now_iso(), metrics))
     return path, conn, hs
@@ -103,7 +105,7 @@ def test_a_stale_lead_action_is_refused_not_applied(world):
     # A second tab still showing the old page tries to junk the same lead.
     r = client.post("/lead/1/action", data={"owner_id": "900", "action": "junk", "seen": seen}, follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/queue/900?stale=1"
-    assert _overrides(conn) == 1 and hs.get_contact("1").hs_lead_status == "NEW"
+    assert _overrides(conn) == 1 and hs.get_contact("1").hs_lead_status == "BAD_TIMING"   # the skip, not the stale junk
     assert "not saved" in client.get("/queue/900?stale=1").text
     # HubSpot moving the lead on (first touch seen there) also makes an open page stale.
     seen = lead_token(conn, hs.get_contact("1"))

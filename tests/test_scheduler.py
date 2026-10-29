@@ -113,10 +113,10 @@ def test_repeated_routing_passes_never_hold_more_than_the_cap(db):
 def test_the_server_starts_and_stops_the_scheduler(db):
     off = create_app(db)
     assert off.state.scheduler is None
-    assert "scheduler: off" in TestClient(off).get("/").text
+    assert 'data-scheduler="off"' in TestClient(off).get("/").text
 
     app = create_app(db, scheduler=True)
     with TestClient(app) as client:
         assert app.state.scheduler.running
-        assert "scheduler: on" in client.get("/").text
+        assert 'data-scheduler="on"' in client.get("/").text
     assert not app.state.scheduler.running

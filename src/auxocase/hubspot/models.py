@@ -38,6 +38,10 @@ WAITING_LEAD_STATUSES = ("NEW", "OPEN")
 SDR_LIFECYCLE_STAGES = ("lead", "marketingqualifiedlead", "salesqualifiedlead")
 # Stages an assignment moves forward to salesqualifiedlead: HubSpot allows the jump from lead straight to SQL.
 PROMOTED_ON_ASSIGNMENT = ("lead", "marketingqualifiedlead")
+# What a skip sets, by the SDR's reason: a status that is neither waiting (so the slot frees) nor a sign the lead
+# was worked (outcome sync leaves a skipped, untouched lead unlabelled). "timing" maps to HubSpot's BAD_TIMING.
+SKIP_STATUS = {"timing": "BAD_TIMING"}
+SKIP_STATUS_DEFAULT = "UNQUALIFIED"
 # A lead is "worked" once an SDR has moved it past the status an assignment sets (NEW/OPEN): the first touch.
 TOUCHED_STATUSES = ("IN_PROGRESS", "ATTEMPTED_TO_CONTACT", "CONNECTED", "UNQUALIFIED", "QUALIFIED")
 

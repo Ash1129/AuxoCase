@@ -134,6 +134,7 @@ CREATE TABLE IF NOT EXISTS outreach (
   contact_id TEXT PRIMARY KEY, owner_id TEXT, subject TEXT, body TEXT, source TEXT, rejected TEXT,
   sequence_id TEXT, enrollment_id TEXT, status TEXT, created_at TEXT
 );
+CREATE INDEX IF NOT EXISTS run_log_job ON run_log(job, id);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 """
 

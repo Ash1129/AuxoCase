@@ -1,24 +1,127 @@
-{% extends "base.html" %}{% block title %}{{ owner.name }} · queue{% endblock %}
+{% extends "base.html" %}
+{% import "_lead_detail.html" as ld with context %}
+{% block title %}{{ owner.name }}'s queue{% endblock %}
+{% block style %}{{ ld.css() }}
+.decide{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
+.decide form{margin:0}
+.decide details[open]{flex-basis:100%}
+.decide summary{list-style:none}
+.decide summary::-webkit-details-marker{display:none}
+.decide summary::after{content:"";margin-left:10px;border:5px solid transparent;border-top-color:currentColor;transform:translateY(3px)}
+.decide details[open] summary::after{border-top-color:transparent;border-bottom-color:currentColor;transform:translateY(-2px)}
+.decide .panel{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:12px 0 0}
+.decide .panel p{flex-basis:100%;margin:0}
+@media (max-width:640px){.decide>*,.decide .panel>*{flex:1 1 100%}.decide .btn{width:100%;min-height:48px;font-size:16px}}
+{% endblock %}
 {% block body %}
-<h1>{{ owner.name }}'s queue</h1>
-<p class="sub">Best first. The percentage is the model's calibrated chance this lead books a demo if you work it. You make the final call: mark it worked, skip it with a reason, or move it a few places.{% if hit %} This period the ranked leads you all worked booked {{ (100*hit.rate)|round(0) }}% of the time ({{ hit.booked }} of {{ hit.n }}).{% endif %}</p>
-{% if stale %}<p><span class="pill warn">not saved</span> That lead changed after this page loaded: someone else acted on it, or it moved on in HubSpot. Here is the queue as it stands now.</p>{% endif %}
-<table>
-<tr><th class="num">Rank</th><th>Lead</th><th>Channel</th><th class="num">Demo</th><th>Why it is ranked here</th><th>Your call</th></tr>
-{% for c in leads %}
-<tr>
-<td class="num">{{ c.auxo_rank }}</td>
-<td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a><div class="small muted">{{ c.country }} · {{ 'webinar attended' if c.webinar_attended else ('webinar registered' if c.webinar_registered else '') }}{% if c.auxo_holdout %} · <span class="pill accent">calibration lead</span>{% endif %}{% if c.auxo_below_gate or c.lifecycle_stage == 'lead' %} · <span class="pill accent" title="HubSpot's MQL gate did not pass this lead">below old threshold</span>{% endif %}{% if c.auxo_review_flag %} · <span class="pill warn">{{ c.auxo_review_flag }}</span>{% endif %}</div></td>
-<td>{{ c.channel }}</td>
-<td class="num"><strong>{{ (100*(c.auxo_probability or 0))|round(0)|int }}%</strong></td>
-<td class="reason small">{{ c.auxo_reason }}
-{% set s = signals.get(c.id, {}) %}{% if s.signals %}<div class="quote">{% for g in s.signals %}“{{ g.quote }}” ({{ g.type|replace('_',' ') }}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}</td>
-<td>
-<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ tokens[c.id] }}"><button name="action" value="worked">Worked</button><button class="quiet" name="action" value="junk">Junk</button></form>
-<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ tokens[c.id] }}"><select name="note"><option value="">reason…</option><option>wrong fit</option><option>already a customer</option><option>no contact details</option><option>timing</option><option>other</option></select><button class="quiet" name="action" value="skipped">Skip</button></form>
-<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ tokens[c.id] }}"><input type="hidden" name="move" value="3"><input name="note" placeholder="why move it" size="12"><button class="quiet" name="action" value="promote">↑3</button><button class="quiet" name="action" value="demote">↓3</button></form>
-</td>
-</tr>
-{% else %}<tr><td colspan="6" class="muted">Nothing assigned right now.</td></tr>{% endfor %}
-</table>
+{%- set labels = {'worked': 'worked', 'junk': 'junk', 'skipped': 'skipped'} -%}
+{%- set others_waiting = waiting|rejectattr('c.id', 'equalto', open.c.id if open else none)|list -%}
+{%- set others_touched = touched|rejectattr('c.id', 'equalto', open.c.id if open else none)|list -%}
+{% if stale %}<p class="notice warn" role="status"><b>Not saved.</b> That lead changed after this page loaded: someone else acted on it, or it moved on in HubSpot, so your click was not saved. This is the queue as it stands now.</p>{% endif %}
+
+<header class="head">
+  <p class="kicker">{{ owner.name }}'s queue · {{ waiting_count }} of {{ limit }} slot{{ '' if limit == 1 else 's' }} waiting</p>
+  {% if open -%}
+  <h1 class="title">{{ ld.name(open.c, open.co) }}</h1>
+  <p class="muted">{{ ld.facts_line(open.c, open.co) }}</p>
+  {{ ld.marks(open.c, true) }}
+  {%- else -%}
+  <h1 class="title">Nothing waiting for a first touch</h1>
+  <p class="lede">Routing gives {{ owner.name.split(' ')[0] }} the best lead in the pool as soon as a slot is free{% if scheduler == 'on' %}; it runs every five minutes{% else %}; the scheduler is off, so that happens the next time routing is run{% endif %}.</p>
+  {%- endif %}
+</header>
+
+{% macro hit_line() -%}
+{% if hit -%}
+<p class="small muted" style="margin: 0; max-width: 760px">Across the team, of the leads handed out in the last {{ hit.days }} days and worked since, the ranked ones booked {% if hit.ranked.n %}{{ ld.pct(hit.ranked.rate) }} ({{ hit.ranked.booked }} of {{ hit.ranked.n }}){% else %}nothing yet (none worked){% endif %}; the exploration slice, drawn at random, {% if hit.exploration.n %}booked {{ ld.pct(hit.exploration.rate) }} ({{ hit.exploration.booked }} of {{ hit.exploration.n }}){% else %}has no worked leads yet{% endif %}.{{ ld.dag() }}</p>
+{%- endif %}
+{%- endmacro %}
+
+{% if open -%}
+{%- set c = open.c -%}
+<hr class="rule">
+{{ ld.score(open, 'queue') }}
+{{ hit_line() }}
+
+<div class="decide" role="group" aria-label="Your call on {{ ld.first(c) }}">
+  <form method="post" action="/lead/{{ c.id }}/action">
+    <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}">
+    <button class="btn primary" type="submit" name="action" value="worked">Mark worked</button>
+  </form>
+  <details>
+    <summary class="btn">Skip with a reason</summary>
+    <form class="panel" method="post" action="/lead/{{ c.id }}/action">
+      <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="action" value="skipped">
+      <p class="small muted">{% if open.first_touch %}The first touch already freed your slot; a skip takes {{ ld.first(c) }} off your list.{% else %}A skip frees your slot, and routing runs at once to fill it.{% endif %} Pick the reason; it is kept with your call.</p>
+      {% for r in ('wrong fit', 'already a customer', 'no contact details', 'timing', 'other') %}<button class="btn" type="submit" name="note" value="{{ r }}">{{ r|capitalize }}</button>
+      {% endfor %}
+    </form>
+  </details>
+  <form method="post" action="/lead/{{ c.id }}/action">
+    <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}">
+    <button class="btn" type="submit" name="action" value="junk">Junk</button>
+  </form>
+  <details>
+    <summary class="btn">Move it a few places</summary>
+    <form class="panel" method="post" action="/lead/{{ c.id }}/action">
+      <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="move" value="3">
+      <p class="small muted">Moves its rank three places and flags it for review, with your reason.</p>
+      <div class="field"><label for="why-move">Why move it</label><input id="why-move" name="note" autocomplete="off"></div>
+      <button class="btn" type="submit" name="action" value="promote">Up 3 places</button>
+      <button class="btn" type="submit" name="action" value="demote">Down 3 places</button>
+    </form>
+  </details>
+</div>
+
+<hr class="rule">
+{{ ld.why(open) }}
+
+<hr class="rule">
+{{ ld.reach(open, '/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&draft=1', 'queue') }}
+<p class="small" style="margin: 0"><a class="tap" href="/lead/{{ c.id }}">Everything on {{ ld.first(c) }}: activity, notes and history</a></p>
+{%- else -%}
+{{ hit_line() }}
+{%- endif %}
+
+{% if others_waiting -%}
+<hr class="rule">
+<section class="part" aria-labelledby="q-waiting">
+  <h2 class="kicker" id="q-waiting">Also waiting · first touch due</h2>
+  <ul class="list">
+    {% for e in others_waiting %}<li><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a>
+      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · touch by {{ e.clock.touch_by }}, {{ e.clock.age }} since arrival</p>{{ ld.marks(e.c) }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{%- endif %}
+
+{% if others_touched -%}
+<hr class="rule">
+<section class="part" aria-labelledby="q-touched">
+  <h2 class="kicker" id="q-touched">{{ 'Also yours · ' if open else '' }}touch seen in HubSpot · log your call</h2>
+  <ul class="list">
+    {% for e in others_touched %}<li><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a>
+      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · {{ (e.seen_type or 'activity')|lower }} seen {{ e.seen_when }}; log your call when you have one.</p>{{ ld.marks(e.c) }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{%- endif %}
+
+<hr class="rule">
+<section class="part" aria-labelledby="q-done">
+  <h2 class="kicker" id="q-done">Done today{% if done_total %} · {{ done_total }}{% endif %}</h2>
+  {% if done -%}
+  <ul class="list">
+    {% for r in done %}<li><a href="/lead/{{ r.contact_id }}">{{ ld.name(r.c, none) if r.c else 'Lead #' ~ r.contact_id }}</a>
+      <p class="small"><span class="num muted">{{ r.at }}</span> · {{ labels.get(r.action, r.action) }}{% if r.note %}: {{ r.note }}{% endif %}</p></li>
+    {% endfor %}
+  </ul>
+  {% if done_total > done|length %}<p class="small muted">And {{ done_total - done|length }} more today.</p>{% endif %}
+  {%- else -%}
+  <p class="muted">Nothing decided yet today.</p>
+  {%- endif %}
+  {% if env == 'mock' %}<p class="tiny muted">Today here is the wall-clock day, not the demo clock's.</p>{% endif %}
+</section>
+
+{{ ld.footnote(open) }}
 {% endblock %}

@@ -1,34 +1,305 @@
 {% extends "base.html" %}{% block title %}Model &amp; approvals{% endblock %}
+{% block style %}
+.mhead{display:flex;flex-direction:column;gap:8px}
+.facts{margin:8px 0 0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px}
+.facts dt{color:var(--muted)}.facts dd{margin:0}
+.msec{display:flex;flex-direction:column;gap:12px}
+.msec>p{margin:0;max-width:760px}
+.sub{display:block;font-size:14px;line-height:20px;color:var(--muted);font-weight:400}
+.sub.good{color:var(--good)}.sub.acc{color:var(--accent)}
+tbody th{font-size:inherit;line-height:inherit;letter-spacing:0;text-transform:none;color:inherit;border-top:1px solid var(--line);padding-bottom:10px}
+tr.few{color:var(--muted)}
+td.r,th.r{padding-left:16px}
+.scroll{position:relative}
+.drivers.adds{grid-template-columns:minmax(max-content,1fr) max-content 136px max-content 136px;max-width:880px;min-width:max-content}
+table.versus{min-width:760px}
+table.versus .vcol{text-transform:none;letter-spacing:0;font-size:15px;line-height:22px;color:var(--ink);font-weight:600;vertical-align:bottom}
+table.mon{min-width:640px}
+table.mon .lim{padding-right:24px}
+.slots{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:16px 32px}
+.slots>div{border-top:1px solid var(--line);padding-top:10px;display:flex;flex-direction:column;gap:2px}
+.slot{font-size:22px;line-height:32px;font-weight:500}
+form.signoff{display:flex;flex-direction:column;gap:16px;margin:0}
+.fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px 24px}
+.fields input,.fields select{width:100%}
+details>summary{display:inline-flex;align-items:center;min-height:44px;color:var(--accent);cursor:pointer;font-weight:500}
+details[open]>summary{margin-bottom:8px}
+.cal{display:flex;flex-wrap:wrap;gap:24px 48px;align-items:flex-start}
+.cal>div{flex:1 1 320px;min-width:0;max-width:480px}
+.cal figure{margin:0;flex:0 0 240px;display:flex;flex-direction:column;gap:6px}
+.pl-frame{fill:none;stroke:var(--line)}.pl-grid{stroke:var(--line)}.pl-diag{stroke:var(--muted);stroke-width:1}
+.pl-t{fill:var(--muted);font-size:13px}.pl-pt{fill:var(--accent)}.pl-few{fill:var(--bg);stroke:var(--accent);stroke-width:1.5}
+.figs{display:flex;flex-wrap:wrap;gap:24px 40px}
+.figs>div{display:flex;flex-direction:column;gap:4px;max-width:180px}
+.tap{display:inline-flex;align-items:center;min-height:44px;align-self:flex-start}
+.lc{text-transform:none}
+{% endblock %}
 {% block body %}
-<h1>The shared number</h1>
-<p class="sub">One model scores every lead for both teams. A new version goes live only when one named person from marketing and one from sales approve it, one version at a time, with its numbers beside the live model's.</p>
-{% if hit %}<div class="cards"><div class="card"><div class="k">Ranked leads worked this period</div><div class="v">{{ hit.n }}</div></div><div class="card"><div class="k">…that booked a demo</div><div class="v">{{ (100*hit.rate)|round(0)|int }}%</div></div>{% if speed.n %}<div class="card"><div class="k">Median time to first touch</div><div class="v">{{ speed.median_hours }}h</div></div><div class="card"><div class="k">Touched within 24h</div><div class="v">{{ (100*speed.within_24h)|round(0)|int }}%</div></div>{% endif %}</div>{% endif %}
-{% if shadow %}<p class="small">Shadow check on the last labelled month ({{ shadow.n }} leads): live {{ shadow.live.version }} precision@k {{ shadow.live.precision_at_k }} vs previous {{ shadow.shadow.version }} {{ shadow.shadow.precision_at_k }}.</p>{% endif %}
-{% if rescoring %}<p class="small"><span class="pill accent">rescoring</span> {{ rescoring.version }} is live; {{ rescoring.left }} pool leads still carry the previous model's score. They are being rescored best-ranked first.</p>{% endif %}
-{% if stale %}<p><span class="pill warn">not saved</span> {{ stale }} changed after this page loaded (another approval or a send-back). Check its state below before deciding.</p>{% endif %}
-<h2>Versions</h2>
-<table><tr><th>Version</th><th>Status</th><th>Family</th><th class="num">Rows / positives</th><th class="num">Precision@K</th><th class="num">HubSpot points @K</th><th class="num">Lift</th><th class="num">AUC-PR (base)</th><th class="num">ECE</th><th>Approvals</th></tr>
-{% for r in regs %}{% set m = r.metrics %}
-<tr><td>{{ r.version }}<div class="small muted">{{ r.trained_at[:10] }} · {{ r.notes or '' }}</div></td>
-<td><span class="pill {{ 'good' if r.status=='live' else ('accent' if r.status=='candidate' else '') }}">{{ r.status }}</span></td>
-<td>{{ 'logistic regression' if r.family=='lr' else 'gradient boosting' }}</td>
-<td class="num">{{ m.rows }} / {{ m.positives }}</td><td class="num">{{ m.precision_at_k }}</td><td class="num">{{ m.hubspot_precision_at_k }}</td><td class="num"><strong>{{ m.lift_at_k }}×</strong></td><td class="num">{{ m.auc_pr }} ({{ m.base_rate }})</td><td class="num">{{ m.ece }}</td>
-<td class="small">{% for a in r.approvals %}{{ a.team }}: {{ a.decision }} by {{ a.approver }}{% if a.note %} ({{ a.note }}){% endif %}<br>{% endfor %}
-{% if r.status=='candidate' %}<form class="inline" method="post" action="/model/{{ r.version }}/approve"><input type="hidden" name="seen" value="{{ r.token }}"><select name="team"><option>marketing</option><option>sales</option></select><input name="approver" placeholder="your name" required><input name="note" placeholder="note"><button name="decision" value="approve">Approve</button><button class="quiet" name="decision" value="send_back">Send back</button></form>{% endif %}</td></tr>
-{% else %}<tr><td colspan="10" class="muted">No trained model yet; the points table is scoring. Run <code>python run.py train</code>.</td></tr>{% endfor %}
+{# Log times are now_iso(): UTC wall clock, "2026-10-28T18:30:10", shown as "28 Oct 2026 18:30". #}
+{% macro when(ts) %}{% if ts and ts|length >= 16 and (ts[5:7]|int) in range(1, 13) %}<time class="num" datetime="{{ ts[:16] }}">{{ ts[8:10]|int }} {{ ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(ts[5:7]|int) - 1] }} {{ ts[:4] }} {{ ts[11:16] }}</time>{% elif ts %}{{ ts }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}{% endmacro %}
+{% macro nr() %}<span class="muted">[NOT RECORDED]</span>{% endmacro %}
+{% macro dg() %}{% if env == 'mock' %}<span class="dagger">†</span>{% endif %}{% endmacro %}
+{% macro n(x) %}{% if x is none %}{{ nr() }}{% else %}{{ '{:,}'.format(x) }}{% endif %}{% endmacro %}
+{% macro f3(x) %}{% if x is none %}{{ nr() }}{% else %}{{ '%.3f'|format(x) }}{% endif %}{% endmacro %}
+{% macro names(xs) %}{% for x in xs %}{{ x }}{% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}{% endmacro %}
+{% macro chg(x) %}{% if x %}<span class="sub{% if x.word == 'better' %} good{% endif %}">{{ x.text }}</span>{% endif %}{% endmacro %}
+{% macro signed_teams(r) %}{% for t in ['marketing', 'sales'] if r.signed[t] %}{{ t }} approved{% if not loop.last %}, {% endif %}{% endfor %}{% endmacro %}
+
+{% macro bandtable(r) %}
+<table class="num" aria-label="Calibration bands for {{ r.version }}">
+  <thead><tr><th scope="col">Score band</th><th scope="col" class="r">Leads</th><th scope="col" class="r">Average score</th><th scope="col" class="r">Booked</th></tr></thead>
+  <tbody>
+  {% for b in r.bands %}<tr{% if b.few %} class="few"{% endif %}>
+    <th scope="row">{{ b.label }}</th>
+    <td class="r">{{ n(b.n) }}{% if b.few %} · few{% endif %}</td>
+    <td class="r">{% if b.predicted is not none %}{{ b.predicted }}%{% else %}{{ nr() }}{% endif %}</td>
+    <td class="r">{% if b.observed is not none %}{{ b.observed }}%{% else %}{{ nr() }}{% endif %}</td>
+  </tr>{% endfor %}
+  </tbody>
 </table>
-{% for r in regs if r.status in ('live','candidate') %}
-<h2>{{ r.version }}: calibration and channels</h2>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
-<table><tr><th>Predicted</th><th class="num">n</th><th class="num">Observed</th></tr>{% for b in r.metrics.calibration_bins %}<tr><td>{{ b.lo }}–{{ b.hi }}</td><td class="num">{{ b.n }}</td><td class="num">{{ b.observed }}</td></tr>{% endfor %}</table>
-<table><tr><th>Channel (test months)</th><th class="num">n</th><th class="num">Observed</th><th class="num">Predicted</th></tr>{% for ch, v in r.metrics.by_channel.items() %}<tr><td>{{ ch }}</td><td class="num">{{ v.n }}</td><td class="num">{{ v.observed }}</td><td class="num">{{ v.predicted }}</td></tr>{% endfor %}</table>
+{% endmacro %}
+
+{% macro signoff(r) %}
+{% set pick = 'sales' if r.signed.marketing and not r.signed.sales else 'marketing' %}
+<div class="slots">
+  {% for t in ['marketing', 'sales'] %}{% set a = r.signed[t] %}<div>
+    <span class="kicker">{{ t|capitalize }}</span>
+    {% if a %}<span class="serif slot">Approved by {{ a.approver }}</span>
+    <span class="small muted">{{ when(a.created_at) }} log time{% if a.note %} · <span class="quote">{{ a.note }}</span>{% endif %}</span>
+    {% else %}<span class="serif slot">Not signed yet</span>{% endif %}
+  </div>{% endfor %}
 </div>
-{% endfor %}
-<h2>Channel monitor (p-chart, worked leads)</h2>
-<p class="sub small">Observed demo rate per channel and month against the model's predicted rate with 3-sigma limits. Outside the limits is a real shift, inside is noise; under {{ 30 }} worked leads is held, not judged.</p>
-<table><tr><th>Period</th><th>Channel</th><th class="num">Worked</th><th class="num">Demos</th><th class="num">Observed</th><th class="num">Predicted</th><th class="num">Limits</th><th>Flag</th></tr>
-{% for p in monitor %}<tr><td>{{ p.period }}</td><td>{{ p.channel }}</td><td class="num">{{ p.n }}</td><td class="num">{{ p.demos }}</td><td class="num">{{ (p.demo_rate or 0)|round(3) }}</td><td class="num">{{ (p.predicted_rate or 0)|round(3) }}</td><td class="num small">{% if p.lcl is not none %}{{ p.lcl|round(3) }}–{{ p.ucl|round(3) }}{% endif %}</td><td><span class="pill {{ 'good' if p.flag=='ok' else ('warn' if p.flag=='held' else 'bad') }}">{{ p.flag }}</span></td></tr>{% else %}<tr><td colspan="8" class="muted">Run the monitor job.</td></tr>{% endfor %}
-</table>
-<h2>SDR overrides</h2>
-<table><tr><th>Action</th><th class="num">Count</th></tr>{% for o in overrides %}<tr><td>{{ o.action }}</td><td class="num">{{ o.n }}</td></tr>{% else %}<tr><td colspan="2" class="muted">None yet.</td></tr>{% endfor %}</table>
+<form class="signoff" method="post" action="/model/{{ r.version }}/approve">
+  <input type="hidden" name="seen" value="{{ r.token }}">
+  <div class="fields">
+    <div class="field">
+      <label for="team-{{ r.version }}">Team</label>
+      <select id="team-{{ r.version }}" name="team">{% for t in ['marketing', 'sales'] %}<option value="{{ t }}"{% if t == pick %} selected{% endif %}>{{ t|capitalize }}</option>{% endfor %}</select>
+    </div>
+    <div class="field">
+      <label for="name-{{ r.version }}">Your name</label>
+      <input id="name-{{ r.version }}" name="approver" type="text" required autocomplete="name">
+    </div>
+    <div class="field">
+      <label for="note-{{ r.version }}">Note, optional</label>
+      <input id="note-{{ r.version }}" name="note" type="text">
+    </div>
+  </div>
+  <div class="actions">
+    <button class="btn primary" type="submit" name="decision" value="approve">Approve {{ r.version }}</button>
+    <button class="btn" type="submit" name="decision" value="send_back">Send back</button>
+  </div>
+</form>
+<p class="small muted">Goes live when both slots approve; until then routing keeps {{ current.version if current else 'the cold-start points table' }}. When it goes live, the pool is rescored on {{ r.version }}, best-ranked leads first. Sending it back retires it.</p>
+{% endmacro %}
+
+<header class="mhead">
+  <p class="kicker">Model &amp; approvals · {% if waiting %}{{ waiting|length }} candidate{{ 's' if waiting|length != 1 }} waiting{% else %}no candidate waiting{% endif %}</p>
+  <h1 class="title">One shared model</h1>
+  <p class="muted" style="margin: 0; max-width: 760px">One model scores every lead for both teams. A version goes live when one named person from marketing and one from sales approve it; sending it back retires it.</p>
+  <dl class="facts">
+    <dt>Live</dt>
+    <dd>{% if current %}{{ current.version }}, approved by {% for t in ['marketing', 'sales'] %}{% if current.signed[t] %}{{ current.signed[t].approver }}{% else %}{{ nr() }}{% endif %} ({{ t }}){% if loop.first %} and {% endif %}{% endfor %}, {{ when(current.promoted_at) }} log time{% else %}None: the cold-start points table is scoring{% endif %}</dd>
+    <dt>Waiting</dt>
+    <dd>{% if waiting %}{% for r in waiting|reverse %}{{ r.version }}{% if r.signed.marketing or r.signed.sales %} ({{ signed_teams(r) }}){% endif %}{% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}{% if not (waiting|selectattr('approvals')|list) %}, with no sign-offs yet{% endif %}{% else %}None{% endif %}</dd>
+    <dt>Scores</dt>
+    <dd>{% if rescoring %}{{ n(rescoring.left) }} pool lead{{ 's' if rescoring.left != 1 }} still on the previous model; see the notice below{% elif current and scored|length == 1 and current.version in scored %}None pending: all {{ n(scored[current.version]) }} scored leads carry {{ current.version }}'s score{% elif scored %}None pending. {% for v, k in scored.items() %}{{ n(k) }} scored lead{{ 's' if k != 1 }} {{ 'carries' if k == 1 else 'carry' }} {{ v }}'s score{% if not loop.last %}; {% endif %}{% endfor %}{% if scored|length > 1 %} (when a model goes live, only leads still in the pool are scored again){% endif %}{% else %}No lead scored yet{% endif %}</dd>
+  </dl>
+</header>
+
+{% if stale %}<p class="notice warn"><b>Not saved.</b> {{ stale }} changed after this page loaded (another approval or a send-back), so your decision was not saved. Check its state below before deciding again.</p>{% endif %}
+{% if rescoring %}<p class="notice"><b>Rescoring.</b> {{ rescoring.version }} is live; {{ n(rescoring.left) }} pool lead{{ 's' if rescoring.left != 1 }} still {{ 'carries' if rescoring.left == 1 else 'carry' }} the previous model's score. The rescoring job takes the best-ranked leads first.</p>{% endif %}
+
+<hr class="rule">
+
+{% if not regs %}
+<section class="msec" aria-labelledby="md-none">
+  <h2 id="md-none" class="kicker">No trained model yet</h2>
+  <p>The cold-start points table is scoring every lead. Train the first model with <code>python run.py train</code>; it appears here for marketing and sales to sign off.</p>
+</section>
+{% else %}
+<section class="msec" aria-labelledby="md-adds">
+  <h2 id="md-adds" class="kicker">What the model adds over the points tables</h2>
+  {% if plainly %}<p class="lede">{{ plainly }}</p>{% endif %}
+  <div class="scroll" role="region" aria-label="What the model adds, scrolls sideways" tabindex="0">
+    <div class="drivers adds num" role="table" aria-label="Precision at K, model minus each points table">
+      <div role="row" style="display: contents">
+        <span class="hd" role="columnheader">Version, at its own K</span>
+        <span class="hd" role="columnheader">Over HubSpot's points</span>
+        <span class="hd" role="columnheader"><span class="vh">Size</span></span>
+        <span class="hd" role="columnheader">Over the cold-start points table</span>
+        <span class="hd" role="columnheader"><span class="vh">Size</span></span>
+      </div>
+      {% for a in adds %}<div role="row" style="display: contents">
+        <span role="rowheader">{{ a.version }}{% if a.live %}, live{% endif %} · K {% if a.k is not none %}{{ a.k }}{% else %}{{ nr() }}{% endif %}</span>
+        {% for e in (a.hub, a.pts) %}{% if e %}<span role="cell" class="{{ 'good' if e.word == 'better' else 'muted' }}">{{ e.word }} {{ e.effect }}</span>
+        <span role="cell"><svg width="136" height="6" aria-hidden="true"><rect class="{{ 'bar-good' if e.word == 'better' else 'bar-worse' }}" x="0" y="0" width="{{ e.bar }}" height="6" rx="1"></rect></svg></span>
+        {% else %}<span role="cell">{{ nr() }}</span><span role="cell"></span>{% endif %}{% endfor %}
+      </div>{% endfor %}
+    </div>
+  </div>
+  <p class="small muted">Precision at K, the model minus each table, on the same test leads. K is capacity's share of each version's test leads ({{ capacity }} touches a month), so it differs by version. A full bar is {{ '%.2f'|format(bar_scale) }}.</p>
+</section>
+
+<hr class="rule">
+
+<section class="msec" aria-labelledby="md-side">
+  <h2 id="md-side" class="kicker">{% if current and waiting %}Live against the candidates{% elif waiting %}The candidates{% else %}The live model{% endif %}</h2>
+  {% if tested_where or side|length > 1 %}<p>{% if tested_where %}{{ tested_where }} {% endif %}{% if side|length > 1 %}Compare columns on the lifts and the calibration error; read precision only against its own column.{% if current %} Changes are against {{ current.version }}.{% endif %}{% endif %}</p>{% endif %}
+  <div class="scroll" role="region" aria-label="{% if current and waiting %}Live against the candidates{% else %}Measures by version{% endif %}, scrolls sideways" tabindex="0">
+    <table class="versus" aria-labelledby="md-side">
+      <thead><tr><th scope="col">Measure</th>{% for r in side %}<th scope="col" class="vcol">{{ r.version }}<span class="sub {{ 'good' if r.status == 'live' else 'acc' }}">{{ r.status }}{% if r.simulated %}{{ dg() }}{% endif %}</span></th>{% endfor %}</tr></thead>
+      <tbody class="num">
+        <tr><th scope="row">Trained</th>{% for r in side %}<td>{{ r.trained or nr() }}{% if r.notes %}<span class="sub">{{ r.notes }}{% if r.simulated %}{{ dg() }}{% endif %}</span>{% endif %}</td>{% endfor %}</tr>
+        {% if side|selectattr('split')|list %}<tr><th scope="row">Trained on<span class="sub">then calibrated on</span></th>{% for r in side %}<td>{% if r.split %}{{ r.split.train or nr() }}<span class="sub">{{ r.split.calibration or '[NOT RECORDED]' }}</span>{% else %}{{ nr() }}{% endif %}</td>{% endfor %}</tr>{% endif %}
+        <tr><th scope="row">Tested on<span class="sub">test leads · booked</span></th>{% for r in side %}<td>{{ r.tested or nr() }}<span class="sub">{{ n(r.test_n) }} · {{ n(r.test_booked) }}</span></td>{% endfor %}</tr>
+        <tr><th scope="row">Precision at K<span class="sub">the model, then each table on the same leads</span></th>{% for r in side %}{% set m = r.metrics %}<td>{{ f3(m.precision_at_k) }}{% if m.k is not none %} <span class="muted">at K {{ m.k }}</span>{% endif %}<span class="sub">HubSpot {{ f3(m.hubspot_precision_at_k) }}</span><span class="sub">points table {{ f3(m.points_precision_at_k) }}</span></td>{% endfor %}</tr>
+        <tr><th scope="row">Lift over HubSpot's points</th>{% for r in side %}<td>{% if r.metrics.lift_at_k is not none %}{{ '%.3f'|format(r.metrics.lift_at_k) }}×{% else %}{{ nr() }}{% endif %}{% if r.vs %}{{ chg(r.vs.lift_hub) }}{% endif %}</td>{% endfor %}</tr>
+        <tr><th scope="row">Lift over the points table</th>{% for r in side %}<td>{% if r.metrics.lift_over_points is not none %}{{ '%.3f'|format(r.metrics.lift_over_points) }}×{% else %}{{ nr() }}{% endif %}{% if r.vs %}{{ chg(r.vs.lift_pts) }}{% endif %}</td>{% endfor %}</tr>
+        <tr><th scope="row">Calibration error<span class="sub">average gap, score to bookings</span></th>{% for r in side %}<td>{% if r.metrics.ece is not none %}off by {{ '%.1f'|format(100 * r.metrics.ece) }} points<span class="sub">ECE {{ '%.3f'|format(r.metrics.ece) }}</span>{% else %}{{ nr() }}{% endif %}{% if r.vs %}{{ chg(r.vs.ece) }}{% endif %}</td>{% endfor %}</tr>
+        <tr><th scope="row">AUC-PR <span class="muted">(base rate)</span></th>{% for r in side %}<td>{{ f3(r.metrics.auc_pr) }} <span class="muted">({{ f3(r.metrics.base_rate) }})</span></td>{% endfor %}</tr>
+        <tr><th scope="row">Labelled rows · booked</th>{% for r in side %}<td>{{ n(r.metrics.rows) }} · {{ n(r.metrics.positives) }}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+  </div>
+  {% set unsplit = side|rejectattr('split')|map(attribute='version')|list %}
+  <p class="small muted">{% if unsplit %}Months trained on and calibrated on: [NOT RECORDED] for {{ names(unsplit) }}. {{ 'This registry row predates' if unsplit|length == 1 else 'These registry rows predate' }} the train, calibrate and test split and store{{ 's' if unsplit|length == 1 }} only the months {{ 'it was' if unsplit|length == 1 else 'they were' }} tested on. {% endif %}{% if side|selectattr('test_n')|rejectattr('metrics.test_rows')|list %}Test leads are the sum of the calibration bands. {% endif %}{% if families %}{{ families }} {% endif %}{% if sent_back %}Sent back: {% for r in sent_back %}{{ r.version }}{% if r.sent_back %} by {{ r.sent_back.approver }} ({{ r.sent_back.team }}){% if r.sent_back.note %}, <span class="quote">“{{ r.sent_back.note }}”</span>{% endif %}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}.{% else %}No version has been sent back.{% endif %}{% if shadow_reg %} {{ shadow_reg.version }} is kept as the shadow, the previous live model{% if shadow %}: on {{ n(shadow.n) }} recent labelled leads, live {{ shadow.live.version }} found {{ f3(shadow.live.precision_at_k) }} precision in its top {{ shadow.k }} against {{ f3(shadow.shadow.precision_at_k) }} for {{ shadow.shadow.version }}{% endif %}.{% endif %}{% if retired %} Retired: {{ names(retired) }}.{% endif %}</p>
+</section>
+{% endif %}
+
+<hr class="rule">
+
+<section id="sign-off" class="msec" aria-labelledby="md-sign">
+  {% if waiting %}{% set r = waiting[0] %}
+  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}</h2>
+  {{ signoff(r) }}
+  {% if waiting|length > 1 %}{% set older = waiting[1:] %}
+  <p>Also waiting{% if not (older|selectattr('approvals')|list) %}, unsigned{% endif %}: {% for o in older %}{{ o.version }} (trained {{ o.trained or '[NOT RECORDED]' }}{% if o.signed.marketing or o.signed.sales %}; {{ signed_teams(o) }}{% endif %}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}.</p>
+  {% for o in older %}<details{% if stale == o.version %} open{% endif %}>
+    <summary>Sign off {{ o.version }}</summary>
+    <div class="msec">{{ signoff(o) }}</div>
+  </details>{% endfor %}
+  {% endif %}
+  <a class="tap" href="/decisions">Every approval and send-back so far, on Decisions</a>
+  {% else %}
+  <h2 id="md-sign" class="kicker">Sign off</h2>
+  <p>No candidate is waiting. The next one appears here after a retrain (<code>python run.py train</code>, or the scheduler's monthly job), with its numbers beside the live model's.</p>
+  {% endif %}
+</section>
+
+<hr class="rule">
+
+<section class="msec" aria-labelledby="md-cal">
+  {% if current and calibration %}
+  <h2 id="md-cal" class="kicker">Calibration · {{ current.version }} on {{ current.tested or '[NOT RECORDED]' }}</h2>
+  <p>{% if calibration.typical %}When {{ current.version }} says {{ calibration.typical.predicted }}%, about {{ calibration.typical.observed }}% book. {% endif %}{% if calibration.ece_points is not none %}Across {{ n(current.test_n) }} test leads it is off by {{ calibration.ece_points }} points on average. {% endif %}Bands with fewer than {{ small_band }} leads are marked few; read them loosely.</p>
+  <div class="cal">
+    <div class="scroll">{{ bandtable(current) }}</div>
+    <figure>
+      <svg width="240" height="222" viewBox="0 0 240 222" role="img" aria-label="{{ calibration.label }}">
+        <rect class="pl-frame" x="40" y="8" width="190" height="190"></rect>
+        <line class="pl-grid" x1="135" y1="8" x2="135" y2="198"></line>
+        <line class="pl-grid" x1="40" y1="103" x2="230" y2="103"></line>
+        <line class="pl-diag" x1="40" y1="198" x2="230" y2="8"></line>
+        <text class="pl-t" x="34" y="202" text-anchor="end">0%</text>
+        <text class="pl-t" x="34" y="107" text-anchor="end">50%</text>
+        <text class="pl-t" x="34" y="17" text-anchor="end">100%</text>
+        <text class="pl-t" x="40" y="216" text-anchor="middle">0%</text>
+        <text class="pl-t" x="135" y="216" text-anchor="middle">50%</text>
+        <text class="pl-t" x="230" y="216" text-anchor="end">100%</text>
+        {% for b in current.bands if b.cx is not none and b.cy is not none %}<circle class="{{ 'pl-few' if b.few else 'pl-pt' }}" cx="{{ b.cx }}" cy="{{ b.cy }}" r="4"></circle>{% endfor %}
+      </svg>
+      <figcaption class="small muted">Score across, share booked up. On the line is exact. Hollow: fewer than {{ small_band }} leads.</figcaption>
+    </figure>
+  </div>
+  {% else %}
+  <h2 id="md-cal" class="kicker">Calibration</h2>
+  <p>{% if current %}{{ current.version }} stored no calibration bands.{% else %}No model is live, so there are no live calibration bands: the cold-start points table is scoring.{% endif %}</p>
+  {% endif %}
+  {% set cb = waiting|selectattr('bands')|list|reverse|list %}
+  {% if cb %}<details>
+    <summary>The same bands for {{ names(cb|map(attribute='version')) }}</summary>
+    <div class="msec">{% for r in cb %}
+      <h3 class="kicker">{{ r.version }} on {{ r.tested or '[NOT RECORDED]' }}{% if r.metrics.ece is not none %} · off by {{ '%.1f'|format(100 * r.metrics.ece) }} points{% endif %}</h3>
+      <div class="scroll" style="max-width: 480px">{{ bandtable(r) }}</div>
+    {% endfor %}</div>
+  </details>{% endif %}
+</section>
+
+<hr class="rule">
+
+<section class="msec" aria-labelledby="md-mon">
+  <h2 id="md-mon" class="kicker">Channel monitor{% if monitor %} · {{ monitor.period }}{% endif %}, worked leads {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}{{ dg() }}</h2>
+  {% if monitor %}
+  <p class="lede">{{ monitor.headline }}</p>
+  <div class="scroll" role="region" aria-label="Channel monitor, scrolls sideways" tabindex="0">
+    <table class="num mon" aria-labelledby="md-mon">
+      <thead><tr><th scope="col">Channel</th><th scope="col" class="r">Worked</th><th scope="col" class="r">Demos</th><th scope="col" class="r">Booked</th><th scope="col" class="r">Average score</th><th scope="col" class="r lim">Limits, 3<span class="lc">σ</span></th><th scope="col">Flag</th></tr></thead>
+      <tbody>
+      {% for p in monitor.rows %}<tr>
+        <th scope="row">{{ p.label }}</th>
+        <td class="r">{{ n(p.n) }}</td>
+        <td class="r">{{ n(p.demos) }}</td>
+        <td class="r">{% if p.booked is not none %}{{ p.booked }}%{% else %}{{ nr() }}{% endif %}</td>
+        <td class="r">{% if p.predicted is not none %}{{ p.predicted }}%{% else %}{{ nr() }}{% endif %}</td>
+        <td class="r lim{% if p.low is none %} muted{% endif %}">{% if p.low is not none and p.high is not none %}{{ p.low }}–{{ p.high }}%{% else %}not set{% endif %}</td>
+        <td class="{{ {'ok': 'good', 'above': 'warn', 'below': 'bad'}.get(p.flag, 'muted') }}">{% if p.flag == 'ok' %}Inside limits{% elif p.flag == 'above' %}Above prediction, retrain due{% elif p.flag == 'below' %}Below prediction, retrain due{% else %}Too few to judge, under {{ min_group }}{% endif %}</td>
+      </tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted">Share booked against the average score the same leads carried, with limits three standard errors either side: inside is noise, outside is a real shift. A channel with under {{ min_group }} worked leads in a month is held, not judged.{% if monitor.earlier %} Earlier months in the same run: {{ monitor.earlier|join(' ') }}{% endif %} Run {{ when(monitor.run) }} log time.</p>
+  {% if monitor.earlier %}<details>
+    <summary>Every month in this run</summary>
+    <div class="scroll" role="region" aria-label="Every month of the channel monitor, scrolls sideways" tabindex="0">
+      <table class="num mon">
+        <thead><tr><th scope="col">Month</th><th scope="col">Channel</th><th scope="col" class="r">Worked</th><th scope="col" class="r">Booked</th><th scope="col" class="r">Average score</th><th scope="col" class="r lim">Limits, 3<span class="lc">σ</span></th><th scope="col">Flag</th></tr></thead>
+        <tbody>
+        {% for p in monitor.every|sort(attribute='period', reverse=true) %}<tr>
+          <td>{{ p.month }}</td><th scope="row">{{ p.label }}</th><td class="r">{{ n(p.n) }}</td>
+          <td class="r">{% if p.booked is not none %}{{ p.booked }}%{% else %}{{ nr() }}{% endif %}</td>
+          <td class="r">{% if p.predicted is not none %}{{ p.predicted }}%{% else %}{{ nr() }}{% endif %}</td>
+          <td class="r lim{% if p.low is none %} muted{% endif %}">{% if p.low is not none and p.high is not none %}{{ p.low }}–{{ p.high }}%{% else %}not set{% endif %}</td>
+          <td>{{ {'ok': 'inside', 'above': 'above', 'below': 'below'}.get(p.flag, 'too few') }}</td>
+        </tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </details>{% endif %}
+  {% else %}
+  <p>The monitor has not run yet. It runs with the scheduler, or with <code>python run.py monitor</code>.</p>
+  {% endif %}
+
+  <h3 class="kicker" style="margin-top: 12px">Since routing began{% if began %}, {{ began }}{% endif %}{{ dg() }}</h3>
+  {% if (hit and hit.n) or speed.n %}
+  <div class="figs">
+    {% if hit and hit.ranked.n %}<div><span class="mid num">{{ (100 * hit.ranked.booked / hit.ranked.n)|round|int }}%</span><span>of worked ranked leads booked</span><span class="small muted num">{{ n(hit.ranked.booked) }} of {{ n(hit.ranked.n) }}</span></div>{% endif %}
+    {% if hit and hit.exploration.n %}<div><span class="mid num">{{ (100 * hit.exploration.booked / hit.exploration.n)|round|int }}%</span><span>of the random exploration slice booked</span><span class="small muted num">{{ n(hit.exploration.booked) }} of {{ n(hit.exploration.n) }}</span></div>{% endif %}
+    {% if speed.n %}<div><span class="mid num">{{ speed.median_hours|round|int }}h</span><span>median wait for a first touch</span><span class="small muted num">{{ n(speed.n) }} routed leads{% if speed.baseline.n %}; {{ speed.baseline.median_hours|round|int }}h before routing{% endif %}</span></div>
+    <div><span class="mid num">{{ (100 * speed.within_24h)|round|int }}%</span><span>first touched within a day</span>{% if speed.baseline.n %}<span class="small muted num">{{ (100 * speed.baseline.within_24h)|round|int }}% of {{ n(speed.baseline.n) }} before routing</span>{% endif %}</div>{% endif %}
+  </div>
+  {% else %}<p>No lead AuxoCase handed out has been worked yet.</p>{% endif %}
+  {% if effect.factor is not none %}<p class="small muted">{% if learned_wait %}{{ current.version }} learned from leads worked before routing, which waited {{ learned_wait }} for a first touch. {% endif %}{% if env == 'mock' %}On the mock, a lead first touched after a day booked {{ (100 * effect.rate_slow)|round|int }}% of the time against {{ (100 * effect.rate_fast)|round|int }}% within a day: a factor of {{ effect.factor }} in the outcomes, against the generator's built-in {{ built_in }}.{% if late_factor and late_factor|float != built_in %} Routing discounts a lead past its first day by {{ late_factor }}.{% endif %}{{ dg() }}{% else %}A lead first touched after a day booked {{ (100 * effect.rate_slow)|round|int }}% of the time against {{ (100 * effect.rate_fast)|round|int }}% within a day, a factor of {{ effect.factor }}; routing discounts a lead past its first day by {{ late_factor or '1.0' }}. Fast touches were not given at random, so read the factor as a range.{% endif %}</p>{% endif %}
+</section>
+
+<hr class="rule">
+
+<section class="msec" aria-labelledby="md-over">
+  <h2 id="md-over" class="kicker">SDR overrides</h2>
+  <div class="scroll" style="max-width: 560px">
+    <table class="num" aria-labelledby="md-over">
+      <thead><tr><th scope="col">Action</th><th scope="col" class="r">Times</th><th scope="col" class="r">Leads</th><th scope="col" class="r">Booked later{{ dg() }}</th></tr></thead>
+      <tbody>
+      {% for o in overrides.rows %}<tr{% if not o.times %} class="few"{% endif %}>
+        <th scope="row">{{ o.label }}{% if o.action == 'worked' %} <span class="muted">(self-reported)</span>{% endif %}</th>
+        <td class="r">{{ n(o.times) }}</td><td class="r">{{ n(o.leads) }}</td><td class="r">{{ n(o.booked) if o.times else 'none' }}</td>
+      </tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted">{% set rs = overrides.reason %}{% if rs %}{% if rs[1] == overrides.skips %}{{ 'The one skip' if overrides.skips == 1 else 'All ' ~ overrides.skips ~ ' skips' }} gave the reason <span class="quote">“{{ rs[0] }}”</span>{% else %}{{ rs[1] }} of the {{ overrides.skips }} skips gave the reason <span class="quote">“{{ rs[0] }}”</span>{% endif %}. {% endif %}{% if overrides.total %}{% if overrides.first_day == overrides.last_day %}{{ 'It was' if overrides.total == 1 else 'All ' ~ overrides.total ~ ' were' }} logged on {{ overrides.first_day }}, log time.{% else %}Logged from {{ overrides.first_day }} to {{ overrides.last_day }}, log time.{% endif %} {% else %}No SDR has overridden the ranking yet. {% endif %}Booked later is the lead's outcome {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}, whoever worked it. Moves up and down show in each lead's own history.</p>
+  <a class="tap" href="/decisions">Every worked, skipped and junk call, on Decisions</a>
+</section>
+
+{% if env == 'mock' %}<footer class="footnote"><span class="dagger">†</span> Simulated · synthetic data. Every lead comes from the mock portal, not a real HubSpot portal. {% set sims = regs|selectattr('simulated')|list|reverse|map(attribute='version')|list %}{% if sims %}{{ names(sims) }} {{ 'was' if sims|length == 1 else 'were each' }} trained after the generator simulated one more month{% if seeds_text %} ({{ seeds_text }}){% endif %}, and every{% else %}Every{% endif %} booking and first touch is generated or simulated; on a real portal they are measured. Log times are the demo run's wall clock, in UTC; the service clock is frozen at {{ clock_text }}.</footer>{% endif %}
 {% endblock %}

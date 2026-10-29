@@ -1,40 +1,89 @@
-{% extends "base.html" %}{% block title %}Decisions · AuxoCase{% endblock %}
+{% extends "base.html" %}{% block title %}Decisions{% endblock %}
+{% block style %}
+.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:24px 32px;margin:0}
+.tally>div{display:flex;flex-direction:column;gap:4px}
+.dsec{display:flex;flex-direction:column;gap:12px}
+.dsec>p{margin:0;max-width:760px}
+.scroll{position:relative}  /* keeps the .vh "No note" spans inside the scroll box, or they widen the page on a phone */
+.scroll table{min-width:760px}
+.badge.yes{color:var(--good)}.badge.yes::before{width:7px;height:7px;background:currentColor}
+.badge.no{color:var(--bad)}.badge.no::before{width:7px;height:7px;border:1.5px solid currentColor}
+.badge.skip{color:var(--warn)}.badge.skip::before{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:7px solid currentColor}
+.badge.live{color:var(--good)}.badge.live::before{width:7px;height:7px;border-radius:50%;background:currentColor}
+.badge.cand{color:var(--accent)}.badge.cand::before{width:7px;height:7px;border-radius:50%;border:1.5px solid currentColor}
+.badge.past::before{width:8px;height:2px;background:currentColor}
+{% endblock %}
 {% block body %}
-<h1>Decisions</h1>
-<p class="sub">Every call people made: which model versions marketing and sales approved or sent back, and which leads SDRs worked or turned down. Newest first.</p>
-<div class="cards">
-  <div class="card"><div class="k">Model approvals</div><div class="v">{{ counts.approve }}</div></div>
-  <div class="card"><div class="k">Models sent back</div><div class="v">{{ counts.send_back }}</div></div>
-  <div class="card"><div class="k">Leads worked</div><div class="v">{{ counts.worked }}</div></div>
-  <div class="card"><div class="k">Leads junked</div><div class="v">{{ counts.junk }}</div></div>
-  <div class="card"><div class="k">Leads skipped</div><div class="v">{{ counts.skipped }}</div></div>
-</div>
+{# Log times are now_iso(): UTC wall clock, "2026-10-28T18:30:10". Shown as "28 Oct 2026 18:30"; anything else as it came. #}
+{% macro when(ts) %}{% if ts and ts|length >= 16 and (ts[5:7]|int) in range(1, 13) %}<time class="num" datetime="{{ ts[:16] }}Z">{{ ts[8:10]|int }} {{ ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(ts[5:7]|int) - 1] }} {{ ts[:4] }} <span class="muted">{{ ts[11:16] }}</span></time>{% elif ts %}{{ ts }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}{% endmacro %}
+{% macro none_given(what) %}<span class="muted" aria-hidden="true">—</span><span class="vh">{{ what }}</span>{% endmacro %}
+{% macro nr() %}<span class="muted small">[NOT RECORDED]</span>{% endmacro %}
+{# On the mock every count is synthetic: the demo build approves the first model, the simulator's SDRs skip leads,
+   and the rest are clicks in the demo on generated leads and models. #}
+{% macro dg() %}{% if env == 'mock' %}<span class="dagger">†</span>{% endif %}{% endmacro %}
 
-<h2>Model versions</h2>
-<p class="sub small">A version goes live once one person from marketing and one from sales approve it. Sending it back retires it.</p>
-<table><tr><th>When</th><th>Version</th><th>Team</th><th>Who</th><th>Decision</th><th>Note</th><th>Version now</th></tr>
-{% for a in models %}<tr>
-<td class="small">{{ a.created_at }}</td>
-<td><a href="/model">{{ a.version }}</a></td>
-<td>{{ a.team }}</td>
-<td>{{ a.approver }}</td>
-<td><span class="pill {{ 'good' if a.decision == 'approve' else 'bad' }}">{{ 'Approved' if a.decision == 'approve' else 'Sent back' }}</span></td>
-<td class="small muted">{{ a.note or '' }}</td>
-<td><span class="pill {{ 'good' if a.status == 'live' else ('accent' if a.status == 'candidate' else '') }}">{{ (a.status or 'unknown')|replace('_', ' ') }}</span></td>
-</tr>{% else %}<tr><td colspan="7" class="muted">No model decisions yet.</td></tr>{% endfor %}
-</table>
+<header style="display: flex; flex-direction: column; gap: 8px">
+  <p class="kicker">Results · marketing, sales and SDR calls{% if env == 'mock' %} · mock HubSpot portal{% endif %}</p>
+  <h1 class="title">Decisions</h1>
+  <p class="muted" style="margin: 0; max-width: 760px">Every call people made: which model versions marketing and sales approved or sent back, and which leads SDRs worked or turned down. Newest first. Times are when each call was logged, in UTC.</p>
+</header>
 
-<h2>Leads</h2>
-<p class="sub small">Worked means the SDR made first contact. Junk and skipped are leads they turned down, with their reason. Score and rank are what the SDR saw at the time.{% if leads|length >= limit %} Showing the latest {{ limit }}.{% endif %}</p>
-<table><tr><th>When</th><th>SDR</th><th>Lead</th><th>Decision</th><th>Reason</th><th class="num">Score then</th><th class="num">Rank then</th></tr>
-{% for o in leads %}<tr>
-<td class="small">{{ o.created_at }}</td>
-<td>{{ owners.get(o.owner_id, o.owner_id) }}</td>
-<td><a href="/lead/{{ o.contact_id }}">{{ titles.get(o.contact_id) or 'Contact' }}</a> <span class="muted small">#{{ o.contact_id }}</span></td>
-<td><span class="pill {{ 'good' if o.action == 'worked' else ('bad' if o.action == 'junk' else 'warn') }}">{{ {'worked': 'Worked', 'junk': 'Junk', 'skipped': 'Skipped'}[o.action] }}</span></td>
-<td class="small muted">{{ o.note or '' }}</td>
-<td class="num">{{ o.score_at_time if o.score_at_time is not none else '' }}</td>
-<td class="num">{{ o.rank_at_time if o.rank_at_time is not none else '' }}</td>
-</tr>{% else %}<tr><td colspan="7" class="muted">No lead decisions yet.</td></tr>{% endfor %}
-</table>
+<hr class="rule">
+
+<section class="tally" aria-labelledby="hd-counts">
+  <h2 id="hd-counts" class="vh">Counts</h2>
+  <div><span class="mid num">{{ counts.approve }}{{ dg() }}</span><span>Model approvals</span></div>
+  <div><span class="mid num">{{ counts.send_back }}{{ dg() }}</span><span>Models sent back</span></div>
+  <div><span class="mid num">{{ counts.worked }}{{ dg() }}</span><span>Leads worked</span></div>
+  <div><span class="mid num">{{ counts.junk }}{{ dg() }}</span><span>Leads junked</span></div>
+  <div><span class="mid num">{{ counts.skipped }}{{ dg() }}</span><span>Leads skipped</span></div>
+</section>
+
+<hr class="rule">
+
+<section class="dsec" aria-labelledby="hd-models">
+  <h2 id="hd-models" class="kicker">Model versions</h2>
+  <p class="small muted">A version goes live once one person from marketing and one from sales approve it. Sending it back retires it.</p>
+  <div class="scroll" role="region" aria-label="Model decisions, scrolls sideways" tabindex="0">
+    <table aria-labelledby="hd-models">
+      <thead><tr><th scope="col">When</th><th scope="col">Version</th><th scope="col">Team</th><th scope="col">Who</th><th scope="col">Decision</th><th scope="col">Note</th><th scope="col">Version now</th></tr></thead>
+      <tbody>
+      {% for a in models %}<tr>
+        <td class="small">{{ when(a.created_at) }}</td>
+        <td><a href="/model">{{ a.version }}</a></td>
+        <td>{{ a.team }}</td>
+        <td>{{ a.approver or nr() }}</td>
+        <td>{% if a.decision == 'approve' %}<span class="badge yes">Approved</span>{% else %}<span class="badge no">Sent back</span>{% endif %}</td>
+        <td class="small">{% if a.note %}<span class="quote">{{ a.note }}</span>{% else %}{{ none_given('No note') }}{% endif %}</td>
+        <td><span class="badge {{ 'live' if a.status == 'live' else ('cand' if a.status == 'candidate' else 'past') }}">{{ (a.status or 'unknown')|replace('_', ' ') }}</span></td>
+      </tr>{% else %}<tr><td colspan="7" class="muted">No model decisions yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section class="dsec" aria-labelledby="hd-leads">
+  <h2 id="hd-leads" class="kicker">Leads</h2>
+  <p class="small muted">Worked means the SDR made first contact. Junk and skipped are leads they turned down, with their reason. Score and rank are what the SDR saw at the time. These are the calls logged in AuxoCase; a first touch seen only in HubSpot shows on the lead's page.{% if leads|length >= limit %} Showing the latest {{ limit }}.{% endif %}</p>
+  <div class="scroll" role="region" aria-label="Lead decisions, scrolls sideways" tabindex="0">
+    <table aria-labelledby="hd-leads">
+      <thead><tr><th scope="col">When</th><th scope="col">SDR</th><th scope="col">Lead</th><th scope="col">Decision</th><th scope="col">Reason</th><th scope="col" class="r">Score then</th><th scope="col" class="r">Rank then</th></tr></thead>
+      <tbody>
+      {% for o in leads %}<tr>
+        <td class="small">{{ when(o.created_at) }}</td>
+        <td>{{ owners.get(o.owner_id) or o.owner_id or nr() }}</td>
+        <td><a href="/lead/{{ o.contact_id }}">{{ titles.get(o.contact_id) or 'Contact' }}</a> <span class="muted small num">#{{ o.contact_id }}</span></td>
+        <td>{% if o.action == 'worked' %}<span class="badge yes">Worked</span>{% elif o.action == 'junk' %}<span class="badge no">Junk</span>{% else %}<span class="badge skip">Skipped</span>{% endif %}</td>
+        <td class="small">{% if o.note %}<span class="quote">{{ o.note }}</span>{% else %}{{ none_given('No reason given') }}{% endif %}</td>
+        <td class="r num">{% if o.score_at_time is not none %}{{ o.score_at_time|round|int }}%{% else %}{{ nr() }}{% endif %}</td>
+        <td class="r num">{% if o.rank_at_time is not none %}{{ o.rank_at_time }}{% else %}{{ nr() }}{% endif %}</td>
+      </tr>{% else %}<tr><td colspan="7" class="muted">No lead decisions yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+{% if env == 'mock' %}<footer class="footnote"><span class="dagger">†</span> Simulated · synthetic data. This is the mock HubSpot portal: its leads and SDRs come from a generator and its models are trained on them. When the demo build trains the first model it also records that model's two approvals, under demo approver names; the lead calls mix the simulator's SDRs (which skip with the reason "wrong fit") with anything clicked in this demo. On a real portal this page lists the calls your own SDRs and your marketing and sales leads make in AuxoCase. Times are the demo run's wall clock, in UTC; the service clock is frozen at {{ clock_text }}.</footer>{% endif %}
 {% endblock %}

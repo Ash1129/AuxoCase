@@ -19,7 +19,9 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from .features import CATEGORICAL, FEATURES, LABELS, frame
+from .features import CATEGORICAL, FEATURES, driver_label, frame, reason_clause
+
+REASON_WORDING = "2"     # part of a score's input hash, so a change of wording is written back on the next scoring
 from .model import DemoModel
 
 
@@ -33,12 +35,27 @@ class Explanation:
     def reason_text(self) -> str:
         parts = []
         if self.positives:
-            parts.append("Ranked up because the lead " + "; ".join(self.positives) + ".")
+            parts.append("Ranked up because " + _join(self.positives) + ".")
         if self.negatives:
-            parts.append("Held back because the lead " + "; ".join(self.negatives) + ".")
+            parts.append("Held back because " + _join(self.negatives) + ".")
         if self.counterfactual:
             parts.append(self.counterfactual)
         return " ".join(parts)
+
+
+def _join(clauses: list[str]) -> str:
+    """"a", "a and b", "a, b and c"."""
+    return clauses[0] if len(clauses) == 1 else ", ".join(clauses[:-1]) + " and " + clauses[-1]
+
+
+def driver_rows(contributions: list, limit: int = 6, bar_width: int = 136) -> list[dict]:
+    """The score breakdown as the pages draw it: a label, which way it moved the score, the signed effect on the
+    log-odds, and a bar scaled to the largest effect shown."""
+    items = [(str(k), float(v)) for k, v in (contributions or [])][:limit]
+    biggest = max((abs(v) for _, v in items), default=0.0) or 1.0
+    return [{"label": driver_label(k, v), "better": v > 0, "word": "better" if v > 0 else "worse",
+             "effect": f"{'+' if v > 0 else '−'}{abs(v):.2f}", "bar": max(2, round(bar_width * abs(v) / biggest))}
+            for k, v in items]
 
 
 def _feature_columns(model: DemoModel) -> list[str]:
@@ -89,8 +106,8 @@ def explain(model: DemoModel, row: dict, probability: float, cutoff_probability:
     # Drop features that are "off" (value 0 contributes nothing meaningful to a rep).
     items = [(k, v) for k, v in contrib.items() if abs(v) > 0.05 and _is_on(row, k)]
     items.sort(key=lambda kv: -abs(kv[1]))
-    pos = [LABELS.get(k, _fallback_label(k)) for k, v in items if v > 0][:3]
-    neg = [LABELS.get(k, _fallback_label(k)) for k, v in items if v < 0][:1]
+    pos = [reason_clause(k, v) for k, v in items if v > 0][:3]
+    neg = [reason_clause(k, v) for k, v in items if v < 0][:1]
     cf = ""
     if cutoff_probability is not None and probability < cutoff_probability:
         cf = _counterfactual(model, row, probability, cutoff_probability)
@@ -102,13 +119,6 @@ def _is_on(row: dict, key: str) -> bool:
         f, v = key.split("=", 1)
         return str(row.get(f)) == v
     return bool(row.get(key))
-
-
-def _fallback_label(key: str) -> str:
-    if "=" in key:
-        f, v = key.split("=", 1)
-        return f"{f.replace('_', ' ')} is {v.replace('_', ' ')}"
-    return key.replace("_", " ")
 
 
 # Actions a rep or marketing can actually take; each is a feature change and a sentence (L08: "what would change the rank").

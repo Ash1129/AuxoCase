@@ -1,16 +1,232 @@
-{% extends "base.html" %}{% block title %}Manager · held queue{% endblock %}
+{% extends "base.html" %}{% block title %}Held &amp; overdue{% endblock %}
+{% block style %}
+.hdr{display:flex;flex-direction:column;gap:8px}
+.mw{max-width:760px;margin:0}
+.sec{display:flex;flex-direction:column;gap:12px}
+.glance{display:flex;flex-wrap:wrap;gap:24px 48px}
+.stat{display:flex;flex-direction:column;gap:4px;max-width:240px}
+.stat.lead-stat{max-width:280px}
+.strong{font-weight:600}
+.tap{display:inline-block;padding:11px 0;margin:-11px 0}
+.hlist{container-type:inline-size;display:flex;flex-direction:column}
+.hrows{list-style:none;margin:0;padding:0}
+.hl{display:grid;grid-template-columns:32px minmax(0,1fr) 80px 240px 96px;column-gap:20px;align-items:center;padding:12px 0;border-top:1px solid var(--line)}
+.hl.hd{border-top:0;padding:0 0 6px;font-size:13px;line-height:18px;color:var(--muted);align-items:end}
+.hl .rank{font-size:20px;line-height:28px;color:var(--muted)}
+.hl .pct{font-size:22px;line-height:28px;font-weight:500}
+.hl>div{display:flex;flex-direction:column;min-width:0}
+.held{position:relative;margin:0 -12px;padding:0 12px}
+.held:has(>details[open]){background:var(--surface)}
+.hform{padding:4px 0 20px 52px}
+.hform>p{margin:12px 0 0}
+.hform>summary{position:absolute;top:12px;right:12px;width:96px}
+summary{list-style:none}
+summary::-webkit-details-marker{display:none}
+details[open]>summary .shut,details:not([open])>summary .opened{display:none}
+.hform:not([open]){padding:0}
+.relform{display:flex;flex-wrap:wrap;gap:12px 16px;align-items:flex-end}
+.relform .field{min-width:0}
+.relform .grow2{flex:2 1 200px}.relform .grow1{flex:1 1 140px}
+.relform label{font-weight:600}.relform .opt{font-weight:400}
+.relform select,.relform input{width:100%}
+.gone{margin:0;padding:0 0 12px 52px}
+.hfoot{margin:0;border-top:1px solid var(--line);padding-top:12px}
+.more>summary{margin-top:12px}
+.clocks{min-width:720px}
+.clocks td{font-size:14px;line-height:20px}
+.clocks td a.tap{line-height:22px}.clocks td a.strong{font-size:15px}
+.sub3{padding-top:12px}
+@container (max-width:719px){
+  .hl{grid-template-columns:28px minmax(0,1fr) max-content;column-gap:12px;row-gap:6px}
+  .hl>.c-wide{grid-column:2 / 4}.hl>.slot{display:none}.hl.hd{display:none}
+  .hform{padding-left:0}.hform>summary{position:static;width:auto;margin:0 0 12px}
+  .hform:not([open]){padding:0}
+  .relform .field{flex:1 1 100%}
+  .gone{padding-left:0}
+}
+{% endblock %}
 {% block body %}
-<h1>Held queue</h1>
-<p class="sub">Leads that could not be assigned because every SDR was at their limit. Assign one by hand, or raise a limit and re-run routing. Nothing is assigned past a limit without a named person.</p>
-<table><tr><th>Lead</th><th class="num">Demo</th><th>Held since</th><th>Assign to</th></tr>
-{% for r in rows %}{% set c = leads[r.contact_id] %}
-<tr><td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a> <span class="muted small">{{ c.channel }}</span></td><td class="num">{{ (100*(c.auxo_probability or 0))|round(0)|int }}%</td><td class="small">{{ r.held_at }}</td>
-<td><form class="inline" method="post" action="/held/{{ c.id }}/release"><select name="owner_id">{% for o in owners %}<option value="{{ o.id }}">{{ o.name }} ({{ counts.get(o.id,0) }}/{{ o.capacity_limit }})</option>{% endfor %}</select><input name="released_by" placeholder="your name" required><input name="note" placeholder="reason"><button>Assign</button></form></td></tr>
-{% else %}<tr><td colspan="4" class="muted">Nothing held.</td></tr>{% endfor %}
-</table>
-<h2>Assigned but untouched past the SLA</h2>
-<p class="sub small">Speed to lead: assigned leads with no first contact within 24 hours. A reminder task is created for each on the next re-alert run.</p>
-<table><tr><th>Lead</th><th>SDR</th><th>Assigned</th></tr>
-{% for s in stale %}<tr><td><a href="/lead/{{ s.contact_id }}">#{{ s.contact_id }}</a></td><td>{{ s.owner_id }}</td><td class="small">{{ s.created_at }}</td></tr>{% else %}<tr><td colspan="3" class="muted">None.</td></tr>{% endfor %}
-</table>
+{%- set lim = limits -%}
+{%- macro leads_word(n) -%}{{ 'lead' if n == 1 else 'leads' }}{%- endmacro -%}
+{%- macro names(rs) -%}{% for r in rs[:3] %}{{ r.name }} ({{ r.waiting }} of {{ r.limit }}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 and rs|length <= 3 else ', ' }}{% endif %}{% endfor %}{% if rs|length > 3 %} and {{ rs|length - 3 }} more{% endif %}{%- endmacro -%}
+{%- set chooser = 'any SDR you choose' if other_owners else 'whoever you choose' -%}
+{%- set over_note -%}
+{%- if lim.all and lim.uniform -%}Every SDR is at their limit, so {{ chooser }} will have {{ lim.uniform.waiting + 1 }} leads waiting against a limit of {{ lim.uniform.limit }}.
+{%- elif lim.all -%}Every SDR is at their limit, so {{ chooser }} goes over theirs.
+{%- elif lim.room -%}{{ names(lim.room) }} {{ 'has' if lim.room|length == 1 else 'have' }} room; any other SDR goes over their limit.
+{%- endif -%}
+{%- endset -%}
+{%- set dag_band = held and p_lo is not none and bands -%}
+{%- set dag_speed = upcoming and speed.get('rate_fast') is not none -%}
+{%- macro held_row(h, open) -%}
+<li class="held">
+  <div class="hl">
+    <span class="serif num rank">{% if h.rank is not none %}<span class="vh">Rank </span>{{ h.rank }}{% else %}<span aria-hidden="true">–</span><span class="vh">Not ranked</span>{% endif %}</span>
+    <div>
+      {% if h.c %}<a class="tap strong" href="/lead/{{ h.id }}">{{ h.label }}</a>{% else %}<span class="strong">{{ h.label }}</span>{% endif %}
+      {% if h.c %}<span class="small muted">{% if h.company %}{{ h.company }} · {% endif %}{{ h.source }} · #{{ h.id }}</span>{% endif %}
+    </div>
+    <div>{% if h.pct is not none %}<span class="serif num pct">{{ h.pct }}%</span><span class="tiny muted">demo</span>{% else %}<span class="small muted">[NOT SCORED]</span>{% endif %}</div>
+    <div class="c-wide small">
+      <span class="num">{% if not h.c %}[NOT IN HUBSPOT]{% elif h.arrived %}Arrived {{ h.arrived }} ago{% else %}Arrival [NOT RECORDED]{% endif %}</span>
+      <span class="num tiny muted">Held {{ 'at ' ~ h.held_time if h.held_on_day else h.held_at }}{% if h.reason %} · {{ h.reason }}{% endif %}</span>
+    </div>
+    <span class="slot" aria-hidden="true"></span>
+  </div>
+  {% if h.c and h.in_pool %}
+  <details class="hform"{% if open %} open{% endif %}>
+    <summary class="btn"><span class="shut">Assign<span class="vh"> {{ h.name }}</span></span><span class="opened">Close<span class="vh"> the form for {{ h.name }}</span></span></summary>
+    <form class="relform" method="post" action="/held/{{ h.id }}/release">
+      <div class="field grow2">
+        <label for="rel-{{ h.id }}-sdr">Assign {{ h.name }} to</label>
+        <select id="rel-{{ h.id }}-sdr" name="owner_id" required>
+          <option value="">Choose an SDR</option>
+          {% for o in owners %}<option value="{{ o.id }}">{{ o.name }} · {{ counts.get(o.id, 0) }} of {{ o.capacity_limit }} waiting</option>
+          {% endfor %}{% if other_owners %}<optgroup label="Other owners">{% for o in other_owners %}<option value="{{ o.id }}">{{ o.name }} · {{ counts.get(o.id, 0) }} of {{ o.capacity_limit }} waiting</option>{% endfor %}</optgroup>{% endif %}
+        </select>
+      </div>
+      <div class="field grow1">
+        <label for="rel-{{ h.id }}-by">Your name</label>
+        <input id="rel-{{ h.id }}-by" name="released_by" type="text" autocomplete="name" required>
+      </div>
+      <div class="field grow2">
+        <label for="rel-{{ h.id }}-note">Reason <span class="muted opt">(optional)</span></label>
+        <input id="rel-{{ h.id }}-note" name="note" type="text">
+      </div>
+      <div class="actions"><button class="btn primary" type="submit">Assign<span class="vh"> {{ h.name }}</span></button></div>
+    </form>
+    <p class="small muted mw">{% if over_note %}{{ over_note }} {% endif %}Your name goes in the routing log; your reason goes on the SDR's new HubSpot task, due in {{ task_due_hours }} hours.</p>
+  </details>
+  {% else %}
+  <p class="small muted gone">{{ 'No longer in HubSpot' if not h.c else 'No longer in the pool (it aged out or found an owner)' }}; the next routing pass takes it off this list.</p>
+  {% endif %}
+</li>
+{%- endmacro -%}
+{%- macro clocks_table(rows, labelled_by, last_col) -%}
+<div class="scroll" role="region" aria-labelledby="{{ labelled_by }}" tabindex="0">
+  <table class="clocks">
+    <thead><tr><th scope="col">Lead</th><th scope="col">SDR</th><th scope="col">Since assignment</th><th scope="col">Since arrival</th><th scope="col">{{ last_col }}</th></tr></thead>
+    <tbody>
+      {% for e in rows %}
+      <tr>
+        <td><a class="tap strong" href="/lead/{{ e.c.id }}">{{ e.label }}</a><br><span class="muted">{% if e.company %}{{ e.company }} · {% endif %}{{ e.source }}{% if e.c.auxo_holdout %} · <span class="badge holdout">calibration lead</span>{% endif %}{% if e.c.auxo_below_gate %} · <span class="badge gate">below old threshold</span>{% endif %} · #{{ e.c.id }}</span></td>
+        <td>{% if e.owner and e.owner.active %}<a class="tap" href="/queue/{{ e.owner_id }}">{{ e.owner.name }}</a>{% elif e.owner %}{{ e.owner.name }}{% else %}Owner #{{ e.owner_id }}{% endif %}</td>
+        <td class="num">{{ e.since_assignment }}<br><span class="muted">assigned {{ e.assigned }}</span></td>
+        <td class="num{% if e.arrival.state == 'warn' %} warn{% endif %}">{{ e.arrival.text }}<br>{% if e.arrival.state == 'warn' %}{{ e.arrival.sub }}{% else %}<span class="muted">{{ e.arrival.sub }}</span>{% endif %}</td>
+        <td class="num">{{ e.due }}<br><span class="muted">{{ e.due_in }}</span></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{%- endmacro %}
+<header class="hdr">
+  <p class="kicker">Sales manager · {% if env == 'mock' %}mock HubSpot portal · {% if frozen %}clock frozen at {{ now_text }}{% else %}{{ now_text }} UTC{% endif %}{% else %}HubSpot · {{ now_text }} UTC{% endif %}</p>
+  <h1 class="title">Held and overdue</h1>
+  <p class="muted mw">Leads no SDR had room for, and assigned leads still waiting for a first touch after {{ sla_hours }} hours. Nothing is assigned past a limit without a named person.</p>
+</header>
+
+<hr class="rule">
+
+<section aria-label="At a glance" class="glance">
+  <div class="stat lead-stat">
+    <span class="big num">{{ held|length }}</span>
+    <span>{{ leads_word(held|length) }} held for you to place</span>
+    <span class="small muted">{% if not held %}No lead is waiting on your decision.{% elif held|length == 1 %}Held at {{ held_span.first }}, when every SDR was at their limit.{% elif held_span.first == held_span.last %}All held at {{ held_span.first }}, when every SDR was at their limit.{% else %}Held between {{ held_span.first }} and {{ held_span.last }}, each when every SDR was at their limit.{% endif %}</span>
+  </div>
+  <div class="stat">
+    <span class="mid num">{{ overdue|length }}</span>
+    <span>first {{ 'touch' if overdue|length == 1 else 'touches' }} overdue</span>
+    <span class="small muted">Assigned over {{ sla_hours }} hours ago with nothing recorded since.</span>
+  </div>
+  <div class="stat">
+    {% if lim.n %}
+    <span class="mid num">{{ lim.at_limit }} of {{ lim.n }}</span>
+    <span>SDRs at their limit</span>
+    <span class="small muted">{% if lim.uniform %}Each has {{ lim.uniform.waiting }} of {{ lim.uniform.limit }} {{ leads_word(lim.uniform.limit) }} waiting for a first touch.{% elif lim.room %}With room: {{ names(lim.room) }}.{% else %}Each is at or over their limit.{% endif %}</span>
+    {% else %}
+    <span class="mid num">0</span>
+    <span>SDRs active</span>
+    <span class="small muted">No active SDR in HubSpot to place leads with.</span>
+    {% endif %}
+  </div>
+</section>
+
+<hr class="rule">
+
+<section aria-labelledby="hd-held" class="sec">
+  <h2 id="hd-held" class="kicker">Held{% if lim.all %} · every SDR at their limit{% endif %}</h2>
+  {% if held %}
+  {% set top = held[0] %}
+  <p class="lede">{{ top.name }} leads the held list{% if top.pct is not none %} at {{ top.pct }}%{% endif %}.
+    {% if lim.all and lim.uniform %}Every SDR has {{ lim.uniform.waiting }} of {{ lim.uniform.limit }} {{ leads_word(lim.uniform.limit) }} waiting, so placing any of these{{ ' with an SDR' if other_owners }} goes over a limit, on your name.
+    {%- elif lim.all %}Every SDR is at their limit, so placing any of these{{ ' with an SDR' if other_owners }} goes over a limit, on your name.
+    {%- elif lim.room %}{{ lim.room|length }} of {{ lim.n }} SDRs {{ 'has' if lim.room|length == 1 else 'have' }} room; routing fills free slots from the pool at its next pass.
+    {%- else %}No active SDR is set up to place them with.{% endif %}</p>
+  <p class="small muted mw">Best first, by rank{% if pool_size %} among the pool's {{ "{:,}".format(pool_size) }} {{ leads_word(pool_size) }}{% endif %} at the last scoring pass{% if ranked_at %} ({{ ranked_at }}{% if scheduler == 'on' and score_every %}; it runs every {{ score_every }} minutes{% endif %}){% endif %}.
+    {% if p_lo is not none %}{% if p_lo == p_hi %}They all score {{ p_lo }}%{% else %}They score {{ p_lo }}% to {{ p_hi }}%{% endif %}
+    {%- if bands -%}
+      {%- for b in bands -%}
+        {%- if loop.first -%}
+          : of {{ 'the' if b.too_few else '100' }} leads {{ live_version }} scored {{ b.lo }} to {{ b.hi }}% in {% if held_out %}its test months ({{ months_text }}){% else %}{{ months_text }} (months it was also fitted on, so not held out){% endif %}, {% if b.too_few %}too few to say{% else %}about {{ b.booked }} booked when an SDR worked them{% endif %} ({{ "{:,}".format(b.n) }} {{ leads_word(b.n) }})
+        {%- else -%}
+          ; of {{ 'those' if b.too_few else '100' }} scored {{ b.lo }} to {{ b.hi }}%, {% if b.too_few %}too few to say{% else %}about {{ b.booked }}{% endif %} ({{ "{:,}".format(b.n) }} {{ leads_word(b.n) }})
+        {%- endif -%}
+      {%- endfor -%}.{% if env == 'mock' %}<span class="dagger">†</span>{% endif %}
+    {%- elif live_version -%}. {{ live_version }} has no measured booking rate for scores like these.
+    {%- else -%}. No model is live yet, so no booking rate has been measured for these scores.
+    {%- endif %}{% endif %}</p>
+
+  <div class="hlist">
+    <div class="hl hd" aria-hidden="true"><span>Rank</span><span>Lead</span><span>Demo chance</span><span>Waiting</span><span></span></div>
+    <ol class="hrows" aria-label="Held leads, best first">
+      {% for h in held[:shown] %}{{ held_row(h, loop.first) }}{% endfor %}
+    </ol>
+    <p class="small muted num hfoot">{% if held|length > shown %}1–{{ shown }} of {{ held|length }}{% else %}{{ held|length }}{% endif %} held, best first
+      {%- if age_out %} · {{ age_out.n }} of them {{ 'reaches' if age_out.n == 1 else 'reach' }} the pool's {{ max_age_days }}-day limit {{ 'later today' if age_out.today else 'on ' ~ age_out.date }} and drop{{ 's' if age_out.n == 1 }} off this list{% endif %}</p>
+    {% if held|length > shown %}
+    <details class="more">
+      <summary class="btn"><span class="shut">Show the other {{ held|length - shown }}</span><span class="opened">Hide {{ shown + 1 }}–{{ held|length }}</span></summary>
+      <ol class="hrows" aria-label="Held leads {{ shown + 1 }} to {{ held|length }}">
+        {% for h in held[shown:] %}{{ held_row(h, false) }}{% endfor %}
+      </ol>
+    </details>
+    {% endif %}
+  </div>
+  {% else %}
+  <p class="lede">Nothing is held.</p>
+  <p class="small muted mw">Routing holds a lead for you only when every SDR is at their limit and the lead has waited over {{ hold_after_hours }} hours above the capacity line. Until then it waits in the pool for the next free slot.</p>
+  {% endif %}
+</section>
+
+<hr class="rule">
+
+<section aria-labelledby="hd-late" class="sec">
+  <h2 id="hd-late" class="kicker">Overdue first touches · assigned over {{ sla_hours }} hours ago</h2>
+  {% if overdue %}
+  <p class="lede">{{ overdue|length }} {{ 'lead has' if overdue|length == 1 else 'leads have' }} waited over {{ sla_hours }} hours since assignment for a first touch.</p>
+  <p class="small muted mw">Longest overdue first, checked at {{ now_text }}. The {% if scheduler == 'on' and remind_every == 60 %}hourly {% endif %}reminder run sends each one's SDR a HubSpot task, once.</p>
+  {{ clocks_table(overdue, 'hd-late', 'Overdue since') }}
+  {% else %}
+  <p class="lede">No first touch is overdue.</p>
+  <p class="small muted mw">Checked at {{ now_text }}: no lead assigned by {{ sla_since }} is still waiting for a first touch. A lead that passes {{ sla_hours }} hours without one shows here, and the {% if scheduler == 'on' and remind_every == 60 %}hourly {% endif %}reminder run sends its SDR a HubSpot task.</p>
+  {% endif %}
+
+  <h3 id="hd-next" class="kicker sub3">Next to pass {{ sla_hours }} hours since assignment</h3>
+  {% if upcoming %}
+  <p class="small muted mw">Assignment starts the {{ sla_hours }}-hour clock; arrival starts the one that moves bookings
+    {%- if speed.get('rate_fast') is not none -%}
+      : leads first touched within a day of arriving booked {{ (100 * speed.rate_fast)|round|int }}%, later ones {{ (100 * speed.rate_slow)|round|int }}% ({{ "{:,}".format(speed.n_fast) }} and {{ "{:,}".format(speed.n_slow) }} worked leads).{% if env == 'mock' %}<span class="dagger">†</span>{% endif %}
+    {%- else -%}.{%- endif %}
+    {% if upcoming_rest %}The other {{ upcoming_rest.n }} waiting {{ leads_word(upcoming_rest.n) }} {{ 'was' if upcoming_rest.n == 1 else 'were' }} assigned {% if upcoming_rest.first == upcoming_rest.last %}at {{ upcoming_rest.first }}{% else %}between {{ upcoming_rest.first }} and {{ upcoming_rest.last }}{% endif %}.{% endif %}</p>
+  {{ clocks_table(upcoming, 'hd-next', 'Overdue at') }}
+  {% else %}
+  <p class="small muted mw">No lead assigned in the last {{ sla_hours }} hours is still waiting for a first touch.</p>
+  {% endif %}
+</section>
+
+{% if env == 'mock' %}
+<p class="footnote">{% if dag_band or dag_speed %}<span class="dagger">†</span> Simulated · synthetic data. The mock portal's leads and bookings come from a generator, so these booking rates describe generated outcomes; on a real portal they are measured.{% if dag_speed and speed.get('factor') is not none %} The first-day effect is the generator's built-in factor of {{ generator_factor }} (outcomes show {{ speed.factor }}).{% endif %}
+  {%- else %}Simulated · synthetic data. The mock portal's leads, SDRs and bookings come from a generator; on a real portal they come from HubSpot.{% endif %}</p>
+{% endif %}
 {% endblock %}

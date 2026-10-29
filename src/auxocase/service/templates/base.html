@@ -1,46 +1,138 @@
 <!doctype html>
-<html lang="en">
+<html lang="en"{% if theme in ('light', 'dark') %} data-theme="{{ theme }}"{% endif %}>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{% block title %}AuxoCase{% endblock %}</title>
+<meta name="color-scheme" content="{{ 'light' if theme == 'light' else ('dark' if theme == 'dark' else 'light dark') }}">
+<title>{% block title %}AuxoCase{% endblock %} · AuxoCase{% if env == 'mock' %} · synthetic{% endif %}</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400..600;1,400&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,400..600;1,8..60,400..500&amp;display=swap">
 <style>
-:root { --bg:#0f1115; --panel:#171a21; --ink:#e8e9ec; --muted:#9aa3b2; --line:#2a2f3a; --accent:#7cc4ff; --good:#5fd38d; --warn:#f5c26b; --bad:#f28b82; }
-@media (prefers-color-scheme: light) { :root { --bg:#f7f8fa; --panel:#fff; --ink:#15181e; --muted:#5b6472; --line:#e1e5ec; --accent:#0b67c2; --good:#1c8f4a; --warn:#a86b00; --bad:#b3261e; } }
-* { box-sizing: border-box; }
-body { margin:0; background:var(--bg); color:var(--ink); font: 15px/1.5 -apple-system, "Segoe UI", Helvetica, Arial, sans-serif; }
-header { display:flex; gap:18px; align-items:center; padding:12px 20px; border-bottom:1px solid var(--line); background:var(--panel); flex-wrap:wrap; }
-header a { color:var(--ink); text-decoration:none; font-weight:600; } header a.brand { color:var(--accent); font-size:18px; }
-header .meta { margin-left:auto; color:var(--muted); font-size:13px; }
-main { max-width:1180px; margin:0 auto; padding:20px 16px 60px; } main a { color:var(--accent); }
-h1 { font-size:24px; margin:0 0 6px; } h2 { font-size:17px; margin:26px 0 10px; } .sub { color:var(--muted); margin:0 0 18px; }
-table { width:100%; border-collapse:collapse; background:var(--panel); border:1px solid var(--line); border-radius:8px; overflow:hidden; }
-th, td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:var(--muted); font-weight:600; font-size:13px; }
-tr:last-child td { border-bottom:none; }
-.num { text-align:right; font-variant-numeric: tabular-nums; }
-.pill { display:inline-block; padding:2px 8px; border-radius:999px; font-size:12px; border:1px solid var(--line); color:var(--muted); }
-.pill.good { color:var(--good); border-color:var(--good);} .pill.warn { color:var(--warn); border-color:var(--warn);} .pill.bad { color:var(--bad); border-color:var(--bad);} .pill.accent { color:var(--accent); border-color:var(--accent);}
-.cards { display:grid; grid-template-columns:repeat(auto-fit, minmax(170px,1fr)); gap:12px; margin:14px 0 6px; }
-.card { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px 14px; } .card .k { color:var(--muted); font-size:12px; } .card .v { font-size:22px; font-weight:700; }
-form.inline { display:inline-flex; gap:6px; flex-wrap:wrap; align-items:center; }
-input, select, button, textarea { font:inherit; padding:6px 8px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--ink); }
-button { cursor:pointer; background:var(--accent); color:#fff; border-color:var(--accent); } button.quiet { background:transparent; color:var(--ink); }
-.reason { max-width:520px; } .quote { color:var(--muted); font-style:italic; }
-.draft { max-width:640px; margin-top:12px; } .draft-body { white-space:pre-wrap; }
-.muted { color:var(--muted); } .small { font-size:13px; }
-code { background:var(--bg); padding:1px 5px; border-radius:4px; font-size:13px; }
+/* Broadsheet: warm paper, near-black ink, one ink-blue accent. Hierarchy from type and 1px rules, not boxes. */
+:root{--bg:#F7F5F0;--surface:#FFFFFF;--ink:#1C1E21;--muted:#5C6066;--line:#E2DED5;--accent:#2A4F86;--accentSoft:#E7ECF4;--good:#2D6A3E;--warn:#8A5300;--bad:#A1352A;--onAccent:#FFFFFF;color-scheme:light}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141619;--surface:#1C1F23;--ink:#ECEAE4;--muted:#A4A7AC;--line:#31353B;--accent:#94B3E4;--accentSoft:#1F2A3A;--good:#82C596;--warn:#E2B661;--bad:#F0978C;--onAccent:#141619;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#141619;--surface:#1C1F23;--ink:#ECEAE4;--muted:#A4A7AC;--line:#31353B;--accent:#94B3E4;--accentSoft:#1F2A3A;--good:#82C596;--warn:#E2B661;--bad:#F0978C;--onAccent:#141619;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/22px "Source Sans 3",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}a:hover{color:var(--ink)}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.serif{font-family:"Source Serif 4","Iowan Old Style",Charter,Georgia,serif}
+.num{font-variant-numeric:tabular-nums lining-nums}
+.muted{color:var(--muted)}.small{font-size:14px;line-height:20px}.tiny{font-size:13px;line-height:18px}
+.good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* the shell: a sidebar beside the page, stacked on a phone */
+.shell{display:flex;flex-wrap:wrap;min-height:100vh}
+.side{flex:1 1 240px;max-width:240px;border-right:1px solid var(--line);padding:20px 12px;display:flex;flex-direction:column;gap:2px}
+.brand{font-family:"Source Serif 4",Georgia,serif;font-size:22px;line-height:28px;font-weight:500;padding:4px 12px 8px;color:var(--ink);text-decoration:none}
+.glabel{font-size:13px;line-height:18px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:16px 12px 4px;margin:0}
+.nav{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:0 12px;border-radius:4px;color:var(--ink);text-decoration:none;font-weight:500}
+.nav:hover{background:var(--accentSoft);color:var(--ink)}
+.nav[aria-current="page"]{background:var(--accentSoft)}
+.system{margin:auto 0 0;padding:24px 12px 0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 12px;font-size:14px;line-height:20px}
+.system dt{color:var(--muted)}.system dd{margin:0}
+.theme{padding:16px 12px 0;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.theme fieldset{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 12px}
+.theme legend{color:var(--muted);padding:0 0 4px}
+.theme label{display:inline-flex;align-items:center;gap:6px;min-height:44px}
+.content{flex:999 1 560px;min-width:0}
+.page{box-sizing:border-box;padding:40px 48px 64px;display:flex;flex-direction:column;gap:32px;max-width:1160px}
+.page.wide{max-width:none}
+@media (max-width:640px){.side{max-width:none;border-right:0;border-bottom:1px solid var(--line)}.system,.theme{display:none}.page{padding:24px 16px 48px;gap:24px}}
+
+/* type */
+h1,h2,h3{margin:0}
+.title{font-family:"Source Serif 4",Georgia,serif;font-size:40px;line-height:48px;font-weight:500}
+.lede{font-family:"Source Serif 4",Georgia,serif;font-size:22px;line-height:32px;max-width:760px;margin:0}
+.kicker{font-size:13px;line-height:18px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:400}
+.big{font-family:"Source Serif 4",Georgia,serif;font-size:72px;line-height:76px;font-weight:500}
+.mid{font-family:"Source Serif 4",Georgia,serif;font-size:32px;line-height:40px;font-weight:500}
+.rule{border:0;border-top:1px solid var(--line);margin:0}
+.dagger{font-size:13px;color:var(--muted)}
+.footnote{border-top:1px dashed var(--line);padding-top:12px;font-size:13px;line-height:18px;color:var(--muted);max-width:760px}
+@media (max-width:640px){.title{font-size:30px;line-height:36px}.big{font-size:56px;line-height:60px}.mid{font-size:26px;line-height:32px}.lede{font-size:19px;line-height:28px}}
+
+/* controls */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:4px;border:1px solid var(--line);background:transparent;color:var(--ink);font-family:inherit;font-weight:600;font-size:15px;line-height:22px;cursor:pointer;text-decoration:none}
+.btn:hover{border-color:var(--muted);color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--onAccent)}
+.btn.primary:hover{color:var(--onAccent)}
+.actions{display:flex;flex-wrap:wrap;gap:12px}
+input,select,textarea{font:inherit;font-size:16px;line-height:24px;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink)}
+label{font-size:14px}
+form.inline{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+.field{display:flex;flex-direction:column;gap:4px}
+
+/* tables: hairlines, no boxes; wide ones scroll in their own box on a phone */
+.scroll{overflow-x:auto;position:relative}
+table{width:100%;border-collapse:collapse}
+th,td{text-align:left;padding:10px 12px 10px 0;border-top:1px solid var(--line);vertical-align:top}
+th{font-size:13px;line-height:18px;font-weight:400;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:0;padding-bottom:6px}
+td.r,th.r{text-align:right;padding-right:0}
+
+/* badges: words with a small shape, told apart without colour */
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;line-height:18px;color:var(--muted);white-space:nowrap}
+.badge::before{content:"";display:inline-block;flex:none}
+.badge.holdout::before{width:7px;height:7px;border:1.5px solid currentColor;border-radius:50%}
+.badge.gate::before{width:8px;height:2px;background:currentColor}
+.badge.flag::before{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:7px solid currentColor}
+.badge.flag{color:var(--warn)}
+.badge.seen::before{width:7px;height:7px;background:currentColor}
+.badge.seen{color:var(--good)}
+
+/* notices: a sentence with a word in front, never a coloured box */
+.notice{margin:0;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.notice b{font-weight:600}
+.notice.warn b{color:var(--warn)}
+
+/* the score breakdown (from Dispatch): label, which way it moved the score, the effect, a bar */
+.drivers{display:grid;grid-template-columns:minmax(0,1fr) max-content 136px;column-gap:24px;max-width:680px;margin:0}
+.drivers>:not([role=row]),.drivers>[role=row]>*{padding:10px 0;border-top:1px solid var(--line);display:flex;align-items:center}
+.drivers .hd{border-top:0;padding:0 0 6px;font-size:13px;line-height:18px;color:var(--muted)}
+.bar-good{fill:var(--good)}.bar-worse{fill:var(--muted)}.bar-track{fill:var(--line)}.bar-warn{fill:var(--warn)}.bar-accent{fill:var(--accent)}
+@media (max-width:640px){.drivers{grid-template-columns:minmax(0,1fr) max-content;column-gap:12px}.drivers .barcell{grid-column:1 / -1;border-top:0;padding-top:0}}
+.quote{font-family:"Source Serif 4",Georgia,serif;font-style:italic}
+.draft-body{white-space:pre-wrap;margin:0}
+{% block style %}{% endblock %}
 </style>
 <script src="/assets/app.js" defer></script>
 </head>
 <body>
-<header>
-  <a class="brand" href="/">AuxoCase</a>
-  <a href="/">Overview</a>
-  <a href="/held">Manager</a>
-  <a href="/model">Model &amp; approvals</a>
-  <a href="/decisions">Decisions</a>
-  <span class="meta">Live model: {{ live.version if live else 'points table (cold start)' }} · reader: {{ llm }} · scheduler: {{ scheduler }}{% if line is not none %} · capacity line: {{ (100*line)|round(1) }}%{% endif %}</span>
-</header>
-<main>{% block body %}{% endblock %}</main>
+<div class="shell">
+  <nav class="side" aria-label="Main">
+    <a class="brand" href="/">AuxoCase</a>
+    <p class="glabel">Work</p>
+    <a class="nav" href="/"{% if nav == 'overview' %} aria-current="page"{% endif %}>Overview</a>
+    <a class="nav" href="{{ '/queue/' ~ queue_owner if queue_owner else '/' }}"{% if nav == 'queues' %} aria-current="page"{% endif %}>Queues</a>
+    <a class="nav" href="/held"{% if nav == 'held' %} aria-current="page"{% endif %}>Held &amp; overdue{% if held_count %} <span class="warn num">{{ held_count }}</span>{% endif %}</a>
+    <p class="glabel">Results</p>
+    <a class="nav" href="/leadership"{% if nav == 'leadership' %} aria-current="page"{% endif %}>Leadership</a>
+    <a class="nav" href="/decisions"{% if nav == 'decisions' %} aria-current="page"{% endif %}>Decisions</a>
+    <p class="glabel">Model</p>
+    <a class="nav" href="/model"{% if nav == 'model' %} aria-current="page"{% endif %}>Model &amp; approvals{% if candidates %} <span class="num" style="color: var(--accent)">{{ candidates }}</span>{% endif %}</a>
+    <dl class="system" data-scheduler="{{ scheduler }}">
+      <dt>Live model</dt><dd>{{ live.version if live else 'points table' }}</dd>
+      <dt>Reader</dt><dd>{{ 'Claude' if llm != 'offline' else 'rules' }}</dd>
+      <dt>Scheduler</dt><dd>{{ scheduler }}</dd>
+      {% if line is not none %}<dt>Capacity line</dt><dd class="num">{{ (100 * line)|round|int }}%</dd>{% endif %}
+      <dt>Data</dt><dd>{{ 'Synthetic · mock HubSpot' if env == 'mock' else 'HubSpot' }}</dd>
+      {% if env == 'mock' %}<dt>Clock</dt><dd>{{ clock_text }} · frozen</dd>{% endif %}
+    </dl>
+    <form class="theme" method="post" action="/theme">
+      <input type="hidden" name="next" value="{{ request.url.path }}">
+      <fieldset>
+        <legend>Theme</legend>
+        <label><input type="radio" name="theme" value="system"{% if theme not in ('light', 'dark') %} checked{% endif %}> System</label>
+        <label><input type="radio" name="theme" value="light"{% if theme == 'light' %} checked{% endif %}> Light</label>
+        <label><input type="radio" name="theme" value="dark"{% if theme == 'dark' %} checked{% endif %}> Dark</label>
+      </fieldset>
+      <button class="btn" type="submit">Save</button>
+    </form>
+  </nav>
+  <div class="content">
+    <main class="page{% block page_class %}{% endblock %}">{% block body %}{% endblock %}</main>
+  </div>
+</div>
 </body>
 </html>

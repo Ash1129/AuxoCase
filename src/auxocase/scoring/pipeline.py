@@ -34,7 +34,7 @@ from ..llm.signals import SignalReading, notes_hash, read_signals
 from ..storage.db import dumps, get_setting, loads, now_iso, set_setting
 from ..pool import pool_contacts, stages
 from .enrich import Enricher, enrich_lead, make_enricher
-from .explain import Explanation, explain
+from .explain import REASON_WORDING, Explanation, explain
 from .features import feature_row, input_hash
 from .model import DemoModel
 from .points import POINTS_VERSION, points_breakdown, points_score
@@ -85,7 +85,7 @@ class Scorer:
         c, company, enriched = enrich_lead(self.hs, self.conn, self.enricher, c, company)
         missing = [f for f in REQUIRED_FIELDS if not getattr(c, f)]
         row = feature_row(c, company)
-        h = input_hash({**row, "notes": c.notes or "", "v": self.model_version})
+        h = input_hash({**row, "notes": c.notes or "", "v": self.model_version, "w": REASON_WORDING})
 
         if self.model is not None:
             from .features import frame

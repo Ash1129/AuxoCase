@@ -1,52 +1,146 @@
-{% extends "base.html" %}{% block title %}Lead {{ c.id }}{% endblock %}
+{% extends "base.html" %}
+{% import "_lead_detail.html" as ld with context %}
+{% block title %}{{ ld.person(c) }} · lead #{{ c.id }}{% endblock %}
+{% block page_class %} wide{% endblock %}
+{% block style %}{{ ld.css() }}
+.next{display:flex;flex-wrap:wrap;gap:12px 24px;align-items:center}
+.next p{margin:0;flex:1 1 320px;max-width:760px}
+.cols{display:flex;flex-wrap:wrap;gap:48px;align-items:flex-start}
+.cols>.main{flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:32px}
+.cols>aside{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:32px}
+.means{border-top:1px solid var(--line)}
+.means summary{padding:13px 0;cursor:pointer;color:var(--muted)}
+.means dl{margin:0;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:20px}
+.means dt{font-weight:600}.means dd{margin:0}
+.facts{margin:0;display:flex;flex-direction:column}
+.facts>div{padding:10px 0;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:2px}
+.facts>div:last-child{border-bottom:1px solid var(--line)}
+.facts dt{font-size:14px;line-height:20px;color:var(--muted)}
+.facts dd{margin:0}.facts .v{font-weight:500}.facts .src{font-size:13px;line-height:18px;color:var(--muted)}
+.events li{display:flex;flex-direction:column;gap:2px;padding:10px 0}
+{% endblock %}
 {% block body %}
-<h1>{{ c.job_title or 'Contact' }} <span class="muted small">#{{ c.id }}</span></h1>
-{% if c.auxo_below_gate or c.lifecycle_stage == 'lead' %}<p><span class="pill accent">below old threshold</span> <span class="small muted">HubSpot's points ({{ c.hubspot_score }}) did not make this lead an MQL{% if c.auxo_holdout %}; it was drawn at random for the exploration slice, so its outcome shows how well the model ranks leads the gate keeps out{% endif %}.</span></p>{% endif %}
-<p class="sub">{{ co.name if co else 'No company' }}{% if co and co.num_employees %} · {{ co.num_employees }} employees{% endif %}{% if co and co.industry %} · {{ co.industry }}{% endif %} · {{ c.country }} · channel: {{ c.channel }} · source: {{ c.hs_analytics_source }} {{ c.hs_analytics_source_data_1 }}</p>
-<div class="cards">
-  <div class="card"><div class="k">Demo likelihood</div><div class="v">{{ (100*(c.auxo_probability or 0))|round(1) }}%</div></div>
-  <div class="card"><div class="k">Rank in pool</div><div class="v">{{ c.auxo_rank or '–' }}{% if score %}<span class="muted small"> / {{ score.pool_size }}</span>{% endif %}</div></div>
-  <div class="card"><div class="k">HubSpot points</div><div class="v">{{ c.hubspot_score }}</div></div>
-  <div class="card"><div class="k">Model</div><div class="v small">{{ c.auxo_model_version }}</div></div>
+{#- The same dict the queue's open lead is: every key lead_detail returns (views/lead.py); keep the two in step. -#}
+{%- set d = dict(c=c, co=co, score=score, drivers=drivers, band=band, clock=clock, history=history, routing=routing,
+                 activity=activity, first_touch=first_touch, touch=touch, no_draft=no_draft, email=email, stored=stored,
+                 mock=mock, enrollments=enrollments, seen=seen, owner=owner, owners=owners, assigned=assigned,
+                 decision=decision, activity_rows=activity_rows, touched_in=touched_in, slot_next=slot_next,
+                 emails=emails, speed=speed, late_factor=late_factor, pace=pace, watch=watch, enrichment=enrichment,
+                 timeline=timeline, last_read=last_read) -%}
+{%- set who = ld.first(c) -%}
+{%- set below = c.auxo_below_gate or c.lifecycle_stage == 'lead' -%}
+<header class="head">
+  <nav aria-label="Breadcrumb"><p class="kicker">{% if owner %}<a class="tap" href="/queue/{{ owner.id }}">{{ owner.name }}'s queue</a>{% else %}<a class="tap" href="/">Overview</a>{% endif %} / Lead #{{ c.id }}</p></nav>
+  <h1 class="title">{{ ld.name(c, co) }}</h1>
+  <p class="muted">{{ ld.facts_line(c, co, true) }}</p>
+  {{ ld.marks(c, true) }}
+</header>
+
+<hr class="rule">
+{{ ld.score(d, 'lead') }}
+
+<div class="next">
+  {% if owner -%}
+  {%- set sdr = owner.name.split(' ')[0] -%}
+  {% if decision %}<a class="btn" href="/queue/{{ owner.id }}">{{ owner.name }}'s queue</a>
+  {% else %}<a class="btn primary" href="/queue/{{ owner.id }}?lead={{ c.id }}">{{ 'Log the call in ' if first_touch else 'Decide in ' }}{{ sdr }}'s queue</a>{% endif %}
+  {%- endif %}
+  <p class="small muted">
+    {%- if assigned -%}
+    Assigned to {{ owners[assigned.owner_id].name if assigned.owner_id in owners else 'owner ' ~ assigned.owner_id }} {{ assigned.when }}{% if assigned.decision == 'holdout_assigned' %} for the exploration slice{% elif assigned.reason %}, {{ assigned.reason }}{% endif %}.
+    {%- elif owner -%}
+    Owned by {{ owner.name }} in HubSpot; AuxoCase did not assign it.
+    {%- else -%}
+    No SDR owns this lead yet.
+    {%- endif %}
+    {%- if owner and not decision %} Decisions happen in the queue, which checks that nobody else acted on {{ who }} first.{% endif %}
+    {%- if decision and touched_in %} {{ owners[decision.owner_id].name if decision.owner_id in owners else 'The SDR' }} {{ {'worked': 'marked it worked', 'junk': 'marked it junk', 'skipped': 'skipped it'}[decision.action] }} {{ decision.when }}{% if env == 'mock' %} (wall clock){% endif %}{% if decision.note %}: {{ decision.note }}{% endif %}.{% endif %}
+    {%- if slot_next %}{% set toucher = owners[first_touch.owner_id].name.split(' ')[0] if first_touch.owner_id in owners else 'the SDR' %} The touch freed a slot; the next lead assigned to {{ toucher }} was {{ ld.person(slot_next.c) }}, at {{ slot_next.when }}.{% endif %}
+  </p>
 </div>
-<h2>Reach out</h2>
-{% set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} %}
-{% if not c.email %}<p class="muted">No email address on record.</p>{% else %}
-<p><a href="mailto:{{ c.email }}">{{ c.email }}</a>
-{% if first_touch %} · <span class="pill good">first touch {{ first_touch.touched_at|replace('T', ' ') }}: {{ first_touch.type|lower }} seen in HubSpot</span>{% endif %}</p>
-{% if stored %}<p class="small muted">On assignment the first email was drafted{% if stored.status == 'enrolled' %} and the lead enrolled in sequence {{ stored.sequence_id }}: step one waits in the SDR's HubSpot tasks for them to approve and send{% elif stored.status == 'refused' %}, but HubSpot refused the sequence enrolment (already in a sequence, unsubscribed, or the SDR's inbox isn't connected){% else %}; no sequence is set (AUXO_SEQUENCE_ID), so it waits here{% endif %}.</p>{% endif %}
-{% if activity %}<table><tr><th>When</th><th>In HubSpot</th><th>Detail</th></tr>
-{% for e in activity %}<tr><td class="small">{{ e.timestamp }}</td><td>{{ 'Email' if e.type == 'EMAIL' else 'Call' }} {{ 'from the SDR' if e.direction == 'OUTGOING' else 'from the lead' }}</td><td class="small muted">{{ e.subject if e.type == 'EMAIL' else ('connected' if e.connected else 'no answer') }}</td></tr>{% endfor %}
-</table>{% endif %}
-{% if not touch %}<p class="muted">{% if no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif no_draft == 'finished' %}All three emails have gone; nothing more to draft.{% else %}{{ no_draft }}{% endif %}</p>
-{% else %}
-{% if email %}<div class="card draft"><p class="small muted">Draft: {{ labels[email.touch] }}</p><p><b>Subject:</b> {{ email.subject }}</p><p class="draft-body">{{ email.body }}</p>
-<p><a href="{{ email.mailto(c.email) }}"><button type="button">Open in your email app</button></a>
-<span class="small muted">Drafted by {{ 'Claude' if email.source == 'llm' else 'the template' }}{% if email.rejected %} · Claude's draft was set aside: {{ email.rejected }}{% endif %}. Edit it before you send; nothing is sent from here.</span></p></div>{% endif %}
-<p><a href="/lead/{{ c.id }}?draft=1" data-busy="Drafting… this takes a few seconds">{{ 'Draft it again' if email else 'Draft the ' ~ labels[touch] }}</a></p>
-{% endif %}
-{% if mock and c.hubspot_owner_id %}<div class="card draft"><p class="small"><b>Demo: act in HubSpot.</b> On a real portal the SDR sends the email or logs the call in HubSpot, and AuxoCase sees it within a minute; here these buttons stand in for HubSpot.</p>
-<form method="post" action="/lead/{{ c.id }}/hubspot"><input type="hidden" name="subject" value="{{ email.subject if email else '' }}">
-<button name="kind" value="email">Send {{ 'this ' ~ labels[email.touch] if email else 'an email' }}</button>
-<button name="kind" value="call_no_answer" class="quiet">Log a call: no answer</button>
-<button name="kind" value="call_connected" class="quiet">Log a call: connected</button>
-<button name="kind" value="reply" class="quiet">The lead replies</button></form>
-{% for en in enrollments %}<p class="small muted">Sequence {{ en.sequence_id }} from {{ en.sender_email }}: {{ en.status|lower }}</p>{% endfor %}</div>{% endif %}
-{% endif %}
-<h2>Why</h2>
-<p>{{ c.auxo_reason }}</p>
-{% if score %}
-<table><tr><th>Driver</th><th class="num">Effect on the odds</th></tr>
-{% for k, v in score.contributions %}<tr><td>{{ k }}</td><td class="num {{ 'good' if v>0 else 'bad' }}">{{ '%+.2f'|format(v) }}</td></tr>{% endfor %}
-</table>
-{% if score.signals.signals %}<h2>What the notes said</h2><table><tr><th>Signal</th><th>Exact words</th><th class="num">Points</th></tr>
-{% for g in score.signals.signals %}<tr><td>{{ g.type|replace('_',' ') }}</td><td class="quote">“{{ g.quote }}”</td><td class="num">{{ '%+d'|format(g.points) }}</td></tr>{% endfor %}</table>
-<p class="small muted">Reader: {{ score.signals.llm }} · adjustment applied: {{ '%+d'|format(score.signals.adjustment) }} points (capped at ±10){% if score.signals.dropped %} · {{ score.signals.dropped|length }} claimed signal(s) dropped because the words were not in the notes{% endif %}</p>{% endif %}
-{% endif %}
-{% if c.notes %}<h2>Notes on record</h2><p class="small">{{ c.notes }}</p>{% endif %}
-<h2>History</h2>
-<table><tr><th>When</th><th>What</th><th>Who</th><th>Note</th></tr>
-{% for r in routing %}<tr><td class="small">{{ r.created_at }}</td><td>{{ r.decision }}</td><td>{{ r.owner_id or '' }}</td><td class="small muted">{{ r.reason }}</td></tr>{% endfor %}
-{% for r in history %}<tr><td class="small">{{ r.created_at }}</td><td>SDR: {{ r.action }}</td><td>{{ r.owner_id }}</td><td class="small muted">{{ r.note }} (score {{ r.score_at_time }}, rank {{ r.rank_at_time }})</td></tr>{% endfor %}
-</table>
+
+<hr class="rule">
+<div class="cols">
+  <div class="main">
+    {% call ld.reach(d, '/lead/' ~ c.id ~ '?draft=1', 'lead') %}
+    <div class="block" style="max-width: 760px">
+      <h3 id="activity-h">Seen in HubSpot{% if last_read %} <span class="muted" style="font-weight: 400">· {{ 'read every minute, ' if scheduler == 'on' else '' }}last read {{ last_read }}{% if env == 'mock' %}, wall clock{% endif %}</span>{% endif %}</h3>
+      {% if activity_rows -%}
+      <div class="scroll" role="region" aria-labelledby="activity-h" tabindex="0"><table style="min-width: 520px">
+        <thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col">Detail</th></tr></thead>
+        <tbody>{% for a in activity_rows %}{% set e = a.e %}<tr><td class="num" style="white-space: nowrap">{{ a.when }}</td><td>{{ 'Email' if e.type == 'EMAIL' else 'Call' }} {{ 'from the SDR' if e.direction == 'OUTGOING' else 'from the lead' }}{% if e.direction == 'OUTGOING' and e.owner_id in owners %} ({{ owners[e.owner_id].name }}){% endif %}{% if a.first %} <span class="good" style="font-weight: 600">· first touch</span>{% endif %}{% if a.after %}, {{ a.after }} after assignment{% endif %}</td><td class="muted">{{ e.subject if e.type == 'EMAIL' else ('connected' if e.connected else 'no answer') }}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+      {%- else -%}
+      <p class="muted">No email or call logged in HubSpot yet.</p>
+      {%- endif %}
+    </div>
+    {% endcall %}
+
+    <hr class="rule">
+    {{ ld.why(d) }}
+
+    <hr class="rule">
+    <section class="part" aria-labelledby="notes-h">
+      <h2 class="kicker" id="notes-h">Notes on record</h2>
+      {% if c.notes -%}
+      <p style="max-width: 680px">{{ c.notes }}</p>
+      <p class="small muted">From the HubSpot contact's notes field. {% if score and score.signals.signals %}The quotes under the score breakdown are the reader's, each checked word for word against these notes.{% else %}Nothing is highlighted: the reader at scoring found no quote to verify.{% endif %}</p>
+      {%- else -%}
+      <p class="muted">None: the notes field in HubSpot is blank.</p>
+      {%- endif %}
+    </section>
+  </div>
+
+  <aside aria-label="About this lead">
+    {% if c.auxo_probability is not none -%}
+    {%- set b = band -%}
+    <details class="means" open>
+      <summary><h2 class="kicker" style="display: inline">What {{ ld.pct(c.auxo_probability) }} means</h2></summary>
+      <dl>
+        <div><dt>Calibration</dt><dd>{% if b %}{% if b.months %}Test months {{ b.months }}: {% endif %}{{ '{:,}'.format(b.n) }} worked leads scored {{ b.lo }} to {{ b.hi }}%{% if b.predicted is not none %}; {{ ld.pct(b.predicted) }} predicted{% endif %}, {{ ld.pct(b.observed) }} booked{% if b.too_few %}, too few to say{% endif %}.{{ ld.dag() }}{% else %}No calibration band: the live model has none for this score.{% endif %}</dd></div>
+        {% if pace.median_hours is defined and pace.baseline.median_hours is defined -%}
+        <div><dt>Timing</dt><dd>The model learned from the history, where the first touch came a median {{ pace.baseline.median_hours|round|int }} hours after arrival. Leads AuxoCase routed were touched sooner (median {{ pace.median_hours|round|int }} hours), one reason they can book above their score.{{ ld.dag() }}</dd></div>
+        {%- endif %}
+        {% if watch -%}
+        <div><dt>{{ c.channel|replace('_', ' ')|capitalize }} channel</dt><dd>{{ watch.month }}: {{ watch.demos }} of {{ watch.n }} booked{% if watch.demo_rate is not none %} ({{ ld.pct(watch.demo_rate) }}){% endif %}{% if watch.predicted_rate is not none %} against {{ ld.pct(watch.predicted_rate) }} predicted{% endif %}; {% if watch.flag == 'held' %}too few leads that month to judge{% elif watch.flag == 'ok' %}within limits ({{ ld.pct(watch.lcl) }} to {{ ld.pct(watch.ucl) }}){% else %}{{ watch.flag }} its limits ({{ ld.pct(watch.lcl) }} to {{ ld.pct(watch.ucl) }}){% endif %}.{{ ld.dag() }}</dd></div>
+        {%- endif %}
+        {% if line is not none -%}
+        <div><dt>Capacity line</dt><dd>{{ ld.pct(line) }} at the last routing pass: the chance at the rank the team can reach in the next week at its monthly capacity.{% if assigned and assigned.reason == 'above the capacity line' %} {{ who|capitalize }} was assigned above it.{% elif assigned and assigned.decision == 'holdout_assigned' %} {{ who|capitalize }} was drawn for the exploration slice, which does not look at the line.{% endif %}</dd></div>
+        {%- endif %}
+      </dl>
+    </details>
+    {%- endif %}
+
+    <section class="part" aria-labelledby="facts-h">
+      <h2 class="kicker" id="facts-h">Facts, and where they came from</h2>
+      {%- set stages = {'lead': 'lead', 'marketingqualifiedlead': 'marketing qualified lead', 'salesqualifiedlead': 'sales qualified lead', 'opportunity': 'opportunity', 'customer': 'customer'} %}
+      {%- set size = [('{:,}'.format(co.num_employees) ~ ' employees') if co and co.num_employees else '', co.industry if co else '', ('$%.1fM revenue'|format(co.annual_revenue / 1000000)) if co and co.annual_revenue else '']|select|join(' · ') %}
+      <dl class="facts">
+        <div><dt>Company</dt><dd class="v">{% if co %}{{ co.name }}{% if co.domain %} · {{ co.domain }}{% endif %}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}</dd><dd class="src">{{ 'HubSpot company record' if co else 'no company associated in HubSpot' }}</dd></div>
+        <div><dt>Size and industry</dt><dd class="v">{% if size %}{{ size }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}</dd><dd class="src">HubSpot company record · {% if enrichment %}{% for x in enrichment %}{{ x.filled.keys()|map('replace', '_', ' ')|join(', ') }} filled by enrichment ({{ x.provider }}, {{ x.when }}){% if not loop.last %}; {% endif %}{% endfor %}{% else %}not enriched{% endif %}</dd></div>
+        <div><dt>Payroll vendor today</dt><dd class="v">{% if co and co.uses_payroll_vendor %}{{ co.uses_payroll_vendor }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}</dd><dd class="src">{{ 'HubSpot company record' if co and co.uses_payroll_vendor else 'blank in HubSpot' }}</dd></div>
+        {%- set source = [(c.hs_analytics_source or '')|replace('_', ' ')|lower|capitalize, c.hs_analytics_source_data_1, c.hs_analytics_source_data_2]|select|join(' · ') %}
+        <div><dt>Source</dt><dd class="v">{% if source %}{{ source }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}</dd><dd class="src">HubSpot original source · channel {{ c.channel|replace('_', ' ') }}{% if c.referral_partner %} · referred by {{ c.referral_partner }}{% endif %}</dd></div>
+        <div><dt>On the site</dt><dd class="v">{{ c.hs_analytics_num_page_views or 0 }} page view{{ '' if c.hs_analytics_num_page_views == 1 else 's' }} and {{ c.hs_analytics_num_visits or 0 }} visit{{ '' if c.hs_analytics_num_visits == 1 else 's' }} in all · {{ c.email_clicks_30d or 0 }} email click{{ '' if c.email_clicks_30d == 1 else 's' }} in the last 30 days</dd><dd class="src">HubSpot analytics · {{ c.num_form_submissions or 0 }} form submission{{ '' if c.num_form_submissions == 1 else 's' }}, {{ c.pricing_page_views or 0 }} pricing page view{{ '' if c.pricing_page_views == 1 else 's' }}, {{ 'attended a webinar' if c.webinar_attended else ('registered for a webinar' if c.webinar_registered else 'no webinar') }}</dd></div>
+        <div><dt>HubSpot points</dt><dd class="v num">{{ c.hubspot_score }}</dd><dd class="src">HubSpot's own score · {{ 'its MQL gate did not pass this lead' if below else 'passed its MQL gate' }}</dd></div>
+        <div><dt>Lead status</dt><dd class="v">{% if c.hs_lead_status %}{{ c.hs_lead_status|replace('_', ' ')|lower|capitalize }}{% else %}<span class="muted">[NOT SET]</span>{% endif %}</dd><dd class="src">{% if first_touch and first_touch.status_set and first_touch.status_set == c.hs_lead_status %}set by AuxoCase when the touch was seen · {% endif %}stage: {{ stages.get(c.lifecycle_stage, c.lifecycle_stage) }}</dd></div>
+        <div><dt>Owner</dt><dd class="v">{% if owner %}{{ owner.name }} · {{ owner.email }}{% else %}<span class="muted">Nobody yet</span>{% endif %}</dd><dd class="src">{% if assigned %}assigned {{ assigned.when }}{% if assigned.reason %}, {{ assigned.reason }}{% endif %}{% else %}HubSpot contact owner{% endif %}</dd></div>
+        {% if assigned and assigned.task_id %}<div><dt>HubSpot task</dt><dd class="v">{{ assigned.task_id }}</dd><dd class="src">created on assignment, {{ assigned.when }}</dd></div>{% endif %}
+      </dl>
+    </section>
+
+    <section class="part" aria-labelledby="hist-h">
+      <h2 class="kicker" id="hist-h">History</h2>
+      <ol class="list events">
+        {% for t in timeline %}<li><span class="small muted num">{{ t.when }}{% if env == 'mock' %} · {{ t.clock }} clock{% endif %}</span><span>{{ t.what }}</span></li>
+        {% endfor %}
+      </ol>
+      {%- set calls = activity|selectattr('type', 'equalto', 'CALL')|list %}
+      {% if not decision %}<p class="small muted">{{ 'No call logged and no' if not calls else 'No' }} decision yet.</p>{% endif %}
+    </section>
+  </aside>
+</div>
+
+{{ ld.footnote(d, true) }}
 {% endblock %}

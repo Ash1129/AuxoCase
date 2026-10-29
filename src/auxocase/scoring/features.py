@@ -31,40 +31,66 @@ NUMERIC = [
 ]
 FEATURES = CATEGORICAL + NUMERIC
 
-# Plain-English names for reason codes (explain.py). Keyed by feature or by
-# "feature=value" for categoricals.
+# Plain-English reasons (explain.py). Every entry is a whole clause with its own subject, so "Ranked up because"
+# and "Held back because" can precede any of them, and a clause also reads as a row label in the score breakdown.
+# Keyed by feature, or by "feature=value" for categoricals. A count feature has two clauses: one for when it
+# pushes the score up (more than usual), one for when it holds it back (less than usual).
 LABELS = {
-    "channel=referral": "came in as a partner or customer referral",
-    "channel=webinar": "came in through a webinar",
-    "channel=website": "came in through the website",
-    "channel=paid_ads": "came in through paid ads",
-    "channel=email": "came in through an email campaign",
-    "channel=events": "came in through an event",
-    "seniority=c_level": "is a C-level contact",
-    "seniority=vp": "is a VP-level contact",
-    "seniority=director": "is a director-level contact",
-    "seniority=manager": "is a manager-level contact",
-    "seniority=individual": "is an individual contributor",
-    "seniority=unknown": "has no job title on record",
-    "size_band=under_50": "company is under 50 employees, below the target band",
-    "size_band=50_149": "company is 50 to 149 employees, inside the target band",
-    "size_band=150_299": "company is 150 to 299 employees, inside the target band",
-    "size_band=300_500": "company is 300 to 500 employees, inside the target band",
-    "size_band=over_500": "company is over 500 employees, above the target band",
-    "size_band=unknown": "company size is unknown",
-    "log_page_views": "page views on the site",
-    "log_visits": "repeat visits to the site",
-    "num_form_submissions": "forms submitted",
-    "pricing_page_views": "visits to the pricing page",
-    "email_clicks_30d": "email clicks in the last 30 days",
-    "webinar_registered": "registered for a webinar",
-    "webinar_attended": "attended a webinar",
-    "is_referral": "was referred by a partner or customer",
-    "has_competitor": "already uses a competing payroll vendor",
-    "in_target_size": "company size is in the 50 to 500 band",
-    "is_student_or_intern": "job title suggests a student or intern",
-    "has_notes": "left free-text answers or notes",
+    "channel=referral": "it came in as a partner or customer referral",
+    "channel=webinar": "it came in through a webinar",
+    "channel=website": "it came in through the website",
+    "channel=paid_ads": "it came in through paid ads",
+    "channel=email": "it came in through an email campaign",
+    "channel=events": "it came in through an event",
+    "seniority=c_level": "the contact is C-level",
+    "seniority=vp": "the contact is VP-level",
+    "seniority=director": "the contact is a director",
+    "seniority=manager": "the contact is a manager",
+    "seniority=individual": "the contact is an individual contributor",
+    "seniority=unknown": "there is no job title on record",
+    "size_band=under_50": "the company has under 50 employees, below the target band",
+    "size_band=50_149": "the company has 50 to 149 employees, inside the target band",
+    "size_band=150_299": "the company has 150 to 299 employees, inside the target band",
+    "size_band=300_500": "the company has 300 to 500 employees, inside the target band",
+    "size_band=over_500": "the company has over 500 employees, above the target band",
+    "size_band=unknown": "the company size is unknown",
+    "webinar_registered": "it registered for a webinar",
+    "webinar_attended": "it attended a webinar",
+    "is_referral": "it was referred by a partner or customer",
+    "has_competitor": "the company already uses a competing payroll vendor",
+    "in_target_size": "the company is in the 50 to 500 employee band",
+    "is_student_or_intern": "the job title suggests a student or intern",
+    "has_notes": "it left free-text answers or notes",
 }
+# (more than usual, less than usual) for the count features.
+COUNT_LABELS = {
+    "log_page_views": ("it viewed many pages on the site", "it viewed few pages on the site"),
+    "log_visits": ("it came back to the site several times", "it came back to the site rarely"),
+    "num_form_submissions": ("it submitted several forms", "it submitted few forms"),
+    "pricing_page_views": ("it visited the pricing page", "it visited the pricing page only briefly"),
+    "email_clicks_30d": ("it clicked recent emails", "it clicked few recent emails"),
+}
+
+
+def reason_clause(key: str, contribution: float) -> str:
+    """The clause for one driver, in the direction it moved the score."""
+    if key in COUNT_LABELS:
+        up, down = COUNT_LABELS[key]
+        return up if contribution > 0 else down
+    if key in LABELS:
+        return LABELS[key]
+    if "=" in key:
+        f, v = key.split("=", 1)
+        return f"the {f.replace('_', ' ')} is {v.replace('_', ' ')}"
+    return key.replace("_", " ")
+
+
+def driver_label(key: str, contribution: float) -> str:
+    """A clause as a row label: "it came in through the website" -> "Came in through the website"."""
+    clause = reason_clause(key, contribution)
+    if clause.startswith("it "):
+        clause = clause[3:]
+    return clause[:1].upper() + clause[1:]
 
 
 def size_band(n: Optional[int]) -> str:

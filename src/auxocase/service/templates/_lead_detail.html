@@ -1,0 +1,223 @@
+{#- One lead in detail, shared by the queue (its open lead) and the lead page, so the two cannot drift.
+    Macros only: each page imports this file `with context` (for env, live, clock_text) and passes `d`, the dict
+    views/lead.py lead_detail returns. `where` is "queue" (the SDR's own page: "you") or "lead". -#}
+
+{% macro css() -%}
+.head{display:flex;flex-direction:column;gap:8px}
+.head p{margin:0}
+.marks{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
+.score{display:flex;flex-wrap:wrap;gap:24px 48px}
+.score>div{display:flex;flex-direction:column;gap:4px;max-width:320px}
+.part{display:flex;flex-direction:column;gap:12px}
+.part p{margin:0}
+.part h3{font-size:15px;line-height:22px;font-weight:600}
+.block{display:flex;flex-direction:column;gap:8px;max-width:680px}
+.block p{margin:0}
+.tap{display:inline-flex;align-items:center;min-height:44px;overflow-wrap:anywhere}
+.steps{list-style:none;margin:0;padding:0}
+.steps li{display:flex;gap:12px;align-items:flex-start;padding:8px 0;border-top:1px solid var(--line)}
+.steps li:last-child{border-bottom:1px solid var(--line)}
+.dot{flex:0 0 10px;width:10px;height:10px;margin-top:6px;border-radius:50%;border:1px solid var(--muted)}
+.dot.sent{background:var(--good);border-color:var(--good)}
+.dot.next{border:2px solid var(--accent)}
+.placeholder{border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:12px 0;display:flex;flex-direction:column;gap:4px}
+.placeholder .actions{margin-top:8px;align-items:center}
+.demo{border-top:1px dashed var(--muted);border-bottom:1px dashed var(--muted);padding:16px 0;display:flex;flex-direction:column;gap:12px;max-width:760px}
+.demo p,.demo form{margin:0}
+.list{list-style:none;margin:0;padding:0;max-width:760px}
+.list li{padding:6px 0;border-top:1px solid var(--line)}
+.list li:last-child{border-bottom:1px solid var(--line)}
+.list a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
+.draft-body{overflow-wrap:anywhere}
+@media (max-width:640px){.score{flex-direction:column;gap:20px}.score>div{max-width:none}.score>div+div{border-top:1px solid var(--line);padding-top:20px}.draft-body{font-size:16px;line-height:26px}}
+{%- endmacro %}
+
+{% macro dag() %}{% if env == 'mock' %}<span class="dagger">†</span>{% endif %}{% endmacro %}
+
+{% macro pct(p) %}{{ (100 * (p or 0))|round|int }}%{% endmacro %}
+
+{#- A lead's chance in a list: never "0%" for a lead that has no score. -#}
+{% macro odds(p) %}{% if p is none %}<span class="muted">[NOT SCORED]</span>{% else %}{{ pct(p) }}{% endif %}{% endmacro %}
+
+{% macro person(c) %}{{ ((c.first_name or '') ~ ' ' ~ (c.last_name or ''))|trim or 'Contact #' ~ c.id }}{% endmacro %}
+
+{% macro first(c) %}{{ c.first_name or 'this lead' }}{% endmacro %}
+
+{% macro name(c, co) %}{{ person(c) }}{% if c.job_title %}, {{ c.job_title }}{% endif %}{% if co and co.name %} at {{ co.name }}{% endif %}{% endmacro %}
+
+{% macro channel(c) -%}
+{%- set words = {'website': 'the website', 'webinar': 'a webinar', 'paid_ads': 'paid ads', 'email': 'email', 'events': 'an event', 'referral': 'a referral'} -%}
+{{ words.get(c.channel, c.channel|replace('_', ' ')) }}{% if c.channel == 'referral' and c.referral_partner %} from {{ c.referral_partner }}{% endif %}
+{%- endmacro %}
+
+{#- "380 employees · Education · came in through the website · #333806"; `full` adds the country and HubSpot's source detail. -#}
+{% macro facts_line(c, co, full=false) -%}
+{%- set source = [c.hs_analytics_source_data_1, c.hs_analytics_source_data_2]|select|join(', ') -%}
+{% if co and co.num_employees %}{{ '{:,}'.format(co.num_employees) }} employees · {% endif %}{% if co and co.industry %}{{ co.industry }} · {% endif %}{% if full and c.country %}{{ c.country }} · {% endif %}came in through {{ channel(c) }}{% if full and source %} ({{ source }}){% endif %} · #{{ c.id }}
+{%- endmacro %}
+
+{#- Badges: words with a small shape. `full` explains them in a sentence. -#}
+{% macro marks(c, full=false) -%}
+{%- set below = c.auxo_below_gate or c.lifecycle_stage == 'lead' -%}
+{% if below or c.auxo_holdout or c.auxo_review_flag %}<p class="marks">
+{%- if below %}<span class="badge gate">below old threshold</span>{% endif %}
+{%- if c.auxo_holdout %}<span class="badge holdout">calibration lead</span>{% endif %}
+{%- if c.auxo_review_flag %}<span class="badge flag">{{ c.auxo_review_flag }}</span>{% endif %}
+{%- if full %}<span class="small muted">{% if below %}HubSpot's points ({{ c.hubspot_score }}) did not make this lead an MQL{% if c.auxo_holdout %}; it was drawn at random for the exploration slice, so its outcome shows how well the model ranks leads the gate keeps out{% endif %}.{% elif c.auxo_holdout %}Drawn at random for the exploration slice, so next month's model learns from a lead the ranking did not choose.{% endif %}</span>{% endif -%}
+</p>{% endif %}
+{%- endmacro %}
+
+{% macro speed_line(d) %}{% if d.speed.rate_fast is defined %}Leads touched in their first day booked {{ pct(d.speed.rate_fast) }}, against {{ pct(d.speed.rate_slow) }} when touched later.{{ dag() }}{% endif %}{% endmacro %}
+
+{#- The score, the first-day clock and the rank, each with what it means and when it was taken. -#}
+{% macro score(d, where) -%}
+{%- set c = d.c -%}{%- set s = d.score -%}{%- set b = d.band -%}
+<section class="score" aria-label="Score">
+  <div>
+    {% if c.auxo_probability is not none -%}
+    <span class="big num">{{ pct(c.auxo_probability) }}</span>
+    <span>chance {{ first(c) }} books a demo if {{ 'you work this lead' if where == 'queue' else 'worked' }}</span>
+    <span class="small muted">{% if not live %}No live model yet, so no calibration band to check this score against.{% elif not b %}No calibration band for this score: the live model has none to check it against.{% elif b.too_few %}Leads scored {{ b.lo }} to {{ b.hi }}%: too few to say how often they book ({{ b.n }} worked leads, {{ live.version }}).{{ dag() }}{% else %}Of 100 leads scored {{ b.lo }} to {{ b.hi }}%, about {{ (100 * b.observed)|round|int }} booked when an SDR worked them ({{ '{:,}'.format(b.n) }} worked leads{% if live %}, {{ live.version }}{% endif %}).{{ dag() }}{% endif %}</span>
+    {%- else -%}
+    <span class="big muted">[NOT SCORED]</span>
+    <span>no demo likelihood yet</span>
+    {%- endif %}
+  </div>
+  <div>
+    {% if d.touched_in -%}
+    <span class="mid {{ 'good' if d.touched_in.inside else 'warn' }}">Touched in {{ d.touched_in.span }}</span>
+    <span>{{ (d.first_touch.type or 'activity')|lower }} seen in HubSpot {{ d.touched_in.at }}</span>
+    <span class="small muted">{{ 'Inside' if d.touched_in.inside else 'After' }} the first day. {{ speed_line(d) }}</span>
+    {%- elif d.decision -%}
+    {%- set who = d.owners[d.decision.owner_id].name if d.decision.owner_id in d.owners else 'The SDR' -%}
+    <span class="mid">{{ {'worked': 'Worked', 'junk': 'Junk', 'skipped': 'Skipped'}[d.decision.action] }}</span>
+    <span>{{ who }} decided {{ d.decision.when }}{% if d.decision.note %}: {{ d.decision.note }}{% endif %}</span>
+    <span class="small muted">No first touch was seen in HubSpot before the call.</span>
+    {%- else -%}
+    {%- set k = d.clock -%}
+    {% if k.state == 'late' -%}
+    <span class="mid bad">First day over</span>
+    <span>{{ k.age }} since {{ first(c) }} arrived; the day ran out {{ k.touch_by }}</span>
+    {%- else -%}
+    <span class="mid {{ 'warn' if k.state == 'warn' else '' }}">Touch by {{ k.touch_by }}</span>
+    <span>{{ k.age }} since {{ first(c) }} arrived</span>
+    {%- endif %}
+    <span class="small muted">{{ speed_line(d) }}</span>
+    {%- endif %}
+  </div>
+  <div>
+    {%- set rank = c.auxo_rank or (s.rank if s else none) -%}
+    {% if rank -%}
+    <span class="mid num">#{{ rank }}</span>
+    {% if s and s.rank == rank and s.pool_size -%}
+    <span>of {{ '{:,}'.format(s.pool_size) }} in the pool, at last scoring</span>
+    <span class="small muted">{{ s.when }} · {{ s.model_version }}</span>
+    {%- else -%}
+    <span>in the pool at the last ranking pass</span>
+    {% if s and s.rank %}<span class="small muted">#{{ s.rank }}{% if s.pool_size %} of {{ '{:,}'.format(s.pool_size) }}{% endif %} when scored, {{ s.when }} · {{ s.model_version }}</span>{% endif %}
+    {%- endif %}
+    {%- else -%}
+    <span class="mid muted">[NOT RANKED]</span>
+    <span>not in the ranked pool</span>
+    {%- endif %}
+  </div>
+</section>
+{%- endmacro %}
+
+{#- Why the lead is ranked where it is: the reason, the score breakdown, and what the notes reader found. -#}
+{% macro why(d) -%}
+{%- set c = d.c -%}{%- set s = d.score -%}
+<section class="part" aria-labelledby="why-{{ c.id }}">
+  <h2 class="kicker" id="why-{{ c.id }}">{% if s %}Why {{ first(c) }} is ranked here{% else %}Why {{ first(c) }} has no rank yet{% endif %}</h2>
+  {% if c.auxo_reason %}<p class="lede">{{ c.auxo_reason }}</p>{% endif %}
+  {% if d.drivers -%}
+  <div class="drivers" role="table" aria-label="What moved {{ first(c) }}'s score">
+    <div role="row" style="display: contents"><span class="hd" role="columnheader">What moved {{ first(c) }}'s score</span><span class="hd" role="columnheader">Effect on the odds</span><span class="hd barcell" role="columnheader"><span class="vh">Size</span></span></div>
+    {% for x in d.drivers %}<div role="row" style="display: contents"><span role="cell">{{ x.label }}</span><span class="num {{ 'good' if x.better else 'muted' }}" role="cell">{{ x.word }} {{ x.effect }}</span><span class="barcell" role="cell"><svg width="136" height="6" aria-hidden="true"><rect class="bar-{{ 'good' if x.better else 'worse' }}" x="0" y="0" width="{{ x.bar }}" height="6" rx="1"></rect></svg></span></div>
+    {% endfor %}
+  </div>
+  {%- endif %}
+  {% if s -%}
+  {%- set g = s.signals -%}{%- set found = g.signals or [] -%}
+  <p class="small muted">Effect on the odds, from {{ s.model_version }} when it scored {{ first(c) }} ({{ s.when }}). The notes reader was {{ 'the offline stand-in (keyword rules, no model)' if g.llm == 'offline' else ('Claude' if g.llm else 'not recorded') }}: {% if found %}it found {{ found|length }} signal{{ 's' if found|length != 1 else '' }} in the notes, worth {{ '%+d'|format(g.adjustment or 0) }} points (capped at ±10){% elif not c.notes %}it found nothing to quote, as there are no notes on record{% else %}it found nothing to quote, so no adjustment{% endif %}.{% if g.dropped %} {{ g.dropped|length }} claimed signal{{ 's were' if g.dropped|length != 1 else ' was' }} dropped because the words were not in the notes.{% endif %}</p>
+  {% if found -%}
+  <div class="scroll"><table>
+    <thead><tr><th scope="col">Signal</th><th scope="col">Exact words in the notes</th><th scope="col" class="r">Points</th></tr></thead>
+    <tbody>{% for x in found %}<tr><td>{{ x.type|replace('_', ' ') }}</td><td class="quote">“{{ x.quote }}”</td><td class="r num">{{ '%+d'|format(x.points or 0) }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+  {%- endif %}
+  {%- else -%}
+  <p class="muted">Not scored yet, so there is no breakdown.</p>
+  {%- endif %}
+</section>
+{%- endmacro %}
+
+{#- Reach out: the email address, the sequence's three emails, the draft (or the link that drafts it), and on the
+    mock the buttons that stand in for HubSpot. A {% call %} adds page-only content before the demo panel. -#}
+{% macro reach(d, draft_href, where) -%}
+{%- set c = d.c -%}{%- set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} -%}
+{%- set tasks = 'your' if where == 'queue' else ((d.owner.name ~ "'s") if d.owner else "the SDR's") -%}
+<section class="part" aria-labelledby="reach-{{ c.id }}">
+  <h2 class="kicker" id="reach-{{ c.id }}">Reach out</h2>
+  {% if not c.email -%}
+  <p class="muted">No email address on record.</p>
+  {%- else -%}
+  <p><a class="tap" href="mailto:{{ c.email }}">{{ c.email }}</a>{% if d.touched_in %} <span class="badge seen">first touch seen {{ d.touched_in.at }}</span>{% endif %}</p>
+  <div class="block">
+    <h3>Emails · {{ d.emails|selectattr('state', 'equalto', 'sent')|list|length }} of {{ d.emails|length }} sent</h3>
+    <ol class="steps">
+      {% for x in d.emails %}<li><span class="dot {{ x.state }}" aria-hidden="true"></span><span><b>{{ x.label }}</b> <span class="muted">· {{ x.note }}</span></span></li>
+      {% endfor %}
+    </ol>
+    {% if d.stored %}{% set o = d.stored %}<p class="small muted">The first email was drafted on assignment, {{ o.when }}{% if o.status == 'enrolled' %}, and the lead enrolled in sequence {{ o.sequence_id }}: step one waits in {{ tasks }} HubSpot tasks to approve and send{% elif o.status == 'refused' %}, but HubSpot refused the sequence enrolment (already in a sequence, unsubscribed, or the SDR's inbox isn't connected){% else %}; no sequence is set (AUXO_SEQUENCE_ID), so it waits here{% endif %}.</p>{% endif %}
+    {% for en in d.enrollments %}<p class="small muted">In HubSpot: sequence {{ en.sequence_id }} from {{ en.sender_email }}, enrolled {{ en.enrolled_at.strftime('%d %b %Y %H:%M') }} · {{ en.status|lower }}.</p>
+    {% endfor %}
+  </div>
+  {% if not d.touch -%}
+  <p class="muted">{% if d.no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif d.no_draft == 'finished' %}All three emails have gone; nothing more to send.{% else %}{{ d.no_draft }}{% endif %}</p>
+  {%- elif d.email -%}
+  {%- set e = d.email -%}
+  <div class="block">
+    <h3 class="kicker">Draft: {{ labels[e.touch] }}</h3>
+    <p><span class="vh">Subject: </span><b>{{ e.subject }}</b></p>
+    <p class="draft-body">{{ e.body }}</p>
+    <p class="small muted">Drafted by {{ 'Claude' if e.source == 'llm' else 'the template' }}{% if e.rejected %} · Claude's draft was set aside: {{ e.rejected }}{% endif %}. {% if e.touch == 1 and d.stored and d.stored.status == 'enrolled' %}Edit it in HubSpot before you send{% else %}Edit it before you send{% endif %}; nothing is sent from here.</p>
+    <div class="actions"><a class="btn primary" href="{{ e.mailto(c.email) }}">Open in your email app</a><a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">Draft it again</a></div>
+  </div>
+  {%- else -%}
+  <div class="block">
+    <h3>Next: the {{ labels[d.touch] }}, email {{ d.touch }} of {{ d.emails|length }}</h3>
+    <div class="placeholder">
+      <span class="muted"><b>[{{ labels[d.touch]|upper }} DRAFTED ON REQUEST]</b></span>
+      <span class="small muted">Not stored. With Claude on, each draft is a model call of a few seconds, so it is drafted only when asked.</span>
+      <div class="actions"><a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">Draft the {{ labels[d.touch] }}</a><span class="small muted">Edit it before you send. Nothing is sent from here.</span></div>
+    </div>
+  </div>
+  {%- endif %}
+  {%- endif %}
+  {% if caller is defined %}{{ caller() }}{% endif %}
+  {% if d.mock and c.hubspot_owner_id -%}
+  <section class="demo" aria-labelledby="demo-{{ c.id }}">
+    <h3 class="kicker" id="demo-{{ c.id }}">Demo only · mock portal</h3>
+    <p class="small muted"><b>Demo: act in HubSpot.</b> These buttons stand in for HubSpot. On a real portal {{ d.owner.name if d.owner else 'the SDR' }} sends the email or logs the call in HubSpot, and AuxoCase sees it within a minute.{% if where == 'queue' %} Each one opens the lead page afterwards.{% endif %}</p>
+    <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
+      <input type="hidden" name="subject" value="{{ d.email.subject if d.email else '' }}">
+      <button class="btn" type="submit" name="kind" value="email">Send {{ 'this ' ~ labels[d.email.touch] if d.email else 'an email' }}</button>
+      <button class="btn" type="submit" name="kind" value="call_no_answer">Log a call: no answer</button>
+      <button class="btn" type="submit" name="kind" value="call_connected">Log a call: connected</button>
+      <button class="btn" type="submit" name="kind" value="reply">The lead replies</button>
+    </form>
+  </section>
+  {%- endif %}
+</section>
+{%- endmacro %}
+
+{#- The mock's footnote: what the daggers mean, and on the lead page which clock stamped what. -#}
+{% macro footnote(d, clocks=false) -%}
+{% if env == 'mock' -%}
+<footer class="footnote">
+  <p style="margin: 0"><span class="dagger">†</span> Simulated · synthetic data. Booked counts come from the mock portal's generator, not from real leads; on a real portal they come from HubSpot's meetings and deals.{% if d and d.late_factor and d.speed.factor is defined %} On the mock the first-day effect is the generator's built-in factor of {{ d.late_factor }} (outcomes show {{ d.speed.factor }}: {{ pct(d.speed.rate_fast) }} of {{ '{:,}'.format(d.speed.n_fast) }} leads touched within a day booked, against {{ pct(d.speed.rate_slow) }} of {{ '{:,}'.format(d.speed.n_slow) }} touched later); on a real portal it is measured.{% endif %}</p>
+  {% if clocks %}<p style="margin: 6px 0 0">Mock portal clocks: HubSpot activity and routing run on the demo clock, frozen at {{ clock_text }}. AuxoCase's own logs (scoring, drafting, enrolment, SDR decisions) keep wall time, so their dates differ. History is in the order things happened.</p>{% endif %}
+</footer>
+{%- endif %}
+{%- endmacro %}

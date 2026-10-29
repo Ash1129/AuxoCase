@@ -1,0 +1,881 @@
+{
+ "generated_at": "2026-10-29T03:40:26",
+ "live": "demo-v1",
+ "metrics": {
+  "rows": 5404,
+  "positives": 1880,
+  "base_rate": 0.358,
+  "precision_at_k": 0.4482,
+  "hubspot_precision_at_k": 0.3746,
+  "points_precision_at_k": 0.4448,
+  "lift_at_k": 1.196,
+  "lift_over_points": 1.008,
+  "auc_pr": 0.4481,
+  "auc_roc": 0.5953,
+  "brier": 0.2233,
+  "ece": 0.0118,
+  "k": 299,
+  "test_months": [
+   "2028-05",
+   "2028-06"
+  ],
+  "calibration_bins": [
+   {
+    "lo": 0.0,
+    "hi": 0.1,
+    "n": 4,
+    "predicted": 0.007,
+    "observed": 0.0
+   },
+   {
+    "lo": 0.1,
+    "hi": 0.2,
+    "n": 41,
+    "predicted": 0.172,
+    "observed": 0.171
+   },
+   {
+    "lo": 0.2,
+    "hi": 0.3,
+    "n": 260,
+    "predicted": 0.26,
+    "observed": 0.288
+   },
+   {
+    "lo": 0.3,
+    "hi": 0.4,
+    "n": 435,
+    "predicted": 0.349,
+    "observed": 0.352
+   },
+   {
+    "lo": 0.4,
+    "hi": 0.5,
+    "n": 203,
+    "predicted": 0.441,
+    "observed": 0.443
+   },
+   {
+    "lo": 0.5,
+    "hi": 0.6,
+    "n": 50,
+    "predicted": 0.538,
+    "observed": 0.58
+   },
+   {
+    "lo": 0.6,
+    "hi": 0.7,
+    "n": 7,
+    "predicted": 0.644,
+    "observed": 0.571
+   }
+  ],
+  "by_channel": {
+   "email": {
+    "n": 62,
+    "observed": 0.21,
+    "predicted": 0.351
+   },
+   "events": {
+    "n": 61,
+    "observed": 0.475,
+    "predicted": 0.4
+   },
+   "paid_ads": {
+    "n": 158,
+    "observed": 0.342,
+    "predicted": 0.296
+   },
+   "referral": {
+    "n": 37,
+    "observed": 0.514,
+    "predicted": 0.509
+   },
+   "webinar": {
+    "n": 30,
+    "observed": 0.6,
+    "predicted": 0.481
+   },
+   "website": {
+    "n": 652,
+    "observed": 0.345,
+    "predicted": 0.339
+   }
+  },
+  "challenger": {
+   "family": "hgb",
+   "precision_at_k": 0.4381,
+   "ece": 0.0268,
+   "auc_pr": 0.4286,
+   "chosen_on": "calibration months",
+   "calibration_precision_at_k": {
+    "lr": 0.4561,
+    "hgb": 0.4358
+   }
+  },
+  "calibration_months": [
+   "2028-03",
+   "2028-04"
+  ],
+  "train_months": [
+   "2027-08",
+   "2027-09",
+   "2027-10",
+   "2027-11",
+   "2027-12",
+   "2028-01",
+   "2028-02"
+  ],
+  "held_out": true,
+  "train_rows": 3404,
+  "calibration_rows": 1000,
+  "test_rows": 1000
+ },
+ "labelled_rows": 1000,
+ "positives": 358,
+ "head_to_head": {
+  "k": 333,
+  "months": [
+   "2028-05",
+   "2028-06"
+  ],
+  "model_precision_at_k": 0.4444,
+  "points_table_precision_at_k": 0.4474,
+  "hubspot_score_precision_at_k": 0.3694,
+  "random_precision": 0.358
+ },
+ "by_channel_all_history": {
+  "email": {
+   "n": 62,
+   "observed": 0.21,
+   "predicted": 0.351
+  },
+  "events": {
+   "n": 61,
+   "observed": 0.475,
+   "predicted": 0.4
+  },
+  "paid_ads": {
+   "n": 158,
+   "observed": 0.342,
+   "predicted": 0.296
+  },
+  "referral": {
+   "n": 37,
+   "observed": 0.514,
+   "predicted": 0.509
+  },
+  "webinar": {
+   "n": 30,
+   "observed": 0.6,
+   "predicted": 0.481
+  },
+  "website": {
+   "n": 652,
+   "observed": 0.345,
+   "predicted": 0.339
+  }
+ },
+ "slices": {
+  "assigned": {
+   "assigned": 1369,
+   "worked": 1361,
+   "booked": 801
+  },
+  "holdout_assigned": {
+   "assigned": 118,
+   "worked": 118,
+   "booked": 20
+  }
+ },
+ "overrides": {
+  "skipped": {
+   "n": 17,
+   "booked": 0
+  }
+ },
+ "capacity_head_to_head": {
+  "months": [
+   "2028-05",
+   "2028-06",
+   "2028-07",
+   "2028-08",
+   "2028-09",
+   "2028-10"
+  ],
+  "capacity": 500,
+  "per_month": [
+   {
+    "month": "2028-05",
+    "leads": 6000,
+    "mqls": 1692,
+    "hubspot": 289.78200214820157,
+    "points": 341.82203099565135,
+    "model": 342.68292627673173,
+    "random": 260.267673143036,
+    "best_mql": 374.6534391193562,
+    "model_all": 394.50103576438767,
+    "best_all": 439.5973533123871,
+    "below_gate_picked": 355
+   },
+   {
+    "month": "2028-06",
+    "leads": 6000,
+    "mqls": 1652,
+    "hubspot": 291.68048631334545,
+    "points": 343.7857367060778,
+    "model": 347.34715501365844,
+    "random": 263.5367320870775,
+    "best_mql": 376.14676950515855,
+    "model_all": 395.0889892211132,
+    "best_all": 440.01440061192415,
+    "below_gate_picked": 349
+   },
+   {
+    "month": "2028-07",
+    "leads": 6000,
+    "mqls": 1627,
+    "hubspot": 293.5482673248246,
+    "points": 342.54017733575773,
+    "model": 349.5603323477279,
+    "random": 262.0362070804105,
+    "best_mql": 375.4271591823134,
+    "model_all": 399.61793538677716,
+    "best_all": 440.3904461578072,
+    "below_gate_picked": 368
+   },
+   {
+    "month": "2028-08",
+    "leads": 6200,
+    "mqls": 1706,
+    "hubspot": 289.3312215299399,
+    "points": 346.4559341175011,
+    "model": 350.64845777378446,
+    "random": 262.0585230152624,
+    "best_mql": 377.2229146839994,
+    "model_all": 393.2658308970066,
+    "best_all": 442.76219681114867,
+    "below_gate_picked": 358
+   },
+   {
+    "month": "2028-09",
+    "leads": 6000,
+    "mqls": 1649,
+    "hubspot": 295.8775181040669,
+    "points": 349.7143503017681,
+    "model": 350.09058897870784,
+    "random": 263.82979253207094,
+    "best_mql": 377.4783096024951,
+    "model_all": 393.9496161618528,
+    "best_all": 440.6199374119444,
+    "below_gate_picked": 366
+   },
+   {
+    "month": "2028-10",
+    "leads": 5800,
+    "mqls": 1630,
+    "hubspot": 292.7400999350182,
+    "points": 345.62291965598973,
+    "model": 344.9886759834101,
+    "random": 260.6190238752299,
+    "best_mql": 373.67969400476744,
+    "model_all": 397.8123033810964,
+    "best_all": 439.0868311575159,
+    "below_gate_picked": 350
+   }
+  ],
+  "mean": {
+   "hubspot": 292.2,
+   "points": 345.0,
+   "model": 347.6,
+   "random": 262.1,
+   "best_mql": 375.8,
+   "model_all": 395.7,
+   "best_all": 440.4
+  },
+  "model_vs_hubspot": {
+   "mean": 55.4,
+   "lo": 53.4,
+   "hi": 58.0
+  },
+  "model_vs_points": {
+   "mean": 2.6,
+   "lo": 0.6,
+   "hi": 4.8
+  },
+  "all_vs_mql": {
+   "mean": 48.2,
+   "lo": 44.9,
+   "hi": 51.1
+  },
+  "below_gate_picked": 358.0,
+  "below_gate_by_channel": {
+   "referral": 166,
+   "webinar": 166,
+   "events": 13,
+   "website": 8,
+   "email": 4,
+   "paid_ads": 1
+  }
+ },
+ "speed_to_lead": {
+  "n": 1479,
+  "median_hours": 17.1,
+  "within_24h": 0.642,
+  "baseline": {
+   "n": 6044,
+   "median_hours": 70.8,
+   "within_24h": 0.212
+  }
+ },
+ "success_by_month": [
+  {
+   "month": "2027-06",
+   "worked": 14,
+   "demos": 6,
+   "routed_share": 0.0,
+   "median_hours": 24.3,
+   "within_24h": 0.5
+  },
+  {
+   "month": "2027-07",
+   "worked": 463,
+   "demos": 157,
+   "routed_share": 0.0,
+   "median_hours": 61.7,
+   "within_24h": 0.218
+  },
+  {
+   "month": "2027-08",
+   "worked": 507,
+   "demos": 174,
+   "routed_share": 0.0,
+   "median_hours": 65.9,
+   "within_24h": 0.243
+  },
+  {
+   "month": "2027-09",
+   "worked": 497,
+   "demos": 165,
+   "routed_share": 0.0,
+   "median_hours": 74.7,
+   "within_24h": 0.187
+  },
+  {
+   "month": "2027-10",
+   "worked": 499,
+   "demos": 160,
+   "routed_share": 0.0,
+   "median_hours": 68.7,
+   "within_24h": 0.22
+  },
+  {
+   "month": "2027-11",
+   "worked": 494,
+   "demos": 170,
+   "routed_share": 0.0,
+   "median_hours": 68.8,
+   "within_24h": 0.233
+  },
+  {
+   "month": "2027-12",
+   "worked": 506,
+   "demos": 176,
+   "routed_share": 0.0,
+   "median_hours": 75.3,
+   "within_24h": 0.206
+  },
+  {
+   "month": "2028-01",
+   "worked": 500,
+   "demos": 180,
+   "routed_share": 0.0,
+   "median_hours": 72.7,
+   "within_24h": 0.206
+  },
+  {
+   "month": "2028-02",
+   "worked": 496,
+   "demos": 185,
+   "routed_share": 0.0,
+   "median_hours": 67.0,
+   "within_24h": 0.222
+  },
+  {
+   "month": "2028-03",
+   "worked": 491,
+   "demos": 164,
+   "routed_share": 0.0,
+   "median_hours": 67.5,
+   "within_24h": 0.222
+  },
+  {
+   "month": "2028-04",
+   "worked": 511,
+   "demos": 178,
+   "routed_share": 0.0,
+   "median_hours": 71.6,
+   "within_24h": 0.204
+  },
+  {
+   "month": "2028-05",
+   "worked": 493,
+   "demos": 171,
+   "routed_share": 0.0,
+   "median_hours": 74.1,
+   "within_24h": 0.209
+  },
+  {
+   "month": "2028-06",
+   "worked": 506,
+   "demos": 186,
+   "routed_share": 0.0,
+   "median_hours": 82.7,
+   "within_24h": 0.192
+  },
+  {
+   "month": "2028-07",
+   "worked": 67,
+   "demos": 16,
+   "routed_share": 0.0,
+   "median_hours": 167.6,
+   "within_24h": 0.015
+  },
+  {
+   "month": "2028-08",
+   "worked": 505,
+   "demos": 282,
+   "routed_share": 1.0,
+   "median_hours": 16.9,
+   "within_24h": 0.634
+  },
+  {
+   "month": "2028-09",
+   "worked": 493,
+   "demos": 268,
+   "routed_share": 1.0,
+   "median_hours": 17.6,
+   "within_24h": 0.641
+  },
+  {
+   "month": "2028-10",
+   "worked": 481,
+   "demos": 271,
+   "routed_share": 1.0,
+   "median_hours": 16.6,
+   "within_24h": 0.651
+  }
+ ],
+ "speed_effect": {
+  "n_fast": 2229,
+  "n_slow": 5294,
+  "rate_fast": 0.62,
+  "rate_slow": 0.289,
+  "factor": 0.47
+ },
+ "stale_lead_factor": "0.5",
+ "mql_gate": [
+  {
+   "channel": "website",
+   "leads": 6457,
+   "mqls": 3135,
+   "mql_share": 0.486,
+   "no_title": 0.116,
+   "no_size": 0.155
+  },
+  {
+   "channel": "paid_ads",
+   "leads": 3655,
+   "mqls": 876,
+   "mql_share": 0.24,
+   "no_title": 0.147,
+   "no_size": 0.18
+  },
+  {
+   "channel": "webinar",
+   "leads": 2730,
+   "mqls": 225,
+   "mql_share": 0.082,
+   "no_title": 0.467,
+   "no_size": 0.468
+  },
+  {
+   "channel": "events",
+   "leads": 1932,
+   "mqls": 311,
+   "mql_share": 0.161,
+   "no_title": 0.198,
+   "no_size": 0.244
+  },
+  {
+   "channel": "referral",
+   "leads": 1924,
+   "mqls": 178,
+   "mql_share": 0.093,
+   "no_title": 0.494,
+   "no_size": 0.492
+  },
+  {
+   "channel": "email",
+   "leads": 1844,
+   "mqls": 400,
+   "mql_share": 0.217,
+   "no_title": 0.094,
+   "no_size": 0.158
+  }
+ ],
+ "below_gate": {
+  "explore_below_gate_share": 0.0,
+  "ranks_below_gate": false,
+  "assigned": 0,
+  "worked": 0,
+  "matured": 0,
+  "booked": 0,
+  "observed_rate": null,
+  "predicted_rate": null,
+  "assigned_by_rank": 0,
+  "needed": 100,
+  "ready": false
+ },
+ "losses": {
+  "poor_fit": {
+   "50_149": 146,
+   "300_500": 57,
+   "150_299": 80,
+   "unknown": 14,
+   "over_500": 9,
+   "under_50": 29
+  },
+  "competitor": {
+   "50_149": 416,
+   "unknown": 25,
+   "150_299": 305,
+   "300_500": 184,
+   "under_50": 47,
+   "over_500": 29
+  },
+  "no_decision": {
+   "300_500": 132,
+   "150_299": 246,
+   "50_149": 402,
+   "under_50": 25,
+   "unknown": 27,
+   "over_500": 25
+  },
+  "other": {
+   "50_149": 176,
+   "300_500": 69,
+   "150_299": 117,
+   "under_50": 20,
+   "unknown": 11,
+   "over_500": 8
+  },
+  "missing_feature": {
+   "150_299": 174,
+   "under_50": 18,
+   "300_500": 111,
+   "50_149": 272,
+   "over_500": 47,
+   "unknown": 15
+  },
+  "timing": {
+   "50_149": 375,
+   "under_50": 33,
+   "150_299": 245,
+   "300_500": 126,
+   "over_500": 25,
+   "unknown": 17
+  },
+  "price": {
+   "150_299": 328,
+   "50_149": 486,
+   "unknown": 26,
+   "300_500": 198,
+   "over_500": 16,
+   "under_50": 63
+  }
+ },
+ "enrichment": {
+  "asked": 394,
+  "filled": 280,
+  "asked_title": 37,
+  "got_title": 22,
+  "asked_size": 357,
+  "got_size": 258
+ },
+ "monitor": [
+  {
+   "id": 43,
+   "period": "2028-07",
+   "channel": "paid_ads",
+   "n": 2,
+   "demos": 0,
+   "demo_rate": 0.0,
+   "predicted_rate": 0.36605,
+   "lcl": null,
+   "ucl": null,
+   "flag": "held",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 44,
+   "period": "2028-07",
+   "channel": "referral",
+   "n": 2,
+   "demos": 0,
+   "demo_rate": 0.0,
+   "predicted_rate": 0.4764,
+   "lcl": null,
+   "ucl": null,
+   "flag": "held",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 45,
+   "period": "2028-07",
+   "channel": "website",
+   "n": 11,
+   "demos": 5,
+   "demo_rate": 0.45454545454545453,
+   "predicted_rate": 0.36385454545454543,
+   "lcl": null,
+   "ucl": null,
+   "flag": "held",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 46,
+   "period": "2028-08",
+   "channel": "email",
+   "n": 66,
+   "demos": 43,
+   "demo_rate": 0.6515151515151515,
+   "predicted_rate": 0.41638636363636367,
+   "lcl": 0.2343491197645084,
+   "ucl": 0.598423607508219,
+   "flag": "above",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 47,
+   "period": "2028-08",
+   "channel": "events",
+   "n": 62,
+   "demos": 34,
+   "demo_rate": 0.5483870967741935,
+   "predicted_rate": 0.43394354838709676,
+   "lcl": 0.24511315398074537,
+   "ucl": 0.6227739427934481,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 48,
+   "period": "2028-08",
+   "channel": "paid_ads",
+   "n": 31,
+   "demos": 12,
+   "demo_rate": 0.3870967741935484,
+   "predicted_rate": 0.35433548387096775,
+   "lcl": 0.096613663430347,
+   "ucl": 0.6120573043115884,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 49,
+   "period": "2028-08",
+   "channel": "referral",
+   "n": 50,
+   "demos": 36,
+   "demo_rate": 0.72,
+   "predicted_rate": 0.5315439999999999,
+   "lcl": 0.31983453943784174,
+   "ucl": 0.7432534605621581,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 50,
+   "period": "2028-08",
+   "channel": "webinar",
+   "n": 62,
+   "demos": 41,
+   "demo_rate": 0.6612903225806451,
+   "predicted_rate": 0.5005032258064519,
+   "lcl": 0.31000313178928396,
+   "ucl": 0.6910033198236198,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 51,
+   "period": "2028-08",
+   "channel": "website",
+   "n": 236,
+   "demos": 120,
+   "demo_rate": 0.5084745762711864,
+   "predicted_rate": 0.408650847457627,
+   "lcl": 0.31265256907069594,
+   "ucl": 0.504649125844558,
+   "flag": "above",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 52,
+   "period": "2028-09",
+   "channel": "email",
+   "n": 45,
+   "demos": 21,
+   "demo_rate": 0.4666666666666667,
+   "predicted_rate": 0.422288888888889,
+   "lcl": 0.20139933132227308,
+   "ucl": 0.6431784464555049,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 53,
+   "period": "2028-09",
+   "channel": "events",
+   "n": 58,
+   "demos": 31,
+   "demo_rate": 0.5344827586206896,
+   "predicted_rate": 0.43677241379310344,
+   "lcl": 0.2413938929727065,
+   "ucl": 0.6321509346135004,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 54,
+   "period": "2028-09",
+   "channel": "paid_ads",
+   "n": 23,
+   "demos": 10,
+   "demo_rate": 0.43478260869565216,
+   "predicted_rate": 0.33661739130434787,
+   "lcl": null,
+   "ucl": null,
+   "flag": "held",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 55,
+   "period": "2028-09",
+   "channel": "referral",
+   "n": 65,
+   "demos": 48,
+   "demo_rate": 0.7384615384615385,
+   "predicted_rate": 0.5200753846153846,
+   "lcl": 0.33417330905313514,
+   "ucl": 0.7059774601776341,
+   "flag": "above",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 56,
+   "period": "2028-09",
+   "channel": "webinar",
+   "n": 56,
+   "demos": 37,
+   "demo_rate": 0.6607142857142857,
+   "predicted_rate": 0.4933321428571428,
+   "lcl": 0.2929040359954045,
+   "ucl": 0.6937602497188811,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 57,
+   "period": "2028-09",
+   "channel": "website",
+   "n": 239,
+   "demos": 116,
+   "demo_rate": 0.48535564853556484,
+   "predicted_rate": 0.4116368200836818,
+   "lcl": 0.3161370876492675,
+   "ucl": 0.5071365525180961,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 58,
+   "period": "2028-10",
+   "channel": "email",
+   "n": 50,
+   "demos": 28,
+   "demo_rate": 0.56,
+   "predicted_rate": 0.41753,
+   "lcl": 0.20830341029878635,
+   "ucl": 0.6267565897012137,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 59,
+   "period": "2028-10",
+   "channel": "events",
+   "n": 56,
+   "demos": 36,
+   "demo_rate": 0.6428571428571429,
+   "predicted_rate": 0.43673392857142856,
+   "lcl": 0.23789907975328278,
+   "ucl": 0.6355687773895744,
+   "flag": "above",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 60,
+   "period": "2028-10",
+   "channel": "paid_ads",
+   "n": 13,
+   "demos": 5,
+   "demo_rate": 0.38461538461538464,
+   "predicted_rate": 0.3769,
+   "lcl": null,
+   "ucl": null,
+   "flag": "held",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 61,
+   "period": "2028-10",
+   "channel": "referral",
+   "n": 45,
+   "demos": 36,
+   "demo_rate": 0.8,
+   "predicted_rate": 0.5243844444444444,
+   "lcl": 0.30104371870498786,
+   "ucl": 0.747725170183901,
+   "flag": "above",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 62,
+   "period": "2028-10",
+   "channel": "webinar",
+   "n": 71,
+   "demos": 41,
+   "demo_rate": 0.5774647887323944,
+   "predicted_rate": 0.5068225352112675,
+   "lcl": 0.32882185958667465,
+   "ucl": 0.6848232108358604,
+   "flag": "ok",
+   "created_at": "2026-10-29T02:19:59"
+  },
+  {
+   "id": 63,
+   "period": "2028-10",
+   "channel": "website",
+   "n": 218,
+   "demos": 118,
+   "demo_rate": 0.5412844036697247,
+   "predicted_rate": 0.405774770642202,
+   "lcl": 0.30600222070039196,
+   "ucl": 0.5055473205840121,
+   "flag": "above",
+   "created_at": "2026-10-29T02:19:59"
+  }
+ ]
+}

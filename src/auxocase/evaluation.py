@@ -307,4 +307,7 @@ def write_report(hs: HubSpotClient, conn: sqlite3.Connection, path: Path) -> str
     text = "\n".join(L)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text)
+    # The same figures as data, beside the report: what the Leadership page reads, so the page and the report agree.
+    import json
+    path.with_suffix(".json").write_text(json.dumps(e, default=str, indent=1))
     return text

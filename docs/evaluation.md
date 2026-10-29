@@ -1,6 +1,6 @@
 # Evaluation report
 
-Generated 2026-10-29T02:20:04 UTC. Live model: `demo-v1`.
+Generated 2026-10-29T03:40:26 UTC. Live model: `demo-v1`.
 
 ## The win BrightPath asked for: more demos, faster follow-up, same 12 SDRs
 

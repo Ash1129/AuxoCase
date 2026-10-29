@@ -207,3 +207,108 @@ def test_unchanged_notes_are_not_read_again_when_a_lead_is_rescored(db):
     hs.batch_update_contacts([(c.id, {"notes": c.notes + " We are hiring twenty more people next quarter."})])
     Scorer(hs, conn, load_live_model(conn), llm).score_batch([hs.get_contact(c.id)])   # new notes are read
     assert Counting.reads == 2
+
+
+def _scored_pool(conn, hs):
+    """Routing hands out scored leads only; score the pool here rather than rely on an earlier test having done it."""
+    from auxocase.llm.client import Offline
+    from auxocase.scoring.pipeline import Scorer, load_live_model
+    Scorer(hs, conn, load_live_model(conn), Offline()).rescore_pool()
+
+
+def test_skipping_a_lead_frees_the_slot_without_making_it_a_label(db):
+    """A skip is the SDR's call not to work a lead: the slot refills, and the lead is not taught to the model as worked."""
+    path, conn, hs = db
+    _scored_pool(conn, hs)
+    client = TestClient(create_app(path))
+    limits = {o.id: o.capacity_limit for o in hs.list_owners()}
+    try:
+        conn.execute("UPDATE hs_owners SET capacity_limit=0")
+        owner = hs.list_owners()[0]
+        conn.execute("UPDATE hs_owners SET capacity_limit=1 WHERE id=?", (owner.id,))
+        conn.execute("UPDATE hs_contacts SET hs_lead_status='IN_PROGRESS' WHERE hubspot_owner_id=? AND hs_lead_status IN ('NEW','OPEN')", (owner.id,))
+        client.post("/jobs/route")
+        waiting = [c for c in hs.list_contacts() if c.hubspot_owner_id == owner.id and c.hs_lead_status in ("NEW", "OPEN")]
+        assert len(waiting) == 1
+        for reason, status in (("timing", "BAD_TIMING"), ("wrong fit", "UNQUALIFIED")):
+            lead = waiting[0]
+            r = client.post(f"/lead/{lead.id}/action", data={"owner_id": owner.id, "action": "skipped", "note": reason,
+                                                             "seen": _seen(conn, hs, lead.id)}, follow_redirects=False)
+            assert r.status_code == 303
+            assert hs.get_contact(lead.id).hs_lead_status == status
+            waiting = [c for c in hs.list_contacts() if c.hubspot_owner_id == owner.id and c.hs_lead_status in ("NEW", "OPEN")]
+            assert len(waiting) == 1 and waiting[0].id != lead.id                  # the slot was refilled at once
+            fb.sync_outcomes(hs, conn)
+            assert conn.execute("SELECT worked FROM outcomes WHERE contact_id=?", (lead.id,)).fetchone()["worked"] == 0
+    finally:
+        for oid, limit in limits.items():
+            conn.execute("UPDATE hs_owners SET capacity_limit=? WHERE id=?", (limit, oid))
+
+
+def test_the_queue_holds_only_what_auxocase_handed_out_and_still_needs_a_call(db):
+    """An SDR owns months of leads worked before AuxoCase; the queue is the waiting lead, the ones touched in HubSpot
+    that need a call logged, and today's decisions, not all of those."""
+    from auxocase.service.app import State
+    from auxocase.service.views.queue import queue_page
+    from auxocase.storage.db import clock
+
+    path, conn, hs = db
+    _scored_pool(conn, hs)
+    st = State(path)
+    owner = hs.list_owners()[1]
+    owned = sum(1 for c in hs.list_contacts() if c.hubspot_owner_id == owner.id)
+    limits = {o.id: o.capacity_limit for o in hs.list_owners()}
+    try:
+        conn.execute("UPDATE hs_owners SET capacity_limit=0")
+        conn.execute("UPDATE hs_owners SET capacity_limit=2 WHERE id=?", (owner.id,))
+        conn.execute("UPDATE hs_contacts SET hs_lead_status='IN_PROGRESS' WHERE hubspot_owner_id=? AND hs_lead_status IN ('NEW','OPEN')", (owner.id,))
+        st.router().run()
+        page = queue_page(st, owner.id)
+        assert len(page["waiting"]) == 2 and not page["touched"] and owned > 100     # two waiting, not hundreds owned
+        first, second = page["waiting"][0]["c"], page["waiting"][1]["c"]
+        assert page["open"]["c"].id == first.id and page["open"]["seen"]
+        assert (first.auxo_probability or 0) >= (second.auxo_probability or 0)
+        hs.log_engagement(second.id, "EMAIL", "OUTGOING", clock(conn), owner.id, subject="Hello")
+        from auxocase.routing.touches import detect_first_touches
+        detect_first_touches(hs, conn, refill=False)
+        page = queue_page(st, owner.id)
+        assert [e["c"].id for e in page["touched"]] == [second.id] and second.id not in [e["c"].id for e in page["waiting"]]
+        TestClient(create_app(path)).post(f"/lead/{second.id}/action", data={
+            "owner_id": owner.id, "action": "worked", "seen": _seen(conn, hs, second.id)})
+        page = queue_page(st, owner.id)
+        assert not page["touched"] and page["done"][0]["contact_id"] == second.id and page["done_total"] >= 1
+        assert queue_page(st, owner.id, lead=first.id)["open"]["c"].id == first.id
+    finally:
+        for oid, limit in limits.items():
+            conn.execute("UPDATE hs_owners SET capacity_limit=? WHERE id=?", (limit, oid))
+
+
+def test_the_hit_rate_names_its_window_and_keeps_the_exploration_slice_apart(db):
+    from auxocase.service.app import _hit_rate
+    from auxocase.storage.db import clock
+    from datetime import timedelta
+
+    path, conn, hs = db
+    hit = _hit_rate(conn)
+    if hit:
+        assert hit["days"] == 30 and hit["n"] == hit["ranked"]["n"] + hit["exploration"]["n"]
+    since = (clock(conn) - timedelta(days=30)).isoformat(timespec="seconds")
+    old = conn.execute("SELECT COUNT(*) n FROM routing_log WHERE decision IN ('assigned','holdout_assigned') AND created_at < ?", (since,)).fetchone()["n"]
+    conn.execute("UPDATE routing_log SET created_at='2001-01-01T00:00:00' WHERE decision IN ('assigned','holdout_assigned')")
+    assert _hit_rate(conn) is None                                               # nothing handed out in the window
+    assert old >= 0
+
+
+def test_reasons_read_as_sentences():
+    from auxocase.scoring.explain import Explanation, driver_rows
+    from auxocase.scoring.features import COUNT_LABELS, LABELS, reason_clause
+
+    e = Explanation(contributions=[], positives=[reason_clause("channel=events", 0.4), reason_clause("seniority=c_level", 0.2),
+                                                 reason_clause("in_target_size", 0.1)], negatives=[reason_clause("log_page_views", -0.3)])
+    assert e.reason_text() == ("Ranked up because it came in through an event, the contact is C-level and the company is in the "
+                               "50 to 500 employee band. Held back because it viewed few pages on the site.")
+    for clause in list(LABELS.values()) + [c for pair in COUNT_LABELS.values() for c in pair]:
+        assert clause.split()[0] in ("it", "the", "there"), clause                 # every clause has its own subject
+    rows = driver_rows([("channel=website", -0.38), ("seniority=c_level", 0.14)])
+    assert rows[0] == {"label": "Came in through the website", "better": False, "word": "worse", "effect": "−0.38", "bar": 136}
+    assert rows[1]["word"] == "better" and rows[1]["bar"] == round(136 * 0.14 / 0.38)

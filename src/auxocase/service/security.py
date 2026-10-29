@@ -35,8 +35,9 @@ DEFAULT_HOSTS = ("127.0.0.1", "localhost", "[::1]", "testserver")
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 SIGNED_PATHS = ("/webhooks/hubspot",)          # server-to-server: verified by HubSpot's signature, not by origin
 UNPOLICED_PATHS = ("/docs", "/redoc")          # FastAPI's API docs load their scripts from a CDN
-CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; "
-       "connect-src 'self'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
+       "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; "
+       "frame-ancestors 'none'")
 HEADERS = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin"}
 
 # The lead page's one script: show that a draft is on its way, since with Claude it takes a few seconds.

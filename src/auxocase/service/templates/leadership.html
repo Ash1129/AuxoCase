@@ -1,0 +1,311 @@
+{% extends "base.html" %}
+{% macro d(up='') %}{% if env == 'mock' %}<span class="dagger{{ ' up' if up }}">†</span>{% endif %}{% endmacro %}
+{% macro v(x, fmt='') %}{% if x is none %}<span class="muted">[NOT RECORDED]</span>{% elif fmt %}{{ fmt.format(x) }}{% else %}{{ x }}{% endif %}{% endmacro %}
+{% macro no_report() %}<p class="empty">No stored evaluation at <code>{{ report_path }}</code>. Run <code>python run.py eval</code> to write it.</p>{% endmacro %}
+{% macro no_limits() %}<p class="empty">No stored experiment at <code>{{ queue_limits_path }}</code>. Run <code>python run.py queue-limits</code> to write it.</p>{% endmacro %}
+{% macro bar(r) %}<svg width="200" height="12" viewBox="0 0 200 12" aria-hidden="true">{% if r.kind == 'solid' %}<rect class="bar-accent" x="0" y="3" width="{{ r.bar }}" height="6" rx="1"></rect>{% else %}<rect class="bar-{{ r.kind }}" x="0.5" y="3.5" width="{{ r.bar }}" height="5" rx="1"></rect>{% endif %}</svg>{% endmacro %}
+{% block title %}Leadership{% endblock %}
+{% block style %}
+.ld-head{display:flex;flex-direction:column;gap:8px;max-width:760px}
+.ld-sec{display:flex;flex-direction:column;gap:12px;min-width:0}
+.ld-sec.first{gap:20px}
+.ld-sec h2.dash{border-top:1px dashed var(--line);padding-top:12px}
+.ld-figs{display:flex;flex-wrap:wrap;gap:24px 48px}
+.ld-figs.top{gap:32px 48px}
+.ld-fig{flex:0 1 240px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.dagger.up{line-height:0;vertical-align:super}
+.big .dagger.up{font-size:28px}.mid .dagger.up{font-size:18px}
+.ld-note{margin:0;font-size:14px;line-height:20px;color:var(--muted);max-width:760px}
+.ld-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:32px 48px}
+.ld-grid.cards{gap:24px 48px}
+.ld-card{display:flex;flex-direction:column;gap:4px;padding-top:12px;border-top:1px solid var(--line)}
+.ld-card p{margin:4px 0 0}
+.ld-rows{display:flex;flex-direction:column}
+.ld-row{display:flex;flex-wrap:wrap;align-items:center;column-gap:24px;row-gap:6px;padding:10px 0;border-top:1px solid var(--line)}
+.ld-row.hd{align-items:flex-end;padding:0 0 6px;border-top:0;font-size:13px;line-height:18px;color:var(--muted)}
+.ld-row.end{border-bottom:1px solid var(--line)}
+.ld-row.split{padding:14px 0 6px;border-top:1px dashed var(--muted);font-size:13px;line-height:18px;color:var(--muted)}
+.ld-row.on{font-weight:600}
+.ld-row .lbl{flex:1 1 260px;min-width:0}
+.ld-row .w1{flex:0 0 112px}.ld-row .w2{flex:0 0 104px}.ld-row .w3{flex:0 0 96px}
+.ld-row .barcol{flex:0 0 200px;display:flex}
+.range{font-size:13px;font-weight:400;color:var(--muted)}
+.bar-out{fill:none;stroke:var(--muted);stroke-width:1}
+.bar-dash{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:3 2}
+.bar-dash-accent{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:3 2}
+.bar-ink{fill:var(--ink)}
+.ld-table{min-width:600px}
+.ld-table.narrow{min-width:320px}
+.ld-table tbody th{font-size:15px;line-height:22px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--ink);border-top:1px solid var(--line);padding:6px 16px 6px 0}
+.ld-table td{padding:6px 0 6px 16px}
+.ld-table tbody tr:last-child>*{border-bottom:1px solid var(--line)}
+.ld-table tbody tr.grp>th{font-size:13px;line-height:18px;font-weight:600;padding:14px 0 6px;border-bottom:0}
+.ld-table tbody.after tr.grp>th{border-top-color:var(--ink)}
+.ld-limits{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));column-gap:48px;font-size:14px;line-height:20px}
+.ld-limits li{padding:10px 0;border-top:1px solid var(--line)}
+.empty{margin:0;color:var(--muted);max-width:760px}
+code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;overflow-wrap:anywhere}
+.ld-table thead th{vertical-align:bottom}
+{% endblock %}
+{% block body %}
+{% set mock = env == 'mock' %}
+<header class="ld-head">
+  <p class="kicker">Leadership · BrightPath Payroll · {{ sdrs }} SDR{{ '' if sdrs == 1 else 's' }}</p>
+  <h1 class="title">Demos per 1,000 leads</h1>
+  <p class="muted" style="margin: 0">The one number marketing and sales share: demos booked for every 1,000 leads that come in, at the same {{ sdrs }} SDR{{ '' if sdrs == 1 else 's' }} and about {{ capacity }} first touches a month.</p>
+</header>
+
+{% if mock %}
+<p class="notice" role="note"><b>Mock portal.</b> Nothing here was measured on real leads: every figure is simulated on synthetic data and carries a †. On a real portal the shared number and the months come from HubSpot's recorded outcomes instead.</p>
+{% endif %}
+
+{# ---- the shared number ---- #}
+<section class="ld-sec first" aria-labelledby="ld-number">
+  <h2 id="ld-number" class="kicker dash">The shared number{% if mock %} · Simulated · synthetic generator · mock HubSpot{{ d() }}{% else %} · from HubSpot outcomes{% endif %}</h2>
+  {% if not report %}{{ no_report() }}
+  {% elif not shared %}<p class="empty">The stored evaluation at <code>{{ report_path }}</code> has no whole month both before and after routing yet, so there is nothing to compare. Run <code>python run.py eval</code> again once a routed month is complete.</p>
+  {% else %}{% set b = shared.before %}{% set a = shared.after %}
+  <div class="ld-figs top">
+    <div class="ld-fig">
+      <span class="small muted">Before · {{ b.months_word }} month{{ '' if b.months == 1 else 's' }} of history</span>
+      <span class="big num">{{ '%.1f'|format(b.per_1000) }}{{ d('up') }}</span>
+      <span>demos per 1,000 leads</span>
+    </div>
+    <div class="ld-fig">
+      <span class="small muted">After · {{ a.months_word }} {{ 'simulated' if mock else 'routed' }} month{{ '' if a.months == 1 else 's' }}</span>
+      <span class="big num">{{ '%.1f'|format(a.per_1000) }}{{ d('up') }}</span>
+      <span>demos per 1,000 leads</span>
+    </div>
+    <div class="ld-fig">
+      <span class="small muted">Change</span>
+      <span class="big num">{{ v(shared.change, '{:+d}%') }}{{ d('up') }}</span>
+      <span>{{ 'more' if (shared.change or 0) >= 0 else 'fewer' }} demos, same {{ sdrs }} SDR{{ '' if sdrs == 1 else 's' }}</span>
+    </div>
+  </div>
+  <div class="ld-figs">
+    <div class="ld-fig">
+      <span class="mid num">{{ b.demos_a_month }} → {{ a.demos_a_month }}{{ d('up') }}</span>
+      <span>demos booked a month</span>
+      <span class="small muted">{{ b.worked_a_month }} and {{ a.worked_a_month }} leads worked a month{{ d() }}</span>
+    </div>
+    <div class="ld-fig">
+      <span class="mid num">{{ v(shared.hours_before) }} h → {{ v(shared.hours_after) }} h{{ d('up') }}</span>
+      <span>median time to first touch</span>
+      <span class="small muted">touched leads: {{ v(shared.touched_before, '{:,}') }} in the history, {{ v(shared.touched_after, '{:,}') }} routed{{ d() }}</span>
+    </div>
+    <div class="ld-fig">
+      <span class="mid num">{{ v(shared.within_before, '{}%') }} → {{ v(shared.within_after, '{}%') }}{{ d('up') }}</span>
+      <span>touched within 24 hours</span>
+      <span class="small muted">from arrival, not assignment</span>
+    </div>
+  </div>
+  <p class="lede">{% if mock %}In the simulation the same {{ sdrs }} SDRs book{% else %}The same {{ sdrs }} SDRs booked{% endif %}
+    {% if shared.more_a_month >= 0 %}{{ shared.more_a_month }} more demos a month{{ d() }}: better picks, touched on their first day.{% else %}{{ -shared.more_a_month }} fewer demos a month{{ d() }}.{% endif %}</p>
+  <p class="ld-note">Per 1,000 counts every lead that came in, below HubSpot's gate included: {{ '{:,}'.format(b.demos) }} demos from {{ '{:,}'.format(b.leads) }} new leads over the {{ b.months_word }} history month{{ '' if b.months == 1 else 's' }}, {{ '{:,}'.format(a.demos) }} from {{ '{:,}'.format(a.leads) }} over the {{ a.months_word }} routed month{{ '' if a.months == 1 else 's' }}{{ d() }}. {% if shared.leads_recorded %}The lead counts are the new leads the demo database recorded each month.{% else %}The lead counts are the brief's {{ '{:,}'.format(leads_per_month) }} new leads a month.{% endif %}{% if explore and explore.share is not none %} After includes the {{ explore.share }}% exploration slice.{% endif %}</p>
+  {% endif %}
+</section>
+
+<hr class="rule">
+
+{# ---- month by month ---- #}
+<section class="ld-sec" aria-labelledby="ld-months">
+  <h2 id="ld-months" class="kicker">Month by month{% if mock %} · simulated{% endif %}</h2>
+  {% if not report %}{{ no_report() }}
+  {% elif not months %}<p class="empty">The stored evaluation at <code>{{ report_path }}</code> has no whole month of first touches yet.</p>
+  {% else %}
+  {% if shared and shared.all_beat %}<p class="lede">Every routed month beat every month before it{% if shared.same_capacity %}, at the same capacity{% endif %}.</p>
+  {% elif shared %}<p class="lede">Routed months averaged {{ shared.after.demos_a_month }} demos against {{ shared.before.demos_a_month }} before{{ d() }}.</p>{% endif %}
+  <div class="scroll" role="region" aria-labelledby="ld-months" tabindex="0">
+    <table class="ld-table" aria-labelledby="ld-months">
+      <thead>
+        <tr>
+          <th scope="col">Month of first touch</th>
+          <th scope="col" class="r">Leads worked{{ d() }}</th>
+          <th scope="col" class="r">Demos booked{{ d() }}</th>
+          <th scope="col" class="r">Demo rate{{ d() }}</th>
+          <th scope="col" class="r">Median hours to first touch{{ d() }}</th>
+          <th scope="col" class="r">Touched within 24 h{{ d() }}</th>
+        </tr>
+      </thead>
+      {% for group, rows, label in [('before', months.before_rows, "Before · SDRs chose by gut feel and HubSpot's score"), ('after', months.after_rows, 'After · ranked and routed by AuxoCase')] if rows %}
+      <tbody class="{{ group }}">
+        <tr class="grp"><th scope="rowgroup" colspan="6">{{ label }}</th></tr>
+        {% for r in rows %}
+        <tr><th scope="row">{{ r.month }}</th><td class="r num">{{ '{:,}'.format(r.worked) }}</td><td class="r num">{{ '{:,}'.format(r.demos) }}</td><td class="r num">{{ v(r.rate, '{}%') }}</td><td class="r num">{{ v(r.median_hours) }}</td><td class="r num">{{ v(r.within_24h, '{}%') }}</td></tr>
+        {% endfor %}
+      </tbody>
+      {% endfor %}
+    </table>
+  </div>
+  <p class="ld-note">{% if shared %}Average a month: {{ shared.before.demos_a_month }} demos from {{ shared.before.worked_a_month }} leads worked before, {{ shared.after.demos_a_month }} from {{ shared.after.worked_a_month }} after{{ d() }}. {% endif %}{% if months.left_out|length == 1 %}{{ months.left_out[0] }} is left out: too few first touches that month to count as a whole month. {% elif months.left_out %}{{ months.left_out[:-1]|join(', ') }} and {{ months.left_out[-1] }} are left out: too few first touches in those months to count as whole months. {% endif %}Source: <code>{{ report_path }}</code>, written by <code>python run.py eval</code>{% if report_written %} ({{ report_written }}){% endif %}.</p>
+  {% endif %}
+</section>
+
+<hr class="rule">
+
+{# ---- the queue-limit experiment ---- #}
+<section class="ld-sec" aria-labelledby="ld-gain">
+  <h2 id="ld-gain" class="kicker">Where the gain comes from · simulated</h2>
+  {% if not queue_limits %}{{ no_limits() }}
+  {% elif not setups %}<p class="empty">The stored experiment at <code>{{ queue_limits_path }}</code> has no summary rows. Run <code>python run.py queue-limits</code> again.</p>
+  {% else %}
+  {% if setups.first_off and shared %}<p class="lede">With {{ setups.first_desk }}, better picks take the month from {{ shared.before.demos_a_month }} to {{ setups.first_demos }}{{ d() }}.{% if setups.speed_adds %} The rest is speed: small queues reach the best leads on their first day.{% endif %}</p>{% endif %}
+  <div class="ld-rows" role="table" aria-label="Demos a month by routing setup">
+    <div class="ld-row hd" role="row">
+      <span role="columnheader" class="lbl">Routing setup</span>
+      <span role="columnheader" class="w1">Demos a month{{ d() }}</span>
+      <span role="columnheader" class="w2">Touched in 24 h{{ d() }}</span>
+      <span role="columnheader" class="barcol">0 to {{ setups.scale }}{% if setups.line is not none %} · line: history's {{ shared.before.demos_a_month }}{{ d() }}{% endif %}</span>
+    </div>
+    {% for r in setups.rows %}
+    <div class="ld-row{{ ' on' if r.in_use }}{{ ' end' if loop.last }}" role="row">
+      <span role="cell" class="lbl">{{ r.label }}{% if r.in_use %} <span class="range">· the setup in use now</span>{% endif %}</span>
+      <span role="cell" class="w1 num">{{ r.demos }}{{ d() }} <span class="range">{{ r.demos_lo }}–{{ r.demos_hi }}</span></span>
+      <span role="cell" class="w2 num">{{ v(r.within, '{}%') }}{{ d() }} <span class="range">{{ r.within_lo }}–{{ r.within_hi }}</span></span>
+      <span role="cell" class="barcol"><svg width="200" height="12" viewBox="0 0 200 12" aria-hidden="true"><rect class="bar-accent" x="0" y="3" width="{{ r.bar }}" height="6" rx="1"></rect>{% if setups.line is not none %}<rect class="bar-ink" x="{{ setups.line }}" y="0" width="1.5" height="12"></rect>{% endif %}</svg></span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="ld-note">One simulated month per setup at the brief's capacity, averaged over {{ setups.seeds_word }} seed{{ '' if setups.seeds == 1 else 's' }}; the small figures are the range across seeds.{% if setups.fresh_words %} The freshness discount counts a lead past its first day at {{ setups.fresh_words }}.{% endif %} Bars run 0 to {{ setups.scale }} demos a month{% if setups.line is not none %}; the dark rule marks the history's {{ shared.before.demos_a_month }}{{ d() }}{% endif %}. Source: <code>{{ queue_limits_path }}</code>, written by <code>python run.py queue-limits --seeds {{ setups.seeds }}</code>{% if queue_limits_written %} ({{ queue_limits_written }}){% endif %}.</p>
+  {% endif %}
+</section>
+
+<hr class="rule">
+
+{# ---- the capacity head to head ---- #}
+<section class="ld-sec" aria-labelledby="ld-rank">
+  <h2 id="ld-rank" class="kicker">How good is the ranking · simulated</h2>
+  {% if not report %}{{ no_report() }}
+  {% elif not ranking %}<p class="empty">The stored evaluation at <code>{{ report_path }}</code> has no capacity head to head. It needs a live model with held-out test months and, being mock only, the generator's hidden demo chances.</p>
+  {% else %}
+  <p class="lede">Each picking {{ ranking.capacity }} MQLs a month, the model's picks would book {{ ranking.model }}{{ d() }} against {{ ranking.hubspot }}{{ d() }} for HubSpot's points, if every pick were worked on its first day.</p>
+  <div class="ld-rows" role="table" aria-label="Demos a month from each ranker's {{ ranking.capacity }} leads">
+    <div class="ld-row hd" role="row">
+      <span role="columnheader" class="lbl">Who picks the {{ ranking.capacity }}</span>
+      <span role="columnheader" class="w3">Demos a month{{ d() }}</span>
+      <span role="columnheader" class="barcol">0 to {{ ranking.scale }}</span>
+    </div>
+    {% for r in ranking.rows %}
+    <div class="ld-row{{ ' on' if r.live }}" role="row">
+      <span role="cell" class="lbl">{{ r.label }}{% if r.live %} ({{ 'live' if live and live.version == ranking.version else 'live when evaluated' }}){% endif %}</span>
+      <span role="cell" class="w3 num">{{ r.v }}{{ d() }}</span>
+      <span role="cell" class="barcol">{{ bar(r) }}</span>
+    </div>
+    {% endfor %}
+    <div class="ld-row split" role="row">
+      <span role="cell" aria-colspan="3">Phase 2 · {{ 'on' if ranking.phase2_on else 'off by default' }} · {{ 'enough outcomes below the gate to judge it' if ranking.phase2_ready else 'not yet tested below the gate' }}</span>
+    </div>
+    {% for r in ranking.phase2 %}
+    <div class="ld-row{{ ' end' if loop.last }}" role="row">
+      <span role="cell" class="lbl">{{ r.label }}</span>
+      <span role="cell" class="w3 num">{{ r.v }}{{ d() }}</span>
+      <span role="cell" class="barcol">{{ bar(r) }}</span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="ld-note">{{ ranking.months_word|capitalize }} month{{ '' if ranking.months == 1 else 's' }} the model never trained on, {{ ranking.span }}, on the generator's hidden demo chances, every lead counted as worked on its first day. Over HubSpot's points: {{ '{:+d}'.format(ranking.vs_hubspot.mean) }} a month{{ d() }}, {{ '{:+d}'.format(ranking.vs_hubspot.lo) }} to {{ '{:+d}'.format(ranking.vs_hubspot.hi) }} with the months resampled{{ d() }}. Over AuxoCase's own cold-start table: {{ '{:+d}'.format(ranking.vs_points) }}{{ d() }}.{% if ranking.ece is not none %} Expected calibration error {{ '%.3f'|format(ranking.ece) }}{{ d() }} on the test months.{% endif %} Bars run 0 to {{ ranking.scale }}; solid is AuxoCase, outlined the comparisons, dashed phase 2. Source: <code>{{ report_path }}</code>.</p>
+  {% endif %}
+</section>
+
+<hr class="rule">
+
+{# ---- why the two numbers differ ---- #}
+<section class="ld-sec" aria-labelledby="ld-gap" style="gap: 16px">
+  {% if ranking and shared %}
+  <h2 id="ld-gap" class="kicker">Why ranking alone says {{ ranking.model }} and the month says {{ shared.after.demos_a_month }}</h2>
+  <p class="lede">Different questions, so they do not add: the ranking is inside both.</p>
+  <div class="ld-grid cards">
+    <div class="ld-card">
+      <span class="mid num">{{ ranking.model }}{{ d('up') }}</span>
+      <span>demos a month from ranking alone</span>
+      <p class="ld-note">Each month's best {{ ranking.capacity }} MQLs by the model, picked from the whole month at once, as if it were already over. Every one counts as worked on its first day: the generator's hidden demo chances, added up, worked or not. Perfect timing, so it tests the picks and nothing else.</p>
+    </div>
+    <div class="ld-card">
+      <span class="mid num">{{ shared.after.demos_a_month }}{{ d('up') }}</span>
+      <span>demos a month from {{ 'simulated ' if mock }}SDRs</span>
+      <p class="ld-note">Leads arrive through the month and go out as they come{% if desk %}, {{ desk }}{% endif %}.{% if shared.late_share is not none %} {{ shared.late_share }}% of first touches still land after the first day{{ d() }}, when on the generator a lead books {{ late_as_often }}.{% endif %}{% if explore and explore.share is not none %} {{ explore.share }}% of slots go to random leads for the exploration slice.{% endif %} It counts the demos the {{ 'simulation' if mock else 'SDRs' }} booked.</p>
+    </div>
+  </div>
+  {% else %}
+  <h2 id="ld-gap" class="kicker">Why ranking alone and the month give different numbers</h2>
+  {% if not report %}{{ no_report() }}{% else %}<p class="empty">This needs both the capacity head to head and a routed month in <code>{{ report_path }}</code>; the stored evaluation lacks one of them.</p>{% endif %}
+  {% endif %}
+</section>
+
+<hr class="rule">
+
+<div class="ld-grid">
+  {# ---- the exploration slice ---- #}
+  <section class="ld-sec" aria-labelledby="ld-explore">
+    <h2 id="ld-explore" class="kicker">What the exploration slice costs{% if mock %} · simulated{% endif %}</h2>
+    {% if not report %}{{ no_report() }}
+    {% elif not explore %}<p class="empty">The stored evaluation at <code>{{ report_path }}</code> has no ranked and random slices with worked leads yet.</p>
+    {% else %}
+    {% if explore.share is not none %}<p class="lede">{{ explore.share }}% of slots go to a lead picked at random{{ d() }}.</p>{% endif %}
+    <div class="scroll" role="region" aria-labelledby="ld-explore" tabindex="0">
+      <table class="ld-table narrow" aria-labelledby="ld-explore">
+        <thead>
+          <tr>
+            <th scope="col">{% if explore.months %}{{ explore.months_word|capitalize }} routed month{{ '' if explore.months == 1 else 's' }}{% else %}Routed so far{% endif %}</th>
+            <th scope="col" class="r">Worked{{ d() }}</th>
+            <th scope="col" class="r">Booked{{ d() }}</th>
+            <th scope="col" class="r">Rate{{ d() }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in explore.rows %}
+          <tr><th scope="row">{{ r.label }}</th><td class="r num">{{ '{:,}'.format(r.worked) }}</td><td class="r num">{{ '{:,}'.format(r.booked) }}</td><td class="r num">{{ v(r.rate, '{}%') }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="ld-note">At the ranked rate the {{ explore.random_worked }} would have booked about {{ explore.expected }}, not {{ explore.random_booked }}: at most about {{ explore.cost }} demos {% if explore.months %}over the {{ explore.months_word }} month{{ '' if explore.months == 1 else 's' }}{% else %}so far{% endif %}{% if explore.cost_a_month is not none and explore.months > 1 %}, roughly {{ explore.cost_a_month }} a month{% endif %}{{ d() }}, by arithmetic on this table. The true cost is likely lower, since each random slot displaced the next lead down the ranking, not an average one. It buys outcomes the ranking did not choose, the only unbiased check on it.</p>
+    {% endif %}
+  </section>
+
+  {# ---- below the gate ---- #}
+  <section class="ld-sec" aria-labelledby="ld-gate">
+    <h2 id="ld-gate" class="kicker">Below HubSpot's gate · phase 2, {{ 'on' if gate and gate.ranks_below_gate else 'off' }}{% if mock %} · simulated{% endif %}</h2>
+    {% if not report %}{{ no_report() }}
+    {% else %}
+    {% if not ranking %}<p class="empty">The stored evaluation at <code>{{ report_path }}</code> has no capacity head to head, so there is no estimate for ranking below the gate.</p>
+    {% else %}
+    <div class="ld-fig" style="flex: none">
+      <span class="mid num">{{ '{:+d}'.format(ranking.all_vs_mql.mean) }} a month{{ d('up') }}</span>
+      <span>if the model ranked every lead, not only the MQLs</span>
+    </div>
+    <p class="ld-note">{{ '{:+d}'.format(ranking.all_vs_mql.lo) }} to {{ '{:+d}'.format(ranking.all_vs_mql.hi) }} with the {{ ranking.months_word }} months resampled{{ d() }}, on the same {{ ranking.capacity }} touches. About {{ ranking.below_gate_picked }} of the {{ ranking.capacity }}{{ d() }} would be leads the gate keeps out today{% if ranking.below_gate_by_channel %}: {% for c, n in ranking.below_gate_by_channel %}{{ c }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}{{ d() }}{% endif %}.</p>
+    {% endif %}
+    {% if gate %}
+    <p class="ld-note">{% if gate.ranks_below_gate %}Ranking below the gate is switched on{% if not gate.ready %}, with {{ gate.matured }}{{ d() }} of the {{ gate.needed }} matured labels it is meant to wait for{% endif %}.{% else %}{% if gate.matured %}The model has {{ gate.matured }}{{ d() }} matured outcome{{ '' if gate.matured == 1 else 's' }} from below the gate, fewer than it needs{% else %}The model has never seen an outcome below the gate{% endif %}, so this is not switched on. Ranking there is refused until {{ gate.needed }} worked leads from below the gate have matured labels, unless someone forces it.{% endif %}</p>
+    {% endif %}
+    {% endif %}
+  </section>
+</div>
+
+<hr class="rule">
+
+{# ---- limits ---- #}
+<section class="ld-sec" aria-labelledby="ld-limits">
+  <h2 id="ld-limits" class="kicker">What these numbers do not show</h2>
+  {% if not report %}{{ no_report() }}
+  {% else %}
+  <ul class="ld-limits">
+    {% if mock %}<li>A lead touched on its first day books {{ fresh_as_often }} because the generator was built that way, from BrightPath's answer 4 (a factor of {{ generator_factor }}).{% if speed_effect %} The outcomes recover {{ speed_effect.factor }}{{ d() }}.{% endif %} On a real portal the factor is measured.</li>
+    {% elif speed_effect %}<li>Leads first touched within a day booked {{ v(speed_effect.fast, '{}%') }}{% if speed_effect.n_fast is not none %} of {{ '{:,}'.format(speed_effect.n_fast) }}{% endif %}, later ones {{ v(speed_effect.slow, '{}%') }}{% if speed_effect.n_slow is not none %} of {{ '{:,}'.format(speed_effect.n_slow) }}{% endif %} (a factor of {{ speed_effect.factor }}). Which leads got fast touches was the SDRs' choice, so read it as a range.</li>{% endif %}
+    {% if precision %}<li>Precision on worked leads leans on which leads the SDRs chose. On worked test leads {% if precision.level %}the model and the cold-start table are level: {{ '%.3f'|format(precision.model) }} each{% elif precision.points_ahead %}the cold-start table is {{ 'a hair ' if precision.hair }}ahead of the model: {{ '%.3f'|format(precision.points) }} against {{ '%.3f'|format(precision.model) }}{% else %}the model is {{ 'a hair ' if precision.hair }}ahead of the cold-start table: {{ '%.3f'|format(precision.model) }} against {{ '%.3f'|format(precision.points) }}{% endif %} at K = {{ precision.k }}{{ d() }}.</li>{% endif %}
+    {% if ranking %}<li>The ranges resample the {{ ranking.months_word }} held-out months. They show how steady a gap is on this generator, not how sure a real portal would be.</li>{% endif %}
+    {% if mock and months %}<li>The months are the generator's clock, {{ months.span }}, not real dates.</li>{% endif %}
+    {% if gate and not gate.matured %}<li>Phase 2 has no outcomes yet.</li>{% endif %}
+  </ul>
+  {% endif %}
+</section>
+
+{% if report or queue_limits %}
+{% if mock %}
+<p class="footnote"><span class="dagger">†</span> Simulated · synthetic data. Every figure here comes from BrightPath-like history made by the generator{% if months and months.routed_months %} and {{ months.routed_word }} simulated month{{ '' if months.routed_months == 1 else 's' }} of AuxoCase routing{% endif %} on a mock HubSpot{% if report %}: <code>{{ report_path }}</code> (<code>python run.py eval</code>{% if report_written %}, {{ report_written }}{% endif %}{% if report.live %}, live model {{ report.live }}{% endif %}){% endif %}{% if queue_limits %}{{ ' and' if report else ':' }} <code>{{ queue_limits_path }}</code> (<code>python run.py queue-limits{% if setups %} --seeds {{ setups.seeds }}{% endif %}</code>{% if queue_limits_written %}, {{ queue_limits_written }}{% endif %}){% endif %}. It is not a forecast for a real portal. A real portal would measure instead what HubSpot recorded: demos per 1,000 new leads once each lead's label matures, {{ maturity_days }} days after it came in; ranked leads worked; demos booked; median hours from arrival to first touch; and the share touched within 24 hours, each with its n and period.{% if shared and shared.leads_text %} The lead counts behind per 1,000 come from the demo database: {{ shared.leads_text }}.{% elif shared %} Per 1,000 here divides by the brief's {{ '{:,}'.format(leads_per_month) }} new leads a month, not a count of the leads that arrived.{% endif %}</p>
+{% else %}
+<p class="footnote">Sources: {% if report %}<code>{{ report_path }}</code> (<code>python run.py eval</code>{% if report_written %}, {{ report_written }}{% endif %}){% endif %}{% if queue_limits %}{{ ' and ' if report }}<code>{{ queue_limits_path }}</code> (<code>python run.py queue-limits</code>, a simulation on a mock HubSpot){% endif %}. Per 1,000 divides by the brief's {{ '{:,}'.format(leads_per_month) }} new leads a month.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

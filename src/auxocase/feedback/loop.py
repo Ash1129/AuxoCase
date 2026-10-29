@@ -57,12 +57,18 @@ def sync_outcomes(hs: HubSpotClient, conn: sqlite3.Connection, since: Optional[d
     the training window plus maturity, ~13 months) keep the rows earlier syncs wrote; their outcomes are settled."""
     since = since or (clock(conn) - timedelta(days=400))
     contacts = [c for c in hs.list_contacts(created_since=since) if c.lifecycle_stage != "lead"]
+    # A lead the SDR skipped without touching was never worked, whatever status the skip left it in (L05).
+    skipped = {r["contact_id"] for r in conn.execute(
+        "SELECT contact_id FROM overrides WHERE action='skipped' EXCEPT SELECT contact_id FROM overrides WHERE action IN ('worked','junk') "
+        "EXCEPT SELECT contact_id FROM touches")}
     n_booked = n_won = n_worked = 0
     for c in contacts:
         meetings = hs.meetings_for_contact(c.id)
         deals = hs.deals_for_contact(c.id)
         # Assigned is not worked: the owner alone, with the status still NEW/OPEN, is a lead waiting in a queue (L05, item 34).
         worked = int(bool(c.hubspot_owner_id) and (c.hs_lead_status in TOUCHED_STATUSES or bool(meetings)))
+        if c.id in skipped and not meetings:
+            worked = 0
         booked = [m for m in meetings if m.outcome in ("SCHEDULED", "COMPLETED", "RESCHEDULED")]
         demo_at = min((m.start_time for m in booked), default=None)
         won = [d for d in deals if d.dealstage == "closedwon" or d.hs_is_closed_won]
