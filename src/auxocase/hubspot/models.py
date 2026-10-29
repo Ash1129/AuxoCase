@@ -47,6 +47,8 @@ AUXO_PROPERTIES = {
     "auxo_route": "enumeration",       # assigned | held | holdout | incomplete | review
     "auxo_review_flag": "string",      # why a person should look, or empty
     "auxo_holdout": "bool",            # routed regardless of score, for unbiased labels
+    "auxo_email_subject": "string",    # the first email drafted on assignment: tokens for the sequence's step one
+    "auxo_email_body": "string",
 }
 
 
@@ -101,6 +103,8 @@ class Contact:
     auxo_route: str = ""
     auxo_review_flag: str = ""
     auxo_holdout: bool = False
+    auxo_email_subject: str = ""
+    auxo_email_body: str = ""
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -140,6 +144,36 @@ class Owner:
     active: bool = True
     capacity_limit: int = 45       # assigned leads waiting for a first touch (WAITING_LEAD_STATUSES)
     team: str = "sdr"
+    meetings_link: str = ""        # the SDR's HubSpot meetings (booking) page, put in drafts so leads can pick a time
+
+
+@dataclass
+class Engagement:
+    """An email or call logged on a contact in HubSpot (H07): what an SDR's touch leaves behind.
+
+    `timestamp` is when it happened; `logged_at` is when HubSpot recorded it (hs_createdate), which is what
+    the first-touch poll pages by, since a call can be logged after the fact.
+    """
+    id: str
+    contact_id: str
+    type: str                      # EMAIL | CALL
+    direction: str                 # OUTGOING (from the SDR) | INCOMING (from the lead)
+    timestamp: datetime
+    owner_id: Optional[str] = None
+    subject: str = ""
+    connected: bool = False        # calls only: the SDR reached the lead
+    logged_at: datetime = field(default_factory=datetime.utcnow)
+
+
+@dataclass
+class SequenceEnrollment:
+    """A contact enrolled in a HubSpot sequence, sending from one SDR's connected inbox."""
+    id: str
+    contact_id: str
+    sequence_id: str
+    sender_email: str
+    enrolled_at: datetime
+    status: str = "ACTIVE"         # ACTIVE | FINISHED | UNENROLLED (HubSpot unenrolls on a reply or a booked meeting)
 
 
 @dataclass

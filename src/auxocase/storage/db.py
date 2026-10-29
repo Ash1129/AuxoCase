@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS hs_contacts (
   email_clicks_30d INTEGER, notes TEXT, hubspot_score INTEGER, hubspot_owner_id TEXT,
   createdate TEXT, lastmodifieddate TEXT,
   auxo_score REAL, auxo_probability REAL, auxo_rank INTEGER, auxo_reason TEXT, auxo_model_version TEXT,
-  auxo_scored_at TEXT, auxo_route TEXT, auxo_review_flag TEXT, auxo_holdout INTEGER
+  auxo_scored_at TEXT, auxo_route TEXT, auxo_review_flag TEXT, auxo_holdout INTEGER,
+  auxo_email_subject TEXT, auxo_email_body TEXT
 );
 CREATE INDEX IF NOT EXISTS hs_contacts_modified ON hs_contacts(lastmodifieddate);
 CREATE INDEX IF NOT EXISTS hs_contacts_owner ON hs_contacts(hubspot_owner_id);
@@ -60,7 +61,16 @@ CREATE TABLE IF NOT EXISTS hs_meetings (
 CREATE INDEX IF NOT EXISTS hs_meetings_contact ON hs_meetings(contact_id);
 CREATE INDEX IF NOT EXISTS hs_contacts_stage ON hs_contacts(lifecycle_stage);
 CREATE TABLE IF NOT EXISTS hs_owners (
-  id TEXT PRIMARY KEY, name TEXT, email TEXT, active INTEGER, capacity_limit INTEGER, team TEXT
+  id TEXT PRIMARY KEY, name TEXT, email TEXT, active INTEGER, capacity_limit INTEGER, team TEXT, meetings_link TEXT
+);
+CREATE TABLE IF NOT EXISTS hs_engagements (
+  id TEXT PRIMARY KEY, contact_id TEXT, type TEXT, direction TEXT, timestamp TEXT, owner_id TEXT, subject TEXT,
+  connected INTEGER, logged_at TEXT
+);
+CREATE INDEX IF NOT EXISTS hs_engagements_contact ON hs_engagements(contact_id);
+CREATE INDEX IF NOT EXISTS hs_engagements_logged ON hs_engagements(logged_at);
+CREATE TABLE IF NOT EXISTS hs_sequence_enrollments (
+  id TEXT PRIMARY KEY, contact_id TEXT, sequence_id TEXT, sender_email TEXT, enrolled_at TEXT, status TEXT
 );
 CREATE TABLE IF NOT EXISTS hs_tasks (
   id TEXT PRIMARY KEY, contact_id TEXT, owner_id TEXT, subject TEXT, body TEXT, status TEXT, created_at TEXT, due_at TEXT
@@ -117,6 +127,13 @@ CREATE TABLE IF NOT EXISTS channel_monitor (
 CREATE TABLE IF NOT EXISTS run_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, job TEXT, started_at TEXT, finished_at TEXT, status TEXT, detail TEXT
 );
+CREATE TABLE IF NOT EXISTS touches (
+  contact_id TEXT PRIMARY KEY, owner_id TEXT, engagement_id TEXT, type TEXT, touched_at TEXT, status_set TEXT, detected_at TEXT
+);
+CREATE TABLE IF NOT EXISTS outreach (
+  contact_id TEXT PRIMARY KEY, owner_id TEXT, subject TEXT, body TEXT, source TEXT, rejected TEXT,
+  sequence_id TEXT, enrollment_id TEXT, status TEXT, created_at TEXT
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 """
 
@@ -135,7 +152,9 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
 
 
 # Columns added after a database may already exist; CREATE TABLE IF NOT EXISTS does not add them.
-_ADDED_COLUMNS = {"hs_deals": {"closed_lost_reason": "TEXT"}, "outcomes": {"lead_created_at": "TEXT"}}
+_ADDED_COLUMNS = {"hs_deals": {"closed_lost_reason": "TEXT"}, "outcomes": {"lead_created_at": "TEXT"},
+                  "hs_owners": {"meetings_link": "TEXT"},
+                  "hs_contacts": {"auxo_email_subject": "TEXT", "auxo_email_body": "TEXT"}}
 
 
 def _migrate(conn: sqlite3.Connection) -> None:

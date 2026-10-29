@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Iterable, Optional, Protocol
 
-from .models import BatchResult, ChangeEvent, Company, Contact, Deal, Meeting, Owner, Task
+from .models import BatchResult, ChangeEvent, Company, Contact, Deal, Engagement, Meeting, Owner, SequenceEnrollment, Task
 
 
 class HubSpotClient(Protocol):
@@ -53,3 +53,14 @@ class HubSpotClient(Protocol):
     def meetings_since(self, since: datetime) -> list[Meeting]: ...
     def deals_for_contact(self, contact_id: str) -> list[Deal]: ...
     def meetings_for_contact(self, contact_id: str) -> list[Meeting]: ...
+
+    # --- activity: emails and calls logged on contacts ------------------
+    def engagements_logged_since(self, since: datetime) -> list[Engagement]:
+        """Emails and calls HubSpot recorded at or after `since` (hs_createdate), oldest first: the first-touch poll."""
+    def engagements_for_contact(self, contact_id: str) -> list[Engagement]:
+        """Every email and call on one contact, oldest first: what a follow-up draft is built from."""
+
+    # --- sequences ------------------------------------------------------
+    def enroll_in_sequence(self, contact_id: str, sequence_id: str, sender_email: str) -> Optional[SequenceEnrollment]:
+        """Enrol a contact in a sequence sending from `sender_email`; None when HubSpot refuses (already in a
+        sequence, unsubscribed, the sender's inbox not connected)."""

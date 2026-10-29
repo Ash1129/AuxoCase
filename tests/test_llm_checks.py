@@ -1,5 +1,6 @@
 """The code checkers around the model: nothing the model says changes a score unless the record supports it."""
 import json
+from datetime import datetime, timedelta
 
 from auxocase.llm.client import Offline
 from auxocase.llm.reason import check as reason_check, write_reason
@@ -110,7 +111,8 @@ def test_readers_accept_json_in_a_code_fence():
 # ---------------- first email ----------------
 from urllib.parse import parse_qs, urlparse
 
-from auxocase.llm.first_email import draft_first_email
+from auxocase.hubspot.models import Engagement
+from auxocase.llm.emails import draft_email, next_touch, with_booking_link
 
 EMAIL_NOTES = "They told us Granite Logistics is renewing with Gusto in March and want a comparison before then."
 EMAIL_SIGNALS = [{"type": "timeline", "quote": "in March and want a comparison before", "points": 4},
@@ -125,14 +127,14 @@ class Scripted:
         self.reply = reply
 
     def complete(self, system: str, user: str, max_tokens: int = 600) -> str:
-        assert user.startswith("TASK: first_email") and "renewing with Gusto in March and want a comparison before then." in user
+        assert user.startswith("TASK: outreach_email") and "renewing with Gusto in March and want a comparison before then." in user
         return self.reply
 
 
-def _email(llm):
-    return draft_first_email(llm, first_name="Laura", job_title="HR Director", company="Granite Logistics", channel="referral",
-                             referral_partner="Ledgerline CPA", reason="Ranked up because the lead was referred by a partner.",
-                             signals=EMAIL_SIGNALS, notes=EMAIL_NOTES, sender="Alex")
+def _email(llm, **kw):
+    return draft_email(llm, first_name="Laura", job_title="HR Director", company="Granite Logistics", channel="referral",
+                       referral_partner="Ledgerline CPA", reason="Ranked up because the lead was referred by a partner.",
+                       signals=EMAIL_SIGNALS, notes=EMAIL_NOTES, sender="Alex", **kw)
 
 
 def test_first_email_template_uses_the_positive_signals_quoted_words():
@@ -176,3 +178,54 @@ def test_first_email_mailto_carries_subject_and_body():
     assert parsed.scheme == "mailto" and parsed.path == "laura.ali79@granitelogistics.io"
     q = parse_qs(parsed.query)
     assert q["subject"] == [d.subject] and q["body"] == [d.body]
+
+
+T = datetime(2028, 10, 20, 9, 0)
+
+
+def _eng(kind, direction="OUTGOING", days=0, connected=False, subject=""):
+    return Engagement(id=f"e{days}{kind}{direction}", contact_id="1", type=kind, direction=direction,
+                      timestamp=T + timedelta(days=days), subject=subject, connected=connected)
+
+
+def test_next_touch_counts_emails_sent_and_stops_on_a_reply_or_after_three():
+    assert next_touch([]) == (1, "")
+    assert next_touch([_eng("EMAIL"), _eng("CALL", days=1)]) == (2, "")
+    assert next_touch([_eng("EMAIL"), _eng("EMAIL", days=3)]) == (3, "")
+    assert next_touch([_eng("EMAIL"), _eng("EMAIL", days=3), _eng("EMAIL", days=7)]) == (None, "finished")
+    assert next_touch([_eng("EMAIL"), _eng("EMAIL", "INCOMING", days=1)]) == (None, "replied")
+
+
+def test_follow_up_templates_build_on_what_happened():
+    history = [_eng("EMAIL", subject="Payroll at Granite Logistics"), _eng("CALL", days=2)]
+    d = _email(Offline(), touch=2, history=history)
+    assert d.touch == 2 and d.subject == "Re: Payroll at Granite Logistics"
+    assert "I also tried you by phone." in d.body and d.body.startswith("Hi Laura,")
+    d = _email(Offline(), touch=2, history=history + [_eng("CALL", days=3, connected=True)])
+    assert "Thanks again for taking my call." in d.body
+    d = _email(Offline(), touch=3, history=history)
+    assert d.subject == "Closing the loop" and "won't follow up again" in d.body
+
+
+def test_follow_up_from_claude_may_not_invent_a_conversation():
+    body = "Hi Laura,\n\nGreat speaking with you about the March renewal. Could we find a short call?\n\nAlex"
+    reply = json.dumps({"subject": "Following up", "body": body})
+    history = [_eng("EMAIL", subject="Payroll at Granite Logistics")]
+    d = _email(Scripted(reply), touch=2, history=history)
+    assert d.source == "template" and "conversation" in d.rejected
+    d = _email(Scripted(reply), touch=2, history=history + [_eng("CALL", days=1, connected=True)])
+    assert d.source == "llm"
+
+
+def test_the_booking_link_is_added_by_code_above_the_sign_off():
+    link = "https://meetings.brightpath.example/sdr1"
+    d = _email(Offline(), booking_link=link)
+    blocks = d.body.split("\n\n")
+    assert blocks[-1] == "Best,\nAlex" and blocks[-2].endswith(link)
+    q = parse_qs(urlparse(d.mailto("laura@example.com")).query)
+    assert link in q["body"][0]
+    good = json.dumps({"subject": "Before your March renewal",
+                       "body": "Hi Laura,\n\nLedgerline CPA mentioned your March renewal. Could we find a short call?\n\nBest,\nAlex"})
+    d = _email(Scripted(good), booking_link=link)
+    assert d.source == "llm" and d.body.split("\n\n")[-2].endswith(link)   # Claude never writes it; code adds it after the check
+    assert with_booking_link("Hi", "") == "Hi"

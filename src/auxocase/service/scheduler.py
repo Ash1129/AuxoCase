@@ -7,6 +7,8 @@ decides when to run them:
 |---------|-----------|-------------------------------------------------------------------|
 | score   | 5 min     | score leads that are new or changed, then refresh pool ranks      |
 | route   | 5 min     | fill free SDR slots, hold strong leads that waited, create tasks  |
+| touches | 1 min     | first email or call logged in HubSpot -> lead worked, slot refilled |
+| outreach| 1 min     | draft the first email for new assignments, enrol in the sequence  |
 | remind  | 60 min    | reminder task for assigned leads untouched past the SLA           |
 | sync    | 60 min    | pull meetings, deal stages and lead status back into outcomes     |
 | monitor | 1 day     | per-channel check of observed against predicted demo rate         |
@@ -22,14 +24,16 @@ Rules:
 - Every run writes one `run_log` row (`scheduled.<job>`): ok, skipped (the job
   had nothing it could do, e.g. too few labels to train) or failed. A failing
   job never stops the others.
-- Scoring reads at most `AUXO_SCORE_BATCH` changed leads per run, so a burst of
-  new leads cannot hold the loop for hours when Claude reads the notes.
+- Scoring reads at most `AUXO_SCORE_BATCH` changed leads per run, and outreach
+  drafts at most `AUXO_OUTREACH_BATCH`, so a burst of new leads cannot hold
+  the loop for hours when Claude reads the notes or writes the emails.
 - The scheduler can train a model but never approves one.
 
 Configuration (environment, e.g. `.env`): `AUXO_SCHEDULER` on/off (on by
 default under `run.py serve`, off for `create_app` in tests),
 `AUXO_EVERY_<JOB>_MIN` to change an interval (0 turns that job off),
-`AUXO_SCORE_BATCH`, `AUXO_SCHEDULER_TICK_S` for how often it checks.
+`AUXO_SCORE_BATCH`, `AUXO_OUTREACH_BATCH`, `AUXO_SEQUENCE_ID` (the HubSpot
+sequence new assignments join), `AUXO_SCHEDULER_TICK_S` for how often it checks.
 
 Timing uses wall-clock time, while the jobs use the service clock. On the demo
 data that clock is frozen at the end of the generated history: leads that were
@@ -52,6 +56,8 @@ from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
 from ..llm.client import make_llm
 from ..routing.engine import Router
+from ..routing.outreach import DEFAULT_LIMIT as DEFAULT_OUTREACH_BATCH, prepare_outreach
+from ..routing.touches import detect_first_touches
 from ..scoring.pipeline import Scorer, load_live_model
 from ..storage.db import connect, dumps, get_setting, now_iso, set_setting
 
@@ -73,6 +79,8 @@ class Job:
 DEFAULT_JOBS = (
     Job("score", 5, run_on_first_start=True),
     Job("route", 5, run_on_first_start=True),
+    Job("touches", 1, run_on_first_start=True),
+    Job("outreach", 1, run_on_first_start=True),
     Job("remind", 60),
     Job("sync", 60),
     Job("monitor", 24 * 60),
@@ -107,11 +115,12 @@ class Scheduler:
         self.llm = make_llm()
         self.jobs = jobs if jobs is not None else jobs_from_env()
         self.score_batch = score_batch or int(os.environ.get("AUXO_SCORE_BATCH") or DEFAULT_SCORE_BATCH)
+        self.outreach_batch = int(os.environ.get("AUXO_OUTREACH_BATCH") or DEFAULT_OUTREACH_BATCH)
         self.tick_s = tick_s or float(os.environ.get("AUXO_SCHEDULER_TICK_S") or DEFAULT_TICK_S)
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self.actions: dict[str, Callable[[], dict]] = {
-            "score": self._score, "route": self._route, "remind": self._remind,
+            "score": self._score, "route": self._route, "touches": self._touches, "outreach": self._outreach, "remind": self._remind,
             "sync": self._sync, "monitor": self._monitor, "train": self._train,
         }
 
@@ -131,6 +140,12 @@ class Scheduler:
         for x in d:
             counts[x.decision] = counts.get(x.decision, 0) + 1
         return counts
+
+    def _touches(self) -> dict:
+        return detect_first_touches(self.hs, self.conn)
+
+    def _outreach(self) -> dict:
+        return prepare_outreach(self.hs, self.conn, self.llm, limit=self.outreach_batch)
 
     def _remind(self) -> dict:
         return {"reminders": Router(self.hs, self.conn).re_alert_stale()}

@@ -27,8 +27,10 @@ from .models import (
     Company,
     Contact,
     Deal,
+    Engagement,
     Meeting,
     Owner,
+    SequenceEnrollment,
     Task,
 )
 
@@ -387,6 +389,39 @@ class MockHubSpot:
         rows = self.conn.execute("SELECT * FROM hs_meetings WHERE contact_id=? ORDER BY start_time, id", (contact_id,)).fetchall()
         return [_from_row(Meeting, r) for r in rows]
 
+    # ------------------------------------------------------------- activity
+    def engagements_logged_since(self, since: datetime) -> list[Engagement]:
+        self._count()
+        rows = self.conn.execute("SELECT * FROM hs_engagements WHERE logged_at >= ? ORDER BY logged_at, rowid",
+                                 (since.isoformat(),)).fetchall()
+        return [_from_row(Engagement, r) for r in rows]
+
+    def engagements_for_contact(self, contact_id: str) -> list[Engagement]:
+        self._count()
+        rows = self.conn.execute("SELECT * FROM hs_engagements WHERE contact_id=? ORDER BY timestamp, rowid", (contact_id,)).fetchall()
+        return [_from_row(Engagement, r) for r in rows]
+
+    # ------------------------------------------------------------ sequences
+    def enroll_in_sequence(self, contact_id: str, sequence_id: str, sender_email: str) -> Optional[SequenceEnrollment]:
+        """A contact can be in one sequence at a time, and only from a known sender, as on the real portal."""
+        self._count()
+        with self._write():
+            if self.conn.execute("SELECT 1 FROM hs_contacts WHERE id=?", (contact_id,)).fetchone() is None:
+                return None
+            if self.conn.execute("SELECT 1 FROM hs_owners WHERE email=? AND active=1", (sender_email,)).fetchone() is None:
+                return None
+            if self.conn.execute("SELECT 1 FROM hs_sequence_enrollments WHERE contact_id=? AND status='ACTIVE'", (contact_id,)).fetchone():
+                return None
+            e = SequenceEnrollment(id=self._next_id("hs_sequence_enrollments", "enr-"), contact_id=contact_id, sequence_id=sequence_id,
+                                   sender_email=sender_email, enrolled_at=datetime.fromisoformat(now_iso()))
+            _insert(self.conn, "hs_sequence_enrollments", _to_row(e))
+        return e
+
+    def sequence_enrollments(self, contact_id: str) -> list[SequenceEnrollment]:
+        """Mock-only: what the lead page shows the demo in place of HubSpot's sequence view."""
+        rows = self.conn.execute("SELECT * FROM hs_sequence_enrollments WHERE contact_id=? ORDER BY enrolled_at, rowid", (contact_id,)).fetchall()
+        return [_from_row(SequenceEnrollment, r) for r in rows]
+
     # ------------------------------------------------- mock-only: seeding
     def add_contact(self, contact: Contact, emit_event: bool = True) -> None:
         """Insert as HubSpot would on form submit; `emit_event=False` for history that was 'delivered' long ago."""
@@ -418,6 +453,19 @@ class MockHubSpot:
             _insert(self.conn, "hs_meetings", row)
             if emit_event:
                 self._enqueue(meeting.id, "meeting.creation", "", row["createdate"])
+
+    def log_engagement(self, contact_id: str, type: str, direction: str, at: datetime, owner_id: Optional[str] = None,
+                       subject: str = "", connected: bool = False) -> Engagement:
+        """What sending an email or logging a call in HubSpot leaves behind. A reply from the lead ends any active
+        sequence, as HubSpot's unenroll-on-reply does."""
+        e = Engagement(id=self._next_id("hs_engagements", "eng-"), contact_id=contact_id, type=type, direction=direction,
+                       timestamp=at, owner_id=owner_id, subject=subject, connected=connected,
+                       logged_at=datetime.fromisoformat(now_iso()))
+        with self._write():
+            _insert(self.conn, "hs_engagements", _to_row(e))
+            if direction == "INCOMING":
+                self.conn.execute("UPDATE hs_sequence_enrollments SET status='UNENROLLED' WHERE contact_id=? AND status='ACTIVE'", (contact_id,))
+        return e
 
     def simulate_sdr_activity(
         self, contact_id: str, owner_id: str, outcome: str, at: datetime,

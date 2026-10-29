@@ -29,6 +29,16 @@ definition:
 - `num_conversion_events` is used for form submissions and `hs_email_click`
   for email clicks; both are documented but the account may track them
   elsewhere.
+- First touch reads emails and calls. A call counts as connected when its
+  `hs_call_disposition` is HubSpot's default "Connected" outcome
+  (`CALL_CONNECTED_DISPOSITION`); accounts with custom call outcomes must
+  map theirs.
+- Sequence enrolment (`/automation/v4/sequences/enrollments`) needs the
+  `automation.sequences.enrollments.write` scope, a Sales or Service Hub seat
+  for the sender and the sender's inbox connected; the enrolling user is the
+  sender's HubSpot user ID, read from the owners list. Booking links come
+  from `/scheduler/v3/meetings/meeting-links` (scope `scheduler.meetings.meeting-link.read`);
+  without it drafts go out with no link.
 
 No network calls happen at import time or in the constructor.
 """
@@ -52,8 +62,10 @@ from .models import (
     Company,
     Contact,
     Deal,
+    Engagement,
     Meeting,
     Owner,
+    SequenceEnrollment,
     Task,
 )
 
@@ -103,6 +115,9 @@ COMPANY_PROPERTIES = ["name", "domain", "industry", "numberofemployees", "annual
 DEAL_PROPERTIES = ["dealstage", "amount", "createdate", "closedate", "hs_is_closed_won", "hubspot_owner_id", "hs_lastmodifieddate", "closed_lost_reason"]
 MEETING_PROPERTIES = ["hs_meeting_start_time", "hs_meeting_outcome", "hubspot_owner_id", "hs_timestamp", "hs_createdate"]
 TASK_PROPERTIES = ["hs_task_subject", "hs_task_body", "hs_task_status", "hubspot_owner_id", "hs_timestamp", "hs_createdate"]
+EMAIL_PROPERTIES = ["hs_timestamp", "hs_email_direction", "hs_email_subject", "hubspot_owner_id", "hs_createdate"]
+CALL_PROPERTIES = ["hs_timestamp", "hs_call_direction", "hs_call_disposition", "hubspot_owner_id", "hs_createdate"]
+CALL_CONNECTED_DISPOSITION = "f240bbac-87c9-4f6e-bf70-924b57d47db7"   # HubSpot's default "Connected" call outcome
 
 # Association type IDs (H06, H07).
 ASSOC_TASK_TO_CONTACT = 204
@@ -160,6 +175,7 @@ class RealHubSpot:
         self._queue: deque[ChangeEvent] = deque()
         self._last_search = 0.0
         self._owner_cache: tuple[float, list[Owner]] = (0.0, [])
+        self._user_ids: dict[str, str] = {}    # owner email -> HubSpot user ID (sequence enrolment acts as a user)
 
     # ---------------------------------------------------------------- http
     @property
@@ -283,6 +299,20 @@ class RealHubSpot:
         )
 
     @staticmethod
+    def _engagement_from_json(object_type: str, obj: dict, contact_id: str) -> Engagement:
+        p = obj.get("properties", {}) or {}
+        if object_type == "emails":
+            direction = "INCOMING" if p.get("hs_email_direction") == "INCOMING_EMAIL" else "OUTGOING"
+            kind, subject, connected = "EMAIL", p.get("hs_email_subject") or "", False
+        else:
+            direction = "INCOMING" if p.get("hs_call_direction") == "INBOUND" else "OUTGOING"
+            kind, subject, connected = "CALL", "", p.get("hs_call_disposition") == CALL_CONNECTED_DISPOSITION
+        logged = _parse_dt(p.get("hs_createdate")) or datetime.utcnow()
+        return Engagement(id=f"{object_type}-{obj['id']}", contact_id=contact_id, type=kind, direction=direction,
+                          timestamp=_parse_dt(p.get("hs_timestamp")) or logged, owner_id=p.get("hubspot_owner_id") or None,
+                          subject=subject, connected=connected, logged_at=logged)
+
+    @staticmethod
     def _task_from_json(obj: dict, contact_id: str) -> Task:
         p = obj.get("properties", {}) or {}
         return Task(
@@ -322,6 +352,8 @@ class RealHubSpot:
             }
             if type_ == "enumeration":
                 body["options"] = [{"label": v, "value": v} for v in ("assigned", "held", "holdout", "incomplete", "review")]
+            if name == "auxo_email_body":
+                body["fieldType"] = "textarea"
             if type_ == "bool":
                 body["type"], body["fieldType"] = "enumeration", "booleancheckbox"
                 body["options"] = [{"label": "Yes", "value": "true"}, {"label": "No", "value": "false"}]
@@ -454,9 +486,14 @@ class RealHubSpot:
                         id=str(o["id"]), name=name, email=o.get("email", ""), active=not o.get("archived", False),
                         team=(teams[0].get("name") if teams else "sdr") or "sdr",
                     ))
+                    if o.get("userId"):
+                        self._user_ids[o.get("email", "")] = str(o["userId"])
                 after = data.get("paging", {}).get("next", {}).get("after")
                 if not after:
                     break
+            links = self._meeting_links()
+            for o in owners:
+                o.meetings_link = links.get(self._user_ids.get(o.email, ""), "")
             self._owner_cache = (time.monotonic(), owners)
         return [o for o in owners if o.active] if active_only else list(owners)
 
@@ -557,3 +594,58 @@ class RealHubSpot:
             "properties": MEETING_PROPERTIES,
         }
         return [self._meeting_from_json(o, contact_id) for o in self._search_all("meetings", body, max_results=200)]
+
+    # ------------------------------------------------------------- activity
+    def engagements_logged_since(self, since: datetime) -> list[Engagement]:
+        out: list[Engagement] = []
+        for object_type, props in (("emails", EMAIL_PROPERTIES), ("calls", CALL_PROPERTIES)):
+            body = {
+                "filterGroups": [{"filters": [{"propertyName": "hs_createdate", "operator": "GTE", "value": str(_ms(since))}]}],
+                "sorts": [{"propertyName": "hs_createdate", "direction": "ASCENDING"}],
+                "properties": props,
+            }
+            objs = self._search_all(object_type, body, max_results=2000)
+            contacts = self._contact_ids_for(object_type, [str(o["id"]) for o in objs])
+            out += [self._engagement_from_json(object_type, o, contacts[str(o["id"])]) for o in objs if str(o["id"]) in contacts]
+        return sorted(out, key=lambda e: e.logged_at)
+
+    def engagements_for_contact(self, contact_id: str) -> list[Engagement]:
+        out: list[Engagement] = []
+        for object_type, props in (("emails", EMAIL_PROPERTIES), ("calls", CALL_PROPERTIES)):
+            body = {
+                "filterGroups": [{"filters": [{"propertyName": "associations.contact", "operator": "EQ", "value": contact_id}]}],
+                "properties": props,
+            }
+            out += [self._engagement_from_json(object_type, o, contact_id) for o in self._search_all(object_type, body, max_results=200)]
+        return sorted(out, key=lambda e: e.timestamp)
+
+    # ------------------------------------------------------------ sequences
+    def enroll_in_sequence(self, contact_id: str, sequence_id: str, sender_email: str) -> Optional[SequenceEnrollment]:
+        if not self._user_ids:
+            self.list_owners(active_only=False)
+        user_id = self._user_ids.get(sender_email)
+        if not user_id:
+            return None
+        try:          # 400 when the contact is already enrolled or unsubscribed, or the inbox isn't connected
+            resp = self._request("POST", "/automation/v4/sequences/enrollments", params={"userId": user_id},
+                                 json={"contactId": contact_id, "sequenceId": sequence_id, "senderEmail": sender_email})
+        except HubSpotError:
+            return None
+        if resp.status_code == 404:
+            return None
+        data = resp.json()
+        return SequenceEnrollment(id=str(data.get("id", "")), contact_id=contact_id, sequence_id=sequence_id,
+                                  sender_email=sender_email, enrolled_at=_parse_dt(data.get("enrolledAt")) or datetime.utcnow())
+
+    def _meeting_links(self) -> dict[str, str]:
+        """HubSpot user ID -> the user's personal booking page; empty without the scheduler scope."""
+        try:
+            data = self._request("GET", "/scheduler/v3/meetings/meeting-links", params={"limit": 100}).json()
+        except HubSpotError:
+            return {}
+        out: dict[str, str] = {}
+        for r in data.get("results", []):
+            user = str(r.get("organizerUserId") or "")
+            if user and r.get("link") and (user not in out or r.get("type") == "PERSONAL_LINK"):
+                out[user] = r["link"]
+        return out

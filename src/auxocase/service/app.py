@@ -30,8 +30,10 @@ from ..feedback import loop as fb
 from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
 from ..llm.client import make_llm
-from ..llm.first_email import draft_first_email, sender_first_name
+from ..llm.emails import Draft, next_touch
 from ..routing.engine import Router
+from ..routing.outreach import draft_for, log_demo_activity, prepare_outreach, stored_draft
+from ..routing.touches import detect_first_touches
 from ..scoring.pipeline import Scorer, load_live_model
 from ..storage.db import DEFAULT_DB, connect, dumps, get_setting, loads, now_iso
 from . import scheduler as sched
@@ -123,15 +125,36 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             score["signals"] = loads(score["signals"]) or {}
         history = [dict(r) for r in st.conn.execute("SELECT * FROM overrides WHERE contact_id=? ORDER BY id", (contact_id,)).fetchall()]
         routing = [dict(r) for r in st.conn.execute("SELECT * FROM routing_log WHERE contact_id=? ORDER BY id", (contact_id,)).fetchall()]
+        activity = st.hs.engagements_for_contact(contact_id)
+        touch, no_draft = next_touch(activity) if c.email else (None, "no email address")
+        stored = stored_draft(st.conn, contact_id)
         email = None
-        if draft and c.email:
+        if draft and touch:
             # Drafted on request only: with Claude on, a draft is a model call, too slow for every page view.
-            owner = next((o for o in st.hs.list_owners() if o.id == c.hubspot_owner_id), None)
-            email = draft_first_email(st.llm, first_name=c.first_name, job_title=c.job_title, company=co.name if co else "",
-                                      channel=c.channel, referral_partner=c.referral_partner, reason=c.auxo_reason or "",
-                                      signals=(score or {}).get("signals", {}).get("signals", []), notes=c.notes,
-                                      sender=sender_first_name(owner.name if owner else None))
-        return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, c=c, co=co, score=score, history=history, routing=routing, email=email))
+            email, no_draft = draft_for(st.hs, st.conn, st.llm, c, activity)
+        elif touch == 1 and stored:
+            email = Draft(stored["subject"], stored["body"], stored["source"], stored["rejected"] or "", st.llm.name)
+        first_touch = st.conn.execute("SELECT * FROM touches WHERE contact_id=?", (contact_id,)).fetchone()
+        mock = isinstance(st.hs, MockHubSpot)
+        return TEMPLATES.TemplateResponse(request, "lead.html", ctx(
+            request, c=c, co=co, score=score, history=history, routing=routing, email=email, touch=touch, no_draft=no_draft,
+            stored=stored, activity=activity, first_touch=dict(first_touch) if first_touch else None, mock=mock,
+            enrollments=st.hs.sequence_enrollments(contact_id) if mock else []))
+
+    @app.post("/lead/{contact_id}/hubspot")
+    def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form("")):
+        """Demo only: stand in for HubSpot, where the SDR sends the email or logs the call, then run the first-touch
+        check at once (on a real portal the `touches` job polls HubSpot every minute)."""
+        if not isinstance(st.hs, MockHubSpot):
+            raise HTTPException(404)
+        try:
+            log_demo_activity(st.hs, st.conn, contact_id, kind, subject)
+        except KeyError:
+            raise HTTPException(404)
+        except ValueError:
+            raise HTTPException(400, "unknown activity")
+        detect_first_touches(st.hs, st.conn)
+        return RedirectResponse(f"/lead/{contact_id}", status_code=303)
 
     @app.post("/lead/{contact_id}/action")
     def lead_action(contact_id: str, owner_id: str = Form(...), action: str = Form(...), note: str = Form(""), move: int = Form(0)):
@@ -244,6 +267,14 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         except ValueError as e:
             raise HTTPException(400, str(e))
         return {"version": model.version, "family": model.family, "metrics": m.to_dict()}
+
+    @app.post("/jobs/touches")
+    def job_touches():
+        return detect_first_touches(st.hs, st.conn)
+
+    @app.post("/jobs/outreach")
+    def job_outreach(limit: int = 10):
+        return prepare_outreach(st.hs, st.conn, st.llm, limit=limit)
 
     @app.post("/jobs/realert")
     def job_realert():

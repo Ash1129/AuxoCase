@@ -40,20 +40,22 @@ def _log(conn):
 
 def test_first_start_runs_score_and_route_then_each_job_on_its_interval(db):
     s = Scheduler(db, jobs=list(DEFAULT_JOBS), score_batch=10)
-    assert s.run_due(T0) == [("score", "ok"), ("route", "ok")]       # the slow jobs wait one interval
-    assert s.run_due(T0 + timedelta(minutes=1)) == []
-    assert [j for j, _ in s.run_due(T0 + timedelta(minutes=5))] == ["score", "route"]
+    fast = ["touches", "outreach"]
+    assert s.run_due(T0) == [("score", "ok"), ("route", "ok"), ("touches", "ok"), ("outreach", "ok")]   # the slow jobs wait one interval
+    assert s.run_due(T0 + timedelta(seconds=30)) == []
+    assert [j for j, _ in s.run_due(T0 + timedelta(minutes=1))] == fast
+    assert [j for j, _ in s.run_due(T0 + timedelta(minutes=5))] == ["score", "route"] + fast
     hour = s.run_due(T0 + timedelta(minutes=61))
-    assert [j for j, _ in hour] == ["score", "route", "remind", "sync"] and all(st == "ok" for _, st in hour)
-    assert [j for j, _ in s.run_due(T0 + timedelta(days=1, minutes=1))] == ["score", "route", "remind", "sync", "monitor"]
+    assert [j for j, _ in hour] == ["score", "route"] + fast + ["remind", "sync"] and all(st == "ok" for _, st in hour)
+    assert [j for j, _ in s.run_due(T0 + timedelta(days=1, minutes=1))] == ["score", "route"] + fast + ["remind", "sync", "monitor"]
     assert _log(s.conn)[:2] == [("scheduled.score", "ok"), ("scheduled.route", "ok")]
-    assert len(_log(s.conn)) == 2 + 2 + 4 + 5
+    assert len(_log(s.conn)) == 4 + 2 + 4 + 6 + 7
 
 
 def test_a_restart_does_not_rerun_jobs_that_ran_recently(db):
     Scheduler(db, jobs=list(DEFAULT_JOBS), score_batch=10).run_due(T0)
     again = Scheduler(db, jobs=list(DEFAULT_JOBS), score_batch=10)
-    assert again.run_due(T0 + timedelta(minutes=2)) == []
+    assert [j for j, _ in again.run_due(T0 + timedelta(minutes=2))] == ["touches", "outreach"]   # only the one-minute jobs
 
 
 def test_a_failing_job_is_logged_and_the_rest_still_run(db):

@@ -9,11 +9,29 @@
   <div class="card"><div class="k">Model</div><div class="v small">{{ c.auxo_model_version }}</div></div>
 </div>
 <h2>Reach out</h2>
-{% if c.email %}<p><a href="mailto:{{ c.email }}">{{ c.email }}</a>{% if not email %} · <a href="/lead/{{ c.id }}?draft=1" onclick="this.textContent='Drafting… this takes a few seconds'; this.style.pointerEvents='none'">Draft a first email</a>{% endif %}</p>
-{% if email %}<div class="card draft"><p><b>Subject:</b> {{ email.subject }}</p><p class="draft-body">{{ email.body }}</p>
+{% set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} %}
+{% if not c.email %}<p class="muted">No email address on record.</p>{% else %}
+<p><a href="mailto:{{ c.email }}">{{ c.email }}</a>
+{% if first_touch %} · <span class="pill good">first touch {{ first_touch.touched_at|replace('T', ' ') }}: {{ first_touch.type|lower }} seen in HubSpot</span>{% endif %}</p>
+{% if stored %}<p class="small muted">On assignment the first email was drafted{% if stored.status == 'enrolled' %} and the lead enrolled in sequence {{ stored.sequence_id }}: step one waits in the SDR's HubSpot tasks for them to approve and send{% elif stored.status == 'refused' %}, but HubSpot refused the sequence enrolment (already in a sequence, unsubscribed, or the SDR's inbox isn't connected){% else %}; no sequence is set (AUXO_SEQUENCE_ID), so it waits here{% endif %}.</p>{% endif %}
+{% if activity %}<table><tr><th>When</th><th>In HubSpot</th><th>Detail</th></tr>
+{% for e in activity %}<tr><td class="small">{{ e.timestamp }}</td><td>{{ 'Email' if e.type == 'EMAIL' else 'Call' }} {{ 'from the SDR' if e.direction == 'OUTGOING' else 'from the lead' }}</td><td class="small muted">{{ e.subject if e.type == 'EMAIL' else ('connected' if e.connected else 'no answer') }}</td></tr>{% endfor %}
+</table>{% endif %}
+{% if not touch %}<p class="muted">{% if no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif no_draft == 'finished' %}All three emails have gone; nothing more to draft.{% else %}{{ no_draft }}{% endif %}</p>
+{% else %}
+{% if email %}<div class="card draft"><p class="small muted">Draft: {{ labels[email.touch] }}</p><p><b>Subject:</b> {{ email.subject }}</p><p class="draft-body">{{ email.body }}</p>
 <p><a href="{{ email.mailto(c.email) }}"><button type="button">Open in your email app</button></a>
-<span class="small muted">Drafted by {{ 'Claude (' ~ email.llm ~ ')' if email.source == 'llm' else 'the template' }}{% if email.rejected %} · Claude's draft was set aside: {{ email.rejected }}{% endif %}. Edit it before you send; nothing is sent from here.</span></p></div>{% endif %}
-{% else %}<p class="muted">No email address on record.</p>{% endif %}
+<span class="small muted">Drafted by {{ 'Claude' if email.source == 'llm' else 'the template' }}{% if email.rejected %} · Claude's draft was set aside: {{ email.rejected }}{% endif %}. Edit it before you send; nothing is sent from here.</span></p></div>{% endif %}
+<p><a href="/lead/{{ c.id }}?draft=1" onclick="this.textContent='Drafting… this takes a few seconds'; this.style.pointerEvents='none'">{{ 'Draft it again' if email else 'Draft the ' ~ labels[touch] }}</a></p>
+{% endif %}
+{% if mock and c.hubspot_owner_id %}<div class="card draft"><p class="small"><b>Demo: act in HubSpot.</b> On a real portal the SDR sends the email or logs the call in HubSpot, and AuxoCase sees it within a minute; here these buttons stand in for HubSpot.</p>
+<form method="post" action="/lead/{{ c.id }}/hubspot"><input type="hidden" name="subject" value="{{ email.subject if email else '' }}">
+<button name="kind" value="email">Send {{ 'this ' ~ labels[email.touch] if email else 'an email' }}</button>
+<button name="kind" value="call_no_answer" class="quiet">Log a call: no answer</button>
+<button name="kind" value="call_connected" class="quiet">Log a call: connected</button>
+<button name="kind" value="reply" class="quiet">The lead replies</button></form>
+{% for en in enrollments %}<p class="small muted">Sequence {{ en.sequence_id }} from {{ en.sender_email }}: {{ en.status|lower }}</p>{% endfor %}</div>{% endif %}
+{% endif %}
 <h2>Why</h2>
 <p>{{ c.auxo_reason }}</p>
 {% if score %}

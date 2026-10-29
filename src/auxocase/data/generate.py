@@ -520,7 +520,8 @@ def generate(conn: sqlite3.Connection, months: int = 14, seed: int = 7, start: d
     factory = _LeadFactory(conn)
     as_of = datetime.combine(_add_months(start, months), datetime.min.time())
 
-    owners = [Owner(id=str(900 + i), name=f"{FIRST_NAMES[i]} {LAST_NAMES[-1 - i]}", email=f"sdr{i + 1}@brightpath.example", capacity_limit=OPEN_LEAD_LIMIT)
+    owners = [Owner(id=str(900 + i), name=f"{FIRST_NAMES[i]} {LAST_NAMES[-1 - i]}", email=f"sdr{i + 1}@brightpath.example", capacity_limit=OPEN_LEAD_LIMIT,
+                    meetings_link=f"https://meetings.brightpath.example/sdr{i + 1}")
               for i in range(OWNER_COUNT)]
     with tx(conn):
         for o in owners:

@@ -21,6 +21,7 @@ from typing import Optional
 # (stale_lead_factor, capacity_limit). A factor of 1.0 means no freshness discount.
 CONFIGS: list[tuple[float, int]] = [(1.0, 3), (0.5, 3), (0.5, 2), (0.5, 1)]
 FIRST_SEED = 101
+DEMO_SEQUENCE_ID = "demo-sdr-first-touch"
 
 
 def build_demo_base(db_path: Path | str, months: int = 36, seed: int = 7, llm=None) -> dict:
@@ -31,7 +32,7 @@ def build_demo_base(db_path: Path | str, months: int = 36, seed: int = 7, llm=No
     from ..llm.client import make_llm
     from ..routing.engine import Router
     from ..scoring.pipeline import Scorer, load_live_model
-    from ..storage.db import connect
+    from ..storage.db import connect, set_setting
     from .generate import generate
 
     conn = connect(db_path)
@@ -49,6 +50,8 @@ def build_demo_base(db_path: Path | str, months: int = 36, seed: int = 7, llm=No
     out["scored"] = len(Scorer(hs, conn, load_live_model(conn), llm or make_llm()).rescore_pool())
     d = Router(hs, conn).run()
     out["routing"] = {k: sum(1 for x in d if x.decision == k) for k in {x.decision for x in d}}
+    # The mock accepts any sequence ID; on a real portal AUXO_SEQUENCE_ID names the SDRs' sequence.
+    set_setting(conn, "sequence_id", DEMO_SEQUENCE_ID)
     conn.close()
     return out
 

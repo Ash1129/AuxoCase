@@ -28,6 +28,10 @@ HubSpot (mock in development, real API in production)
 │ round robin skipping full SDRs; compare-and-set owner; task due in 4 h   │
 │ above the line, unplaced 24 h → held queue with timestamp → manager page │
 │ no first touch in 24 h → reminder task                                    │
+│ on assignment: first email drafted, checked, booking link added;         │
+│ written to the lead and enrolled in the SDR's HubSpot sequence (step 1   │
+│ waits for the SDR to approve); follow-ups drafted from the activity      │
+│ first email or call logged in HubSpot → worked, slot refilled (1 min)    │
 └──────────────────────────────────────────────────────────────────────────┘
    │ hubspot_owner_id + task; SDR works / skips / junks / nudges rank (logged)
    ▼
@@ -96,4 +100,4 @@ BrightPath noted HubSpot has MCP servers. They suit read-only assistant use, suc
 
 ## Personal data
 
-The model sees role, company and behaviour, never names, emails or note text (features.py). The enrichment step should send the tool only what it needs to match a lead (email domain, company) and ask only for title and size. The LLM sees note text only, returns quotes, and the quotes are the only part kept. Reasons never contain contact details (reason.py rejects them). Logs hold contact ids, not names. The real client needs only `crm.objects.contacts.read/write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.owners.read`, `crm.schemas.contacts.write` and task scopes (H08). A lead's score and reason are HubSpot properties, so HubSpot's own GDPR deletion removes them with the contact (H10); the service's `scores` and `overrides` tables are keyed by contact id and should be purged on the same signal in production.
+The model sees role, company and behaviour, never names, emails or note text (features.py). The enrichment step should send the tool only what it needs to match a lead (email domain, company) and ask only for title and size. The LLM sees note text only, returns quotes, and the quotes are the only part kept. Reasons never contain contact details (reason.py rejects them). Logs hold contact ids, not names. The real client needs only `crm.objects.contacts.read/write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.owners.read`, `crm.schemas.contacts.write` and task scopes (H08), plus `crm.objects.emails.read` and `crm.objects.calls.read` to see the first touch, `automation.sequences.enrollments.write` to enrol leads in a sequence and `scheduler.meetings.meeting-link.read` for booking links. Drafts carry no score, rank or note text beyond what the checker allows, and nothing is sent without an SDR. A lead's score and reason are HubSpot properties, so HubSpot's own GDPR deletion removes them with the contact (H10); the service's `scores` and `overrides` tables are keyed by contact id and should be purged on the same signal in production.
