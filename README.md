@@ -12,22 +12,24 @@ Three years of BrightPath-like history, generated to match the brief and BrightP
 
 | | Before (history) | After (AuxoCase) |
 |---|---|---|
-| Demos booked per month | 172 | **291** (+69%) |
-| Median hours from lead to first touch | 71 | **17** |
+| Demos booked per month | 172 | **283** (+64%) |
+| Median hours from lead to first touch | 71 | **16** |
 | Leads touched within 24 hours | 21% | **66%** |
 
 Where the gain comes from, one simulated month per setup, averaged over five seeds (`python run.py queue-limits`; ranges in `docs/blueprint/brief-answers.md`):
 
 | Routing | Touched within 24 h | Demos |
 |---|---|---|
-| Model ranking, deep queues (3 leads per SDR), no freshness | 15% | 216 |
-| + freshness discount (a lead past its first day is worth half) | 31% | 218 |
-| + two waiting leads per SDR | 50% | 255 |
-| + one waiting lead per SDR, refilled as they touch it | 65% | 289 |
+| Model ranking, deep queues (3 leads per SDR), no freshness | 15% | 209 |
+| + freshness discount (a lead past its first day is worth half) | 30% | 223 |
+| + two waiting leads per SDR | 50% | 249 |
+| + one waiting lead per SDR, refilled as they touch it | 64% | 281 |
 
-The ranking alone is worth about a quarter more demos than the history's 172 a month. The freshness discount doubles how many leads are touched within a day, but by itself it adds no demos while queues are three deep. The rest of the gain comes from small queues, which let SDRs reach the best leads inside their first day. On the mock, "a lead touched within a day books twice as often" is BrightPath's answer 4 built into the generator. On the real portal it is measured: the report estimates the factor from outcomes (0.46 here, against the 0.5 routing uses).
+The ranking alone is worth about a fifth more demos than the history's 172 a month. The freshness discount doubles how many leads are touched within a day, but by itself adds only a few demos while queues are three deep (the ranges overlap). The rest of the gain comes from small queues, which let SDRs reach the best leads inside their first day. On the mock, "a lead touched within a day books twice as often" is BrightPath's answer 4 built into the generator. On the real portal it is measured: the report estimates the factor from outcomes (0.46 here, against the 0.5 routing uses).
 
-How good is the ranking? Measured only on leads the SDRs chose to work, the model beats HubSpot's points at the capacity line (precision@299 0.448 against 0.375 in the time-ordered validation window), but it barely differs from the service's own channel-aware cold-start table. Across a whole month of MQLs, worked or not, the generator's truth shows the real gap. The model's top third would book at **0.69** if touched promptly, against **0.56** for HubSpot's points and 0.52 at random, with 0.74 the best possible. The worked-leads-only number understates it because the SDRs' past choices hide it (L05). The exploration slice is how real data closes that gap over time. Calibration holds (expected calibration error 0.007).
+How good is the ranking? Every number here is on months the model never trained on: it is fitted on the oldest months, chosen and calibrated on the next two, and tested once on the newest two, and the model that goes live is the one tested. On leads the SDRs chose to work, it beats HubSpot's points at the capacity line (precision@299 0.448 against 0.375), but barely differs from the service's own channel-aware cold-start table (0.445). The worked-leads number understates the gap, because the SDRs' past choices hide it (L05). On the generator's truth, for every MQL worked or not across six held-out months, the model's 500 a month would book **348** demos if worked promptly, against **292** for HubSpot's points (+55 a month, +53 to +58 across months), 345 for the cold-start table and 262 at random, with 376 the best possible. Calibration holds (expected calibration error 0.012). The exploration slice is how real data closes the worked-leads gap over time.
+
+Ranking every lead, not only the MQLs, would add about **48 demos a month** on the same 500 (+45 to +51): 358 of them would be leads HubSpot's gate keeps out, almost all referrals and webinars. The model has never seen an outcome below the gate, though, so this is phase 2: it waits until the exploration slice has worked leads from there (`docs/ARCHITECTURE.md`).
 
 What the data says for BrightPath beyond the scores:
 

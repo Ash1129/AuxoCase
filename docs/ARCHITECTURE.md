@@ -41,7 +41,9 @@ HubSpot (mock in development, real API in production)
 │ monitor: p-chart per channel, observed vs predicted demo rate, n<30 held │
 │ loss reasons: free text → fixed category with a checked quote, by size   │
 │ retrain on a sliding 12-month window of mature labels; LR vs GBT on      │
-│ time-split precision@500; Platt calibration on the validation window     │
+│ train / calibrate / test months: fit on the oldest, choose the family    │
+│ and Platt-calibrate on the next two, report the newest two once; the     │
+│ model tested is the model that goes live (no refit)                      │
 │ candidate → metrics beside the live model → marketing AND sales approve  │
 │ → live; previous model kept as shadow for one cycle                      │
 │ → pool rescored on the new model, best-ranked leads first                │
@@ -93,7 +95,7 @@ Routing by channel from HubSpot's own source fields; the AI reads free text only
 
 ## Phase 2: scoring below the MQL gate
 
-The pool holds MQLs only, because that is the process the brief describes and the only leads with outcome labels. But HubSpot's gate gives nothing for a blank title or size, so most referral and webinar leads never reach MQL, and ranking within the MQLs cannot bring them back. The evaluation's MQL-gate table shows the size of that loss. Once the exploration slice has run for a few months, setting `pool_stages` to `marketingqualifiedlead,lead` lets the model replace the gate. Do that only after the exploration slice includes leads from below the gate: until then the model has no labels there.
+The pool holds MQLs only, because that is the process the brief describes and the only leads with outcome labels. But HubSpot's gate gives nothing for a blank title or size, so most referral and webinar leads never reach MQL, and ranking within the MQLs cannot bring them back. The evaluation's MQL-gate table shows where that loss falls, and its capacity head to head sizes it: on the generator's truth, the same 500 a month drawn from every lead instead of the MQLs would book about 48 more demos (+45 to +51 across held-out months), with about 358 of the 500 coming from below the gate, almost all referrals and webinars. Once the exploration slice has run for a few months, setting `pool_stages` to `marketingqualifiedlead,lead` lets the model replace the gate. Do that only after the exploration slice includes leads from below the gate: until then the model has no labels there.
 
 ## HubSpot's MCP server
 

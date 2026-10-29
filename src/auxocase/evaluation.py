@@ -1,9 +1,13 @@
 """The evaluation report: the numbers both teams look at, written to docs/evaluation.md.
 
 What it reports and why (L03, L04, L05, L12, L13):
-- precision and lift at the capacity cut-off (K=500 a month) for the live
-  model against the points model and HubSpot's own score, on a time-ordered
-  validation window, computed on worked leads only and said to be so;
+- precision and lift at the capacity cut-off for the live model against the
+  points model and HubSpot's own score, on its test months only (never
+  trained or calibrated on), computed on worked leads only and said to be so;
+- on the mock, AUXOAI's capacity head to head: for each held-out month, the
+  demos each ranker's 500 would book on the generator's truth, worked or
+  not, same timing for all, with a range from resampling months, and the
+  same for ranking every lead instead of the MQLs only;
 - AUC-PR beside its baseline, Brier and ECE with the reliability table;
 - predicted vs observed demo rate by channel, the brief's own complaint;
 - the exploration slice: how many holdout leads were worked and how they
@@ -23,6 +27,7 @@ from typing import Optional
 from pathlib import Path
 
 import numpy as np
+import pandas as pd
 
 from .feedback import loop as fb
 from .hubspot.client import HubSpotClient
@@ -43,9 +48,13 @@ def evaluate(hs: HubSpotClient, conn: sqlite3.Connection) -> dict:
     out["live"] = live["version"] if live else None
     out["metrics"] = loads(live["metrics"]) if live else None
 
-    # HubSpot's points vs ours on the same labelled rows (worked leads only).
+    # HubSpot's points vs ours on the same labelled rows (worked leads only), in the live model's test months: the
+    # months it never trained on or calibrated on. Without them (a model from before the three-way split) there is
+    # no fair comparison on worked leads, and the section is left out rather than scored in-sample.
     table = fb.build_training_table(hs, conn, window_months=14)
-    m = table.label_state.isin(["booked", "worked_no_demo"]).to_numpy()
+    test_months = (out["metrics"] or {}).get("test_months") or []
+    in_test = pd.to_datetime(table.created).dt.strftime("%Y-%m").isin(test_months).to_numpy()
+    m = table.label_state.isin(["booked", "worked_no_demo"]).to_numpy() & in_test
     y = (table.label_state[m] == "booked").astype(int).to_numpy()
     out["labelled_rows"] = int(m.sum())
     out["positives"] = int(y.sum())
@@ -56,9 +65,9 @@ def evaluate(hs: HubSpotClient, conn: sqlite3.Connection) -> dict:
         p, _ = score_frame(model, rows)
         ids = table.contact_ids[m].tolist()
         hub = np.array([(hs.get_contact(i).hubspot_score if hs.get_contact(i) else 0) for i in ids], dtype=float)
-        k = min(500, len(y))
+        k = int(round(len(y) / 3))       # capacity is a third of the MQL pool, applied to the labelled rows (as in training)
         out["head_to_head"] = {
-            "k": k,
+            "k": k, "months": test_months,
             "model_precision_at_k": round(precision_at_k(y, np.asarray(p), k), 4),
             "points_table_precision_at_k": round(precision_at_k(y, table.points[m].to_numpy().astype(float), k), 4),
             "hubspot_score_precision_at_k": round(precision_at_k(y, hub, k), 4),
@@ -76,7 +85,7 @@ def evaluate(hs: HubSpotClient, conn: sqlite3.Connection) -> dict:
     out["overrides"] = {row["action"]: {"n": row["n"], "booked": row["booked"] or 0} for row in ov}
     if live:
         from .scoring.model import DemoModel as _DM
-        out["truth_check"] = whole_pool_truth_check(hs, conn, _DM.load(Path(live["artifact_path"])))
+        out["capacity_head_to_head"] = capacity_head_to_head(hs, conn, _DM.load(Path(live["artifact_path"])))
     out["speed_to_lead"] = fb.speed_to_lead(conn)
     out["success_by_month"] = fb.success_by_month(conn)
     out["speed_effect"] = fb.speed_effect(conn)
@@ -92,29 +101,86 @@ def evaluate(hs: HubSpotClient, conn: sqlite3.Connection) -> dict:
     return out
 
 
-def whole_pool_truth_check(hs: HubSpotClient, conn: sqlite3.Connection, model, days: int = 31) -> Optional[dict]:
-    """Mock only. Rank the newest `days` of MQLs (worked or not) by the model and by HubSpot's score, and average
-    the generator's hidden demo chance (touched promptly) in each top third: what each ranker would deliver if
-    the SDRs worked its list. Real data cannot do this; the exploration slice estimates it over months."""
+def capacity_head_to_head(hs: HubSpotClient, conn: sqlite3.Connection, model, capacity: int = 500, max_months: int = 6,
+                          boot: int = 2000, seed: int = 17) -> Optional[dict]:
+    """Mock only. For each month the live model never trained on (its test months and every month since), the
+    `capacity` leads each ranker would put in front of the SDRs and the demos they would book if worked promptly:
+    the sum of the generator's hidden demo chances, worked or not. Timing is the same for every ranker, so this
+    is the ranking alone, not speed. Two pools: the MQLs HubSpot's gate lets through (what the service ranks
+    today) and every lead that arrived (what ranking below the gate would rank). Months are resampled for a
+    range. Real data cannot do this: unworked leads have no outcome, which is what the exploration slice is for."""
     if not conn.execute("SELECT 1 FROM sim_truth LIMIT 1").fetchone():
+        return None
+    metrics = model.metrics
+    test_months = getattr(metrics, "test_months", None)
+    if not test_months or not getattr(metrics, "held_out", False):
         return None
     import random
     from .data.generate import true_demo_probability, truth_for
     from .scoring.features import feature_row
     from .scoring.model import score_frame
-    since = clock(conn) - timedelta(days=days)
-    pool = [c for stage in ("marketingqualifiedlead", "salesqualifiedlead", "opportunity", "customer")
-            for c in hs.list_contacts(lifecycle_stage=stage, created_since=since)]   # every MQL, whatever happened since
-    if len(pool) < 100:
+    from .scoring.points import points_score
+
+    start, now = datetime.strptime(min(test_months), "%Y-%m"), clock(conn)
+    by_month: dict[str, list] = {}
+    for c in hs.list_contacts(created_since=start):
+        if c.createdate < now:
+            by_month.setdefault(c.createdate.strftime("%Y-%m"), []).append(c)
+    sizes = sorted(len(v) for v in by_month.values())
+    if not sizes:
         return None
-    companies = {c.company_id: hs.get_company(c.company_id) for c in pool if c.company_id}
-    p_model, _ = score_frame(model, [feature_row(c, companies.get(c.company_id)) for c in pool])
-    truth = np.array([true_demo_probability(c, companies.get(c.company_id), random.Random(0), truth_for(conn, c.id)) for c in pool])
-    hub = np.array([c.hubspot_score or 0 for c in pool], dtype=float)
-    k = max(1, len(pool) // 3)
-    top = lambda s: round(float(truth[np.argsort(-np.asarray(s, dtype=float), kind="stable")[:k]].mean()), 3)
-    return {"n": len(pool), "k": k, "model": top(p_model), "hubspot_score": top(hub), "random": round(float(truth.mean()), 3),
-            "best_possible": round(float(np.sort(truth)[-k:].mean()), 3)}
+    whole = [m for m in sorted(by_month) if len(by_month[m]) >= 0.6 * sizes[len(sizes) // 2]][-max_months:]
+    companies: dict = {}
+    rows, below_gate_channels = [], {}
+    for month in whole:
+        leads = sorted(by_month[month], key=lambda c: c.id)
+        for c in leads:
+            if c.company_id and c.company_id not in companies:
+                companies[c.company_id] = hs.get_company(c.company_id)
+        co = [companies.get(c.company_id) for c in leads]
+        p_model, _ = score_frame(model, [feature_row(c, k) for c, k in zip(leads, co)])
+        p_model = np.asarray(p_model)
+        truth = np.array([true_demo_probability(c, k, random.Random(0), truth_for(conn, c.id)) for c, k in zip(leads, co)])
+        hub = np.array([c.hubspot_score or 0 for c in leads], dtype=float)
+        pts = np.array([points_score(c, k) for c, k in zip(leads, co)], dtype=float)
+        mql = np.array([c.lifecycle_stage != "lead" for c in leads])
+
+        def demos(score: np.ndarray, pool: np.ndarray) -> float:
+            idx = np.flatnonzero(pool)
+            top = idx[np.argsort(-score[idx], kind="stable")[:capacity]]
+            return float(truth[top].sum())
+
+        everyone = np.ones(len(leads), bool)
+        k_mql = min(capacity, int(mql.sum()))
+        idx = np.flatnonzero(everyone)
+        top_all = idx[np.argsort(-p_model, kind="stable")[:capacity]]
+        for i in top_all:
+            if not mql[i]:
+                below_gate_channels[leads[i].channel] = below_gate_channels.get(leads[i].channel, 0) + 1
+        rows.append({
+            "month": month, "leads": len(leads), "mqls": int(mql.sum()),
+            "hubspot": demos(hub, mql), "points": demos(pts, mql), "model": demos(p_model, mql),
+            "random": float(truth[mql].mean() * k_mql), "best_mql": demos(truth, mql),
+            "model_all": demos(p_model, everyone), "best_all": demos(truth, everyone),
+            "below_gate_picked": int((~mql[top_all]).sum()),
+        })
+    if not rows:
+        return None
+    arms = ("hubspot", "points", "model", "random", "best_mql", "model_all", "best_all")
+    mean = {a: round(float(np.mean([r[a] for r in rows])), 1) for a in arms}
+    rng = np.random.default_rng(seed)
+
+    def ranged(a: str, b: str) -> dict:
+        d = np.array([r[a] - r[b] for r in rows])
+        sims = d[rng.integers(0, len(d), size=(boot, len(d)))].mean(axis=1)
+        return {"mean": round(float(d.mean()), 1), "lo": round(float(np.percentile(sims, 2.5)), 1),
+                "hi": round(float(np.percentile(sims, 97.5)), 1)}
+
+    return {"months": [r["month"] for r in rows], "capacity": capacity, "per_month": rows, "mean": mean,
+            "model_vs_hubspot": ranged("model", "hubspot"), "model_vs_points": ranged("model", "points"),
+            "all_vs_mql": ranged("model_all", "model"),
+            "below_gate_picked": round(float(np.mean([r["below_gate_picked"] for r in rows])), 0),
+            "below_gate_by_channel": {k: round(v / len(rows)) for k, v in sorted(below_gate_channels.items(), key=lambda kv: -kv[1])}}
 
 
 def write_report(hs: HubSpotClient, conn: sqlite3.Connection, path: Path) -> str:
@@ -141,26 +207,50 @@ def write_report(hs: HubSpotClient, conn: sqlite3.Connection, path: Path) -> str
     L += ["All precision figures are computed on leads an SDR actually worked, because unworked leads have no label. They are biased by the SDRs' past choices until the exploration slice has run for a few months (knowledge base L05).", ""]
     if e.get("head_to_head"):
         h = e["head_to_head"]
-        L += ["## Head to head at the capacity line", "", f"K = {h['k']} (one month of SDR capacity), {e['labelled_rows']} labelled leads, {e['positives']} demos.", "",
+        L += ["## Head to head on worked leads, in the test months", "",
+              f"The live model's test months ({', '.join(h['months'])}): it never trained or calibrated on them. "
+              f"K = {h['k']}, a third of the {e['labelled_rows']} worked leads there ({e['positives']} demos), as capacity is a third of the MQLs.", "",
               "| Ranker | Precision@K |", "|---|---|",
               f"| AuxoCase live model | **{h['model_precision_at_k']}** |",
               f"| Points table (channel-aware, cold start) | {h['points_table_precision_at_k']} |",
               f"| HubSpot's current points (title, size, pages) | {h['hubspot_score_precision_at_k']} |",
               f"| Random (base rate) | {h['random_precision']} |", ""]
-    t = e.get("truth_check")
+    t = e.get("capacity_head_to_head")
     if t:
-        L += ["## Across the whole pool, on the generator's truth (mock only)", "",
-              f"The newest month's {t['n']} MQLs, worked or not, ranked by each ranker; the average hidden chance of a demo, if touched promptly, in each top third ({t['k']} leads). "
-              "On leads the SDRs chose, HubSpot's score barely loses (above); across everything, it barely beats random.", "",
-              "| Ranker | Demo chance in the top third |", "|---|---|",
-              f"| AuxoCase live model | **{t['model']}** |", f"| HubSpot's current points | {t['hubspot_score']} |",
-              f"| Random | {t['random']} |", f"| Best possible (the truth itself) | {t['best_possible']} |", ""]
+        mn, cap = t["mean"], t["capacity"]
+        mv, ap = t["model_vs_hubspot"], t["all_vs_mql"]
+        L += ["## Capacity head to head on held-out months, on the generator's truth (mock only)", "",
+              f"For each of {len(t['months'])} months the live model never trained on ({', '.join(t['months'])}), the {cap} leads each ranker would hand the SDRs, "
+              f"and the demos they would book if worked promptly: the sum of the generator's hidden demo chances, worked or not. Every ranker gets the same timing, "
+              "so this is the ranking alone; faster follow-up comes on top. Ranges resample the months (2.5th to 97.5th percentile) and say how steady the gap is "
+              "on this generator, not how sure a real portal would be.", "",
+              "| Who gets the 500 | Demos a month |", "|---|---|",
+              f"| HubSpot's points, top of the MQLs | {mn['hubspot']} |",
+              f"| Points table, top of the MQLs | {mn['points']} |",
+              f"| AuxoCase model, top of the MQLs (today) | **{mn['model']}** |",
+              f"| Random MQLs | {mn['random']} |",
+              f"| Best possible among the MQLs | {mn['best_mql']} |",
+              f"| AuxoCase model, top of every lead (below the gate too) | **{mn['model_all']}** |",
+              f"| Best possible among every lead | {mn['best_all']} |", "",
+              f"The model over HubSpot's points: {mv['mean']:+} demos a month ({mv['lo']:+} to {mv['hi']:+}). "
+              f"Ranking every lead over ranking the MQLs only: {ap['mean']:+} ({ap['lo']:+} to {ap['hi']:+}); "
+              f"about {t['below_gate_picked']:.0f} of the {cap} would be leads HubSpot's gate kept out"
+              + (" (" + ", ".join(f"{c} {n}" for c, n in t["below_gate_by_channel"].items()) + ")" if t["below_gate_by_channel"] else "") + ". "
+              "The model learned from worked MQLs only, so how it ranks below the gate is a guess the exploration slice must check before it is used.", "",
+              "| Month | HubSpot | Model (MQLs) | Model (every lead) | Best (every lead) |", "|---|---|---|---|---|"]
+        L += [f"| {r['month']} | {r['hubspot']:.0f} | {r['model']:.0f} | {r['model_all']:.0f} | {r['best_all']:.0f} |" for r in t["per_month"]] + [""]
     if e.get("metrics"):
         m = e["metrics"]
-        L += ["## Validation window (time-ordered)", "", f"Months {', '.join(m['validation_months'])}: precision@{m['k']} {m['precision_at_k']} vs HubSpot's points {m['hubspot_precision_at_k']} (lift {m['lift_at_k']}x) and the service's cold-start table {m['points_precision_at_k']} (lift {m['lift_over_points']}x); AUC-PR {m['auc_pr']} against a base rate of {m['base_rate']}; AUC-ROC {m['auc_roc']}; Brier {m['brier']}; ECE {m['ece']}. Challenger: {m['challenger']}.", "",
+        months = m.get("test_months") or m.get("validation_months") or []
+        split = (f"Trained on {m['train_months'][0]} to {m['train_months'][-1]} ({m.get('train_rows', '?')} worked leads), family chosen and calibrated on "
+                 f"{', '.join(m['calibration_months'])} ({m.get('calibration_rows', '?')}), tested once on {', '.join(months)} ({m.get('test_rows', '?')})."
+                 if m.get("train_months") else f"Months {', '.join(months)} (a model from before the three-way split: it was refitted on them, so these are not held out).")
+        L += ["## The live model's test months", "", split + f" Precision@{m['k']} {m['precision_at_k']} vs HubSpot's points {m['hubspot_precision_at_k']} "
+              f"(lift {m['lift_at_k']}x) and the service's cold-start table {m['points_precision_at_k']} (lift {m['lift_over_points']}x); AUC-PR {m['auc_pr']} "
+              f"against a base rate of {m['base_rate']}; AUC-ROC {m['auc_roc']}; Brier {m['brier']}; ECE {m['ece']}. Challenger: {m['challenger']}.", "",
               "| Predicted | n | Observed |", "|---|---|---|"] + [f"| {b['lo']}–{b['hi']} | {b['n']} | {b['observed']} |" for b in m["calibration_bins"]] + [""]
     if e.get("by_channel_all_history"):
-        L += ["## By channel (all labelled history)", "", "| Channel | n | Observed demo rate | Predicted |", "|---|---|---|---|"]
+        L += ["## By channel (test months, worked leads)", "", "| Channel | n | Observed demo rate | Predicted |", "|---|---|---|---|"]
         L += [f"| {c} | {v['n']} | {v['observed']} | {v['predicted']} |" for c, v in e["by_channel_all_history"].items()] + [""]
     if e.get("slices"):
         L += ["## Ranked slice vs exploration slice", "", "| Slice | Assigned | Worked | Booked |", "|---|---|---|---|"]

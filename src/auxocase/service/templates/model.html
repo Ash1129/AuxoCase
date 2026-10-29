@@ -21,7 +21,7 @@
 <h2>{{ r.version }}: calibration and channels</h2>
 <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
 <table><tr><th>Predicted</th><th class="num">n</th><th class="num">Observed</th></tr>{% for b in r.metrics.calibration_bins %}<tr><td>{{ b.lo }}–{{ b.hi }}</td><td class="num">{{ b.n }}</td><td class="num">{{ b.observed }}</td></tr>{% endfor %}</table>
-<table><tr><th>Channel (validation)</th><th class="num">n</th><th class="num">Observed</th><th class="num">Predicted</th></tr>{% for ch, v in r.metrics.by_channel.items() %}<tr><td>{{ ch }}</td><td class="num">{{ v.n }}</td><td class="num">{{ v.observed }}</td><td class="num">{{ v.predicted }}</td></tr>{% endfor %}</table>
+<table><tr><th>Channel (test months)</th><th class="num">n</th><th class="num">Observed</th><th class="num">Predicted</th></tr>{% for ch, v in r.metrics.by_channel.items() %}<tr><td>{{ ch }}</td><td class="num">{{ v.n }}</td><td class="num">{{ v.observed }}</td><td class="num">{{ v.predicted }}</td></tr>{% endfor %}</table>
 </div>
 {% endfor %}
 <h2>Channel monitor (p-chart, worked leads)</h2>

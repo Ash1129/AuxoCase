@@ -12,7 +12,9 @@ from auxocase.routing.engine import Router
 from auxocase.scoring.pipeline import Scorer, load_live_model
 from auxocase.pool import pool_contacts
 from auxocase.scoring.points import POINTS_VERSION
-from auxocase.evaluation import whole_pool_truth_check
+from auxocase.evaluation import capacity_head_to_head
+from auxocase.scoring.features import frame
+from auxocase.scoring.model import precision_at_k
 from auxocase.storage.db import connect
 
 
@@ -47,10 +49,12 @@ def test_trained_model_beats_points_at_capacity_and_is_calibrated(world):
     # On leads the SDRs chose to work, HubSpot's score has little range left to lose on, so the observed lift is
     # small (L05). It must not be worse...
     assert m.lift_at_k >= 0.95, m
-    # ...and across the whole newest month of MQLs, on the generator's truth, the model's top third must book
-    # clearly more than HubSpot's top third. This is what the exploration slice lets real data show over time.
-    t = whole_pool_truth_check(hs, conn, model)
-    assert t["model"] >= 1.08 * t["hubspot_score"], t
+    # ...and in held-out months, on the generator's truth for every MQL worked or not, the model's 500 must book
+    # clearly more than HubSpot's 500. This is what the exploration slice lets real data show over time.
+    t = capacity_head_to_head(hs, conn, model)
+    assert t["months"][0] == m.test_months[0] and t["mean"]["model"] >= 1.05 * t["mean"]["hubspot"], t
+    assert t["model_vs_hubspot"]["lo"] <= t["model_vs_hubspot"]["mean"] <= t["model_vs_hubspot"]["hi"]
+    assert t["mean"]["best_all"] >= t["mean"]["model_all"] and t["mean"]["best_mql"] >= t["mean"]["model"]
     assert m.ece < 0.08, m
     # Referral and webinar must be predicted higher than paid ads, the brief's complaint about the points model.
     bc = m.by_channel
@@ -121,3 +125,21 @@ def test_held_queue_when_everyone_is_full(world):
     conn.execute("INSERT OR IGNORE INTO held_queue(contact_id, held_at, reason) VALUES('no-such-lead', '2020-01-01T00:00:00', 'test')")
     router.run()
     assert conn.execute("SELECT released_by FROM held_queue WHERE contact_id='no-such-lead'").fetchone()["released_by"] == "left the pool"
+
+
+def test_the_test_months_are_held_out_and_the_live_model_is_the_one_measured(world):
+    """Fit on the oldest months, choose and calibrate on the next, report the newest: no month in two roles, and no
+    refit after the test, so the reported precision is what the deployed model does on those months."""
+    conn, hs = world
+    model, m = fb.train_candidate(hs, conn, notes="split check")
+    assert m.held_out and m.train_months and m.calibration_months and m.test_months
+    assert max(m.train_months) < min(m.calibration_months) <= max(m.calibration_months) < min(m.test_months)
+    assert not set(m.train_months) & set(m.test_months) and not set(m.calibration_months) & set(m.test_months)
+    assert m.challenger["chosen_on"] == "calibration months"
+    table = fb.build_training_table(hs, conn)
+    from auxocase.scoring.model import _labelled
+    from auxocase.storage.db import clock
+    rows = _labelled(table, clock(conn)) & table.created.dt.strftime("%Y-%m").isin(m.test_months).to_numpy()
+    y = (table.label_state[rows] == "booked").astype(int).to_numpy()
+    p = model.predict_proba(frame(table.X[rows].to_dict("records")))
+    assert len(y) == m.test_rows and round(precision_at_k(y, p, m.k), 4) == m.precision_at_k
