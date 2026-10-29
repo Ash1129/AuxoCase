@@ -196,9 +196,17 @@
   {%- endif %}
   {%- endif %}
   {% if caller is defined %}{{ caller() }}{% endif %}
-  {% if d.mock and c.hubspot_owner_id -%}
+  {%- set automated = d.get('tier2') and d.get('tier2').status == 'sent' and not c.hubspot_owner_id %}
+  {% if d.mock and (c.hubspot_owner_id or automated) -%}
   <section class="demo" aria-labelledby="demo-{{ c.id }}">
     <h3 class="kicker" id="demo-{{ c.id }}">Demo only · mock portal</h3>
+    {% if automated -%}
+    <p class="small muted"><b>Demo: the lead answers.</b> This lead is in the automated sequence (phase 3). On a real portal a reply lands in the sender's HubSpot inbox and AuxoCase sees it within a minute, handing the lead to that SDR.</p>
+    <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
+      <input type="hidden" name="subject" value="{{ d.get('tier2').subject or '' }}">
+      <button class="btn" type="submit" name="kind" value="reply">The lead replies</button>
+    </form>
+    {%- else -%}
     <p class="small muted"><b>Demo: act in HubSpot.</b> These buttons stand in for HubSpot. On a real portal {{ d.owner.name if d.owner else 'the SDR' }} sends the email or logs the call in HubSpot, and AuxoCase sees it within a minute.{% if where == 'queue' %} Each one opens the lead page afterwards.{% endif %}</p>
     <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
       <input type="hidden" name="subject" value="{{ d.email.subject if d.email else '' }}">
@@ -207,6 +215,7 @@
       <button class="btn" type="submit" name="kind" value="call_connected">Log a call: connected</button>
       <button class="btn" type="submit" name="kind" value="reply">The lead replies</button>
     </form>
+    {%- endif %}
   </section>
   {%- endif %}
 </section>

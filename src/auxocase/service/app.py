@@ -35,6 +35,7 @@ from ..llm.client import make_llm
 from ..routing.engine import Router
 from ..routing.outreach import log_demo_activity, prepare_outreach
 from ..routing.touches import detect_first_touches
+from ..routing.tier2 import detect_replies, run_tier2
 from ..scoring.pipeline import Scorer, load_live_model
 from ..storage.db import DEFAULT_DB, clock, connect, dumps, get_setting, loads, now_iso
 from . import scheduler as sched
@@ -58,7 +59,7 @@ class State:
         self.hs: HubSpotClient = _make_client(self.conn)
         if isinstance(self.hs, MockHubSpot):
             self.hs.ensure_properties()      # a demo database from before a new auxo_* property gets it; the real portal: go-live step 1
-        self.llm = make_llm()
+        self.llm = make_llm(conn=self.conn)
         self.model = load_live_model(self.conn)
 
     def scorer(self) -> Scorer:
@@ -145,6 +146,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         except ValueError:
             raise HTTPException(400, "unknown activity")
         detect_first_touches(st.hs, st.conn)
+        detect_replies(st.hs, st.conn)
         return RedirectResponse(f"/lead/{contact_id}", status_code=303)
 
     @app.post("/lead/{contact_id}/action")
@@ -252,7 +254,11 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
     @app.post("/jobs/route")
     def job_route():
         d = st.router().run()
-        return {"decisions": {k: sum(1 for x in d if x.decision == k) for k in {x.decision for x in d}}}
+        out = {"decisions": {k: sum(1 for x in d if x.decision == k) for k in {x.decision for x in d}}}
+        t2 = run_tier2(st.hs, st.conn, st.llm)
+        if t2["emailed"] or t2["control"] or t2["expired"]:
+            out["automated"] = t2
+        return out
 
     @app.post("/jobs/sync")
     def job_sync():
@@ -321,7 +327,7 @@ def _rescore_in_background(db_path, hs: HubSpotClient) -> None:
     conn = connect(db_path)
     try:
         client = MockHubSpot(conn) if isinstance(hs, MockHubSpot) else hs
-        Scorer(client, conn, load_live_model(conn), make_llm()).rescore_stale()
+        Scorer(client, conn, load_live_model(conn), make_llm(conn=conn)).rescore_stale()
     finally:
         conn.close()
 

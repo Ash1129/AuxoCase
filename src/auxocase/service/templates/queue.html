@@ -89,7 +89,7 @@
   <h2 class="kicker" id="q-waiting">Also waiting · first touch due</h2>
   <ul class="list">
     {% for e in others_waiting %}<li><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a>
-      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · touch by {{ e.clock.touch_by }}, {{ e.clock.age }} since arrival</p>{{ ld.marks(e.c) }}</li>
+      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · touch by {{ e.clock.touch_by }}, {{ e.clock.age }} since arrival{% if e.replied %} · <b>replied to the automated email {{ e.replied }}</b>: answer this one first{% endif %}</p>{{ ld.marks(e.c) }}</li>
     {% endfor %}
   </ul>
 </section>

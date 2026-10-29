@@ -29,6 +29,7 @@ from typing import Optional
 
 from ..hubspot.client import HubSpotClient
 from ..hubspot.models import WAITING_LEAD_STATUSES, Contact, Engagement
+from ..llm import usage
 from ..llm.client import LLM
 from ..llm.emails import Draft, draft_email, next_touch, sender_first_name
 from ..storage.db import clock, get_setting, loads, now_iso, set_setting
@@ -84,7 +85,8 @@ def prepare_outreach(hs: HubSpotClient, conn: sqlite3.Connection, llm: LLM, limi
         if c is None or owner is None or c.hubspot_owner_id != owner.id or c.hs_lead_status not in WAITING_LEAD_STATUSES:
             counts["passed_over"] += 1
             continue
-        draft, _ = draft_for(hs, conn, llm, c)
+        with usage.reference(c.id):
+            draft, _ = draft_for(hs, conn, llm, c)
         if draft is None or draft.touch != 1:
             counts["passed_over"] += 1          # already emailed, or no address: nothing for step one
             continue

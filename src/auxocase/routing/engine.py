@@ -56,6 +56,7 @@ DEFAULT_TEAM_CAPACITY_PER_MONTH = 500    # the brief: 12 SDRs work about 500 MQL
 DEFAULT_LINE_HORIZON_DAYS = 7
 DEFAULT_HOLD_AFTER_HOURS = 24            # an above-line lead unplaced this long goes to the manager
 DEFAULT_FRESH_HOURS = 24
+REPLY_REASON = "replied to automated outreach"     # phase 3: a lead answering the sequence jumps the ranking
 EXPLORATION_CREDIT = "exploration_slot_credit"
 BELOW_GATE_CREDIT = "below_gate_slot_credit"
 
@@ -112,9 +113,15 @@ class Router:
     def pool(self, now: Optional[datetime] = None) -> list[Contact]:
         """Scored leads in the pool, most valuable to touch now first."""
         now = now or clock(self.conn)
+        # Phase 3: a lead in the automated sequence is out of the SDRs' pool until it replies or the sequence ends,
+        # and a lead that replied is warm, so it goes first whatever its old below-line score: the next free slot
+        # is its, including one that a full team had to put in the held queue.
+        automated, replied = set(), set()
+        for r in self.conn.execute("SELECT contact_id, status FROM tier2 WHERE status IN ('sent', 'replied')"):
+            (automated if r["status"] == "sent" else replied).add(r["contact_id"])
         rows = [c for c in pool_contacts(self.hs, self.conn)
-                if c.auxo_probability is not None and c.auxo_route != "incomplete"]
-        rows.sort(key=lambda c: (-priority(self.conn, c.auxo_probability, c.createdate, now), c.createdate))
+                if c.auxo_probability is not None and c.auxo_route != "incomplete" and c.id not in automated]
+        rows.sort(key=lambda c: (c.id not in replied, -priority(self.conn, c.auxo_probability, c.createdate, now), c.createdate))
         return rows
 
     def free_slots(self) -> tuple[dict[str, int], list[Owner], int]:
@@ -195,7 +202,7 @@ class Router:
     def _score_with_live_model(self, contacts: list[Contact]) -> None:
         from ..llm.client import make_llm
         from ..scoring.pipeline import Scorer, load_live_model
-        Scorer(self.hs, self.conn, load_live_model(self.conn), make_llm()).score_batch(contacts)
+        Scorer(self.hs, self.conn, load_live_model(self.conn), make_llm(conn=self.conn)).score_batch(contacts)
 
     def _line_probability(self, pool: list[Contact], now: datetime) -> Optional[float]:
         """The value at the rank the team reaches in the line horizon at its monthly capacity."""
@@ -205,8 +212,22 @@ class Router:
         c = pool[min(k, len(pool)) - 1]
         return priority(self.conn, c.auxo_probability, c.createdate, now)
 
-    def _next_owner(self, owners: list[Owner], counts: dict[str, int]) -> Optional[Owner]:
-        """Round robin starting after the last assigned owner, skipping anyone at their limit."""
+    def assign_now(self, contact: Contact, reason: str, prefer_owner_id: Optional[str] = None,
+                   now: Optional[datetime] = None) -> RoutingDecision:
+        """Hand one lead out ahead of the ranking (a reply to automated outreach): to the preferred SDR if they have
+        a slot, else the next in rotation, else the held queue."""
+        now = now or clock(self.conn)
+        counts, owners, _ = self.free_slots()
+        if not owners:
+            return self._log(RoutingDecision(contact.id, "held", reason="no active SDRs"), counts)
+        return self._assign_one(contact, owners, counts, False, now, reason, prefer_owner_id)
+
+    def _next_owner(self, owners: list[Owner], counts: dict[str, int], prefer: Optional[str] = None) -> Optional[Owner]:
+        """Round robin starting after the last assigned owner, skipping anyone at their limit. A preferred owner
+        with room comes first and leaves the rotation where it was."""
+        for o in owners:
+            if prefer and o.id == prefer and counts.get(o.id, 0) < o.capacity_limit:
+                return o
         last = get_setting(self.conn, f"rotation:{self.team}")
         order = sorted(owners, key=lambda o: o.id)
         start = 0
@@ -221,7 +242,7 @@ class Router:
         return None
 
     def _assign_one(self, contact: Contact, owners: list[Owner], counts: dict[str, int],
-                    is_holdout: bool, now: datetime, reason: Optional[str] = None) -> RoutingDecision:
+                    is_holdout: bool, now: datetime, reason: Optional[str] = None, prefer: Optional[str] = None) -> RoutingDecision:
         missing = _missing_fields(contact)
         if missing:
             self.hs.batch_update_contacts([(contact.id, {"auxo_route": "incomplete", "auxo_review_flag": "missing: " + ", ".join(missing)})])
@@ -230,19 +251,22 @@ class Router:
             fresh = self.hs.get_contact(contact.id)
             if fresh is None or fresh.hubspot_owner_id:
                 return self._log(RoutingDecision(contact.id, "already_owned", owner_id=fresh.hubspot_owner_id if fresh else None), counts)
-            owner = self._next_owner(owners, counts)
+            owner = self._next_owner(owners, counts, prefer)
             if owner is None:
                 self.conn.execute("INSERT OR IGNORE INTO held_queue(contact_id, held_at, reason) VALUES(?,?,?)",
-                                  (contact.id, now.isoformat(timespec="seconds"), "all SDRs at capacity"))
+                                  (contact.id, now.isoformat(timespec="seconds"), (reason + "; " if reason else "") + "all SDRs at capacity"))
                 self.hs.batch_update_contacts([(contact.id, {"auxo_route": "held"})])
-                return self._log(RoutingDecision(contact.id, "held", reason="all SDRs at capacity"), counts)
+                return self._log(RoutingDecision(contact.id, "held", reason=(reason + "; " if reason else "") + "all SDRs at capacity"), counts)
             if not self.hs.set_owner(contact.id, owner.id, expected_current=None):
                 return self._log(RoutingDecision(contact.id, "already_owned"), counts)
             counts[owner.id] = counts.get(owner.id, 0) + 1
-            set_setting(self.conn, f"rotation:{self.team}", owner.id)
+            if owner.id != prefer:
+                set_setting(self.conn, f"rotation:{self.team}", owner.id)
             subject = f"New lead to qualify: rank {contact.auxo_rank or '?'}, {round(100 * (contact.auxo_probability or 0))}% demo likelihood"
             if is_holdout:
                 subject = "Calibration lead (please work like any other): " + subject
+            elif reason == REPLY_REASON:
+                subject = "Replied to your automated email: " + subject
             task = self.hs.create_task(owner.id, contact.id, subject, contact.auxo_reason or "", due_at=now + timedelta(hours=self.task_due_hours))
             self.hs.batch_update_contacts([(contact.id, {"auxo_route": "assigned", "auxo_holdout": bool(is_holdout)})])
             below_gate = self._mark_below_gate(fresh)

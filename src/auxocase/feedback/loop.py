@@ -110,10 +110,13 @@ def build_training_table(hs: HubSpotClient, conn: sqlite3.Connection, window_mon
     start = as_of - timedelta(days=30 * window_months)
     outcomes = {r["contact_id"]: dict(r) for r in conn.execute("SELECT * FROM outcomes").fetchall()}
     holdouts = {r["contact_id"] for r in conn.execute("SELECT DISTINCT contact_id FROM routing_log WHERE decision='holdout_assigned'").fetchall()}
+    # Phase 3: a lead the automated sequence emailed had a different treatment from an SDR's touch, which is what the
+    # model predicts; its outcome is the experiment's to judge (routing/tier2.py), not the model's to learn from.
+    automated = {r["contact_id"] for r in conn.execute("SELECT contact_id FROM tier2 WHERE arm='emailed'").fetchall()}
     rows, states, created, points, hub, closed, ids, hold = [], [], [], [], [], [], [], []
     companies = {}
     for c in hs.list_contacts(created_since=start):
-        if c.lifecycle_stage == "lead" or c.createdate < start or c.createdate > as_of:
+        if c.lifecycle_stage == "lead" or c.createdate < start or c.createdate > as_of or c.id in automated:
             continue
         if c.company_id not in companies:
             companies[c.company_id] = hs.get_company(c.company_id) if c.company_id else None

@@ -59,6 +59,7 @@ from ..llm.client import make_llm
 from ..routing.engine import Router
 from ..routing.outreach import DEFAULT_LIMIT as DEFAULT_OUTREACH_BATCH, prepare_outreach
 from ..routing.touches import detect_first_touches
+from ..routing.tier2 import detect_replies, run_tier2
 from ..scoring.pipeline import Scorer, load_live_model
 from ..storage.db import connect, dumps, get_setting, now_iso, set_setting
 
@@ -115,7 +116,7 @@ class Scheduler:
         # that database too; the real client keeps webhook events in memory, so that one is shared with the server.
         self.conn = connect(db_path)
         self.hs: HubSpotClient = hs if hs is not None and not isinstance(hs, MockHubSpot) else MockHubSpot(self.conn)
-        self.llm = make_llm()
+        self.llm = make_llm(conn=self.conn)
         self.jobs = jobs if jobs is not None else jobs_from_env()
         self.score_batch = score_batch or int(os.environ.get("AUXO_SCORE_BATCH") or DEFAULT_SCORE_BATCH)
         self.outreach_batch = int(os.environ.get("AUXO_OUTREACH_BATCH") or DEFAULT_OUTREACH_BATCH)
@@ -146,10 +147,17 @@ class Scheduler:
         counts: dict[str, int] = {}
         for x in d:
             counts[x.decision] = counts.get(x.decision, 0) + 1
+        t2 = run_tier2(self.hs, self.conn, self.llm, limit=self.outreach_batch)     # phase 3, a no-op while off
+        if t2["emailed"] or t2["control"] or t2["expired"]:
+            counts["automated"] = t2
         return counts
 
     def _touches(self) -> dict:
-        return detect_first_touches(self.hs, self.conn)
+        out = detect_first_touches(self.hs, self.conn)
+        replies = detect_replies(self.hs, self.conn)
+        if replies["replied"]:
+            out["replies"] = replies
+        return out
 
     def _outreach(self) -> dict:
         return prepare_outreach(self.hs, self.conn, self.llm, limit=self.outreach_batch)

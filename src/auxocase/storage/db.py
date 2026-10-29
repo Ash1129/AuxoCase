@@ -134,6 +134,21 @@ CREATE TABLE IF NOT EXISTS outreach (
   contact_id TEXT PRIMARY KEY, owner_id TEXT, subject TEXT, body TEXT, source TEXT, rejected TEXT,
   sequence_id TEXT, enrollment_id TEXT, status TEXT, created_at TEXT
 );
+-- Phase 3: leads below the capacity line put in an automated sequence (arm 'emailed') or left to the ordinary
+-- process as the comparison (arm 'control'). One row per lead, written when the lead became eligible.
+CREATE TABLE IF NOT EXISTS tier2 (
+  contact_id TEXT PRIMARY KEY, arm TEXT, status TEXT, probability REAL, rank INTEGER, line_probability REAL,
+  owner_id TEXT, subject TEXT, body TEXT, source TEXT, rejected TEXT, sequence_id TEXT, enrollment_id TEXT,
+  created_at TEXT, replied_at TEXT, assigned_at TEXT, resolved_at TEXT
+);
+CREATE INDEX IF NOT EXISTS tier2_status ON tier2(status);
+-- Every model call the service made, with the cost the Claude CLI reports (the figure Revenium meters) and,
+-- for a draft, the lead it was for (llm/usage.py).
+CREATE TABLE IF NOT EXISTS llm_usage (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, reader TEXT, model TEXT, task TEXT, reference TEXT, input_tokens INTEGER,
+  output_tokens INTEGER, cache_read_tokens INTEGER, cache_write_tokens INTEGER, cost_usd REAL, duration_ms REAL, created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS llm_usage_task ON llm_usage(task, reference);
 CREATE INDEX IF NOT EXISTS run_log_job ON run_log(job, id);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 """

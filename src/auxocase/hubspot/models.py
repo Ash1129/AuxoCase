@@ -54,7 +54,7 @@ AUXO_PROPERTIES = {
     "auxo_reason": "string",
     "auxo_model_version": "string",
     "auxo_scored_at": "datetime",
-    "auxo_route": "enumeration",       # assigned | held | holdout | incomplete | review
+    "auxo_route": "enumeration",       # assigned | held | holdout | incomplete | review | automated (phase 3: in the automated sequence)
     "auxo_review_flag": "string",      # why a person should look, or empty
     "auxo_holdout": "bool",            # routed regardless of score, for unbiased labels
     "auxo_below_gate": "bool",         # HubSpot's MQL gate did not pass it; stays true after an assignment moves it on

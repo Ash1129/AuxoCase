@@ -21,10 +21,13 @@ from __future__ import annotations
 import json
 import os
 import shutil
+import sqlite3
 import subprocess
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Optional, Protocol
+
+from . import usage
 
 
 class LLM(Protocol):
@@ -37,6 +40,7 @@ class ClaudeCLI:
     model: str = os.environ.get("AUXO_CLI_MODEL", "haiku")
     timeout_s: int = 90
     name: str = "claude-cli"
+    conn: Optional[sqlite3.Connection] = field(default=None, repr=False)   # where each call's metered cost is recorded
 
     def command(self, exe: str, system: str, user: str) -> list[str]:
         if os.environ.get("ANTHROPIC_API_KEY"):
@@ -52,15 +56,22 @@ class ClaudeCLI:
             raise RuntimeError("claude CLI not found on PATH")
         # Run outside the repo so no project CLAUDE.md or settings ride along with the prompt. The CLI thinks by
         # default, which turned a three-second draft into thirty; these are short, checked answers, so it is off.
+        # The telemetry the shell carries (Revenium's exporter, when the owner set it up) goes with the call, tagged
+        # with the product and the task so Revenium can show the service's spend apart (llm/usage.py).
+        task = usage.task_of(user)
+        env = {**os.environ, "MAX_THINKING_TOKENS": "0",
+               "OTEL_RESOURCE_ATTRIBUTES": usage.resource_attributes(os.environ.get("OTEL_RESOURCE_ATTRIBUTES", ""), task)}
         proc = subprocess.run(self.command(exe, system, user), capture_output=True, text=True,
-                              timeout=self.timeout_s, cwd=tempfile.gettempdir(),
-                              env={**os.environ, "MAX_THINKING_TOKENS": "0"})
+                              timeout=self.timeout_s, cwd=tempfile.gettempdir(), env=env)
         try:
             data = json.loads(proc.stdout.strip().splitlines()[-1])
         except (json.JSONDecodeError, IndexError) as e:
             raise RuntimeError(f"claude CLI returned no JSON (exit {proc.returncode}): {proc.stderr[:200]}") from e
         if data.get("is_error"):
             raise RuntimeError(f"claude CLI error: {data.get('result')}")
+        if self.conn is not None:
+            model = next(iter(data.get("modelUsage") or {}), self.model)
+            usage.record(self.conn, self.name, model, task, data.get("usage"), data.get("total_cost_usd"), data.get("duration_api_ms"))
         return str(data.get("result", ""))
 
 
@@ -68,6 +79,7 @@ class ClaudeCLI:
 class AnthropicAPI:
     model: str = os.environ.get("AUXO_API_MODEL", "claude-haiku-5-5")
     name: str = "anthropic-api"
+    conn: Optional[sqlite3.Connection] = field(default=None, repr=False)
 
     def complete(self, system: str, user: str, max_tokens: int = 600) -> str:
         try:
@@ -77,6 +89,13 @@ class AnthropicAPI:
         client = anthropic.Anthropic()
         msg = client.messages.create(model=self.model, max_tokens=max_tokens, system=system,
                                      messages=[{"role": "user", "content": user}])
+        if self.conn is not None:
+            # Tokens only: the API reports no price. Revenium's Anthropic middleware is the metering path for this route.
+            u = getattr(msg, "usage", None)
+            usage.record(self.conn, self.name, getattr(msg, "model", self.model), usage.task_of(user),
+                         {"input_tokens": getattr(u, "input_tokens", None), "output_tokens": getattr(u, "output_tokens", None),
+                          "cache_read_input_tokens": getattr(u, "cache_read_input_tokens", None),
+                          "cache_creation_input_tokens": getattr(u, "cache_creation_input_tokens", None)}, None, None)
         return "".join(getattr(b, "text", "") for b in msg.content)
 
 
@@ -98,10 +117,11 @@ class Offline:
         return "{}"
 
 
-def make_llm(kind: Optional[str] = None) -> LLM:
+def make_llm(kind: Optional[str] = None, conn: Optional[sqlite3.Connection] = None) -> LLM:
+    """With `conn`, every call's tokens and metered cost are recorded in that database (`llm_usage`)."""
     kind = (kind or os.environ.get("AUXO_LLM", "offline")).lower()
     if kind == "cli":
-        return ClaudeCLI()
+        return ClaudeCLI(conn=conn)
     if kind == "api":
-        return AnthropicAPI()
+        return AnthropicAPI(conn=conn)
     return Offline()

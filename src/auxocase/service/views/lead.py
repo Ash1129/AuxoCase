@@ -202,7 +202,9 @@ def lead_detail(st, contact_id: str, draft: bool = False) -> Optional[dict]:
     watch = {**dict(watch), "month": months_text([watch["period"]])} if watch else None
     enrichment = [{**dict(r), "filled": loads(r["filled"]) or {}, "when": when(r["created_at"])}
                   for r in st.conn.execute("SELECT * FROM enrichment_log WHERE contact_id=? ORDER BY id", (contact_id,)).fetchall()]
-    return {"c": c, "co": co, "score": score, "drivers": driver_rows((score or {}).get("contributions")),
+    t2 = st.conn.execute("SELECT * FROM tier2 WHERE contact_id=?", (contact_id,)).fetchone()
+    t2 = {**dict(t2), "when": when(t2["created_at"]), "replied_when": when(t2["replied_at"]) if t2["replied_at"] else None} if t2 else None
+    return {"c": c, "co": co, "score": score, "drivers": driver_rows((score or {}).get("contributions")), "tier2": t2,
             "band": calibration_band(loads(live["metrics"]) if live else None, c.auxo_probability),
             "clock": first_day(c.createdate, clock(st.conn)), "history": history, "routing": routing,
             "activity": activity, "first_touch": first_touch, "touch": touch,

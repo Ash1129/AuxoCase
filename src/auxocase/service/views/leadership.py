@@ -266,6 +266,43 @@ def _speed_effect(report: dict) -> Optional[dict]:
             "n_fast": se.get("n_fast"), "n_slow": se.get("n_slow")}
 
 
+def _tier2(report: dict) -> Optional[dict]:
+    """Phase 3's experiment as the page shows it: the two arms side by side, with rates as percentages."""
+    t = report.get("tier2")
+    if not t:
+        return None
+    em, co = t["arms"]["emailed"], t["arms"]["control"]
+    if not (em["leads"] or co["leads"] or t["explore_share"] or t["band"]):
+        return None
+    rows = []
+    for label, a in (("Emailed by the sequence", em), ("Left to the ordinary process", co)):
+        rows.append({"label": label, **a, "rate": _pct(a["observed_rate"]) if a["observed_rate"] is not None else None,
+                     "predicted": _pct(a["predicted_rate"]) if a["predicted_rate"] is not None else None,
+                     "reply_rate": _pct(a["replied"] / a["leads"]) if a["leads"] else None})
+    return {"rows": rows, "on": bool(t["band"]), "state": "on" if t["band"] else ("exploring" if t["explore_share"] else "off"),
+            "explore": _pct(t["explore_share"]), "send": _pct(t["send_share"]),
+            "holdback": _pct(t["holdback"]), "daily_limit": t["daily_limit"], "sequence": t.get("sequence"),
+            "lift": round(100 * t["lift"], 1) if t.get("lift") is not None else None, "ready": bool(t["ready"]),
+            "needed": t["needed"], "matured": em["matured"], "refused": t["refused"]}
+
+
+def _costs(report: dict) -> Optional[dict]:
+    """The cost table: a demo's cost by the way the lead was reached, and the service's own AI spend."""
+    c = report.get("costs")
+    if not c or not (c["sdr"]["worked"] or c["automated"]["emailed"]):
+        return None
+    sd, au, ct, u, ai = c["sdr"], c["automated"], c["control"], c["units"], c.get("ai") or {}
+    rows = [{"label": "An SDR's touch on a ranked lead", "reached": sd["worked"], "demos": sd["demos"], "rate": _pct(sd["demo_rate"]),
+             "hours": sd["sdr_hours"], "cost": sd["cost"], "per_demo": sd["cost_per_demo"], "per_hour": sd["demos_per_sdr_hour"], "value": sd["value"]}]
+    if au["emailed"]:
+        rows.append({"label": "The automated sequence", "reached": au["emailed"], "demos": au["demos"], "rate": _pct(au["demo_rate"]),
+                     "hours": au["sdr_hours"], "cost": au["cost"], "per_demo": au["cost_per_demo"], "per_hour": au["demos_per_sdr_hour"], "value": au["value"]})
+    return {"rows": rows, "units": u, "value_per_demo": c["value_per_demo"], "measured_close_rate": _pct(c["measured_close_rate"]) if c.get("measured_close_rate") is not None else None,
+            "closed_demos": c.get("closed_demos"), "automated": au, "control": ct, "reply_rate": _pct(au["reply_rate"]) if au.get("reply_rate") is not None else None,
+            "ai": ai, "ai_metered": bool(ai.get("priced")), "draft_cost_metered": bool(au.get("draft_cost_metered")), "since": c.get("since"),
+            "months": c.get("months") or []}
+
+
 def _in_use(st) -> tuple:
     """(stale_lead_factor, capacity_limit) the router runs with now, to mark that row of the experiment; () when the
     SDRs' limits differ."""
@@ -299,7 +336,12 @@ def leadership_page(st) -> dict:
       explore: {rows: [{label, assigned, worked, booked, rate %}], share % of slots picked at random, random_worked,
         random_booked, expected, cost, months, months_word, cost_a_month};
       precision: worked test leads, {k, model, points, points_ahead, hair, level}; gate: report["below_gate"];
-      speed_effect: {factor, fast %, slow %, n_fast, n_slow}.
+      speed_effect: {factor, fast %, slow %, n_fast, n_slow};
+      tier2: phase 3's experiment, {rows: [{label, leads, replied, reply_rate %, worked_by_sdr, matured, booked, rate %,
+        predicted %}], on, explore %, send %, holdback %, daily_limit, sequence, lift (points), ready, needed, matured, refused};
+      costs: {rows: [{label, reached, demos, rate %, hours, cost, per_demo, per_hour, value}], units, value_per_demo,
+        measured_close_rate %, closed_demos, automated, control, reply_rate %, ai {calls, cost_usd, by_task}, ai_metered,
+        draft_cost_metered}.
     setups: from queue_limits, {rows: [{label, demos, demos_lo, demos_hi, within, within_lo, within_hi, bar, in_use}],
       scale, line (the history's demos a month on the bars' scale, or None), seeds, seeds_word, fresh_words,
       first_desk, first_off, first_demos, speed_adds}."""
@@ -312,12 +354,12 @@ def leadership_page(st) -> dict:
            "desk": f"{_leads(in_use[1], 'waiting lead')} a desk" if in_use else None, "leads_per_month": LEADS_PER_MONTH,
            "maturity_days": DEMO_MATURITY_DAYS, "generator_factor": LATE_TOUCH_FACTOR, "fresh_as_often": fresh_as_often,
            "late_as_often": late_as_often, "months": None, "shared": None, "ranking": None, "explore": None, "precision": None,
-           "gate": None, "speed_effect": None, "setups": None}
+           "gate": None, "speed_effect": None, "setups": None, "tier2": None, "costs": None}
     if report:
         mo = _months(report)
         out.update(months=mo if mo["before_rows"] or mo["after_rows"] else None, shared=_shared(st, report, mo), ranking=_ranking(report),
                    explore=_explore(report, mo["routed_months"]), precision=_precision(report), gate=report.get("below_gate"),
-                   speed_effect=_speed_effect(report))
+                   speed_effect=_speed_effect(report), tier2=_tier2(report), costs=_costs(report))
     if ql:
         out["setups"] = _setups(ql, out["shared"]["before"]["demos_a_month_raw"] if out["shared"] else None, in_use)
     return out

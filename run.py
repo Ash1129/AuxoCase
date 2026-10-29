@@ -60,7 +60,7 @@ def cmd_seed(a):
 
 def cmd_score(a):
     conn, hs = _ctx(a.db)
-    sc = Scorer(hs, conn, load_live_model(conn), make_llm())
+    sc = Scorer(hs, conn, load_live_model(conn), make_llm(conn=conn))
     res = sc.rescore_pool() if a.all else sc.process_events(max_events=a.max_events)
     sc.refresh_ranks()
     flagged = sum(1 for r in res if r.review_flag)
@@ -68,11 +68,15 @@ def cmd_score(a):
 
 
 def cmd_route(a):
+    from auxocase.routing.tier2 import run_tier2
     conn, hs = _ctx(a.db)
     d = Router(hs, conn).run()
     counts = {}
     for x in d:
         counts[x.decision] = counts.get(x.decision, 0) + 1
+    t2 = run_tier2(hs, conn, make_llm(conn=conn))
+    if t2["emailed"] or t2["control"] or t2["expired"]:
+        counts["automated"] = t2
     print(json.dumps(counts))
 
 
@@ -102,7 +106,7 @@ def cmd_approve(a):
     print(json.dumps(res))
     if res["status"] == "live":
         print("rescoring the pool on the new model, best-ranked leads first...")
-        print(json.dumps(Scorer(hs, conn, load_live_model(conn), make_llm()).rescore_stale()))
+        print(json.dumps(Scorer(hs, conn, load_live_model(conn), make_llm(conn=conn)).rescore_stale()))
 
 
 def cmd_simulate(a):
@@ -115,7 +119,7 @@ def cmd_simulate(a):
 
 def cmd_losses(a):
     conn, hs = _ctx(a.db)
-    print(json.dumps(fb.classify_losses(hs, conn, make_llm())))
+    print(json.dumps(fb.classify_losses(hs, conn, make_llm(conn=conn))))
 
 
 def cmd_below_gate(a):
@@ -130,6 +134,34 @@ def cmd_below_gate(a):
     if a.rank == "on":
         print("Plain leads already waiting are marked for rescoring; the server's rescore job scores them best first "
               "(or run `python run.py score --all` now).")
+
+
+def cmd_tier2(a):
+    """Phase 3 in two switches (routing/tier2.switch). Explore first: a share of the leads below the capacity line
+    get the automated sequence, the rest are the control arm. The band only once enough of those have matured, or forced."""
+    from auxocase.routing import tier2
+    conn, _ = _ctx(a.db)
+    try:
+        status = tier2.switch(conn, explore=a.explore, band=None if a.band is None else a.band == "on", force=a.force)
+    except ValueError as e:
+        sys.exit(str(e))
+    print(json.dumps(status, indent=1))
+    if (a.explore or a.band == "on") and not status["sequence"]:
+        print("No automated sequence is set (AUXO_TIER2_SEQUENCE_ID): drafts are written to the leads and the mock logs the send, "
+              "but a real portal sends nothing until the sequence exists.")
+
+
+def cmd_costs(a):
+    """Cost against outcome (costs.py): what a demo costs by the way the lead was reached, with the service's own AI
+    spend metered per call. `--revenium` also asks Revenium's analytics API for the product's cost (REVENIUM_API_KEY)."""
+    from auxocase.costs import cost_report, revenium_cost
+    from auxocase.storage.db import clock
+    conn, _ = _ctx(a.db)
+    out = cost_report(conn)
+    if a.revenium:
+        end = datetime.utcnow()
+        out["revenium"] = revenium_cost(end - timedelta(days=a.days), end)
+    print(json.dumps(out, indent=1, default=str))
 
 
 def cmd_eval(a):
@@ -191,6 +223,9 @@ def main(argv=None):
     s.add_argument("--out", default="outputs/queue_limits.json"); s.set_defaults(fn=cmd_queue_limits)
     s = sub.add_parser("below-gate"); s.add_argument("--explore", type=float, default=None); s.add_argument("--rank", choices=["on", "off"], default=None)
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_below_gate)
+    s = sub.add_parser("costs"); s.add_argument("--revenium", action="store_true"); s.add_argument("--days", type=int, default=30); s.set_defaults(fn=cmd_costs)
+    s = sub.add_parser("tier2"); s.add_argument("--explore", type=float, default=None); s.add_argument("--band", choices=["on", "off"], default=None)
+    s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_tier2)
     s = sub.add_parser("serve"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("demo"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_demo)
     a = p.parse_args(argv)

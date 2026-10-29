@@ -29,6 +29,7 @@ def queue_groups(st, owner_id: str) -> dict:
         "UNION SELECT contact_id FROM touches WHERE owner_id=?", (owner_id, since, owner_id))]
     decided = {r["contact_id"] for r in st.conn.execute("SELECT DISTINCT contact_id FROM overrides WHERE action IN ('worked','junk','skipped')")}
     touches = {r["contact_id"]: dict(r) for r in st.conn.execute("SELECT contact_id, touched_at, type FROM touches WHERE owner_id=?", (owner_id,))}
+    replied = {r["contact_id"]: r["replied_at"] for r in st.conn.execute("SELECT contact_id, replied_at FROM tier2 WHERE status='replied'")}
     now = clock(st.conn)
     waiting, touched = [], []
     for cid in ids:
@@ -40,13 +41,15 @@ def queue_groups(st, owner_id: str) -> dict:
         is_waiting = c.hs_lead_status in WAITING_LEAD_STATUSES and c.lifecycle_stage in SDR_LIFECYCLE_STAGES
         if cid not in touches and not is_waiting:
             continue
-        entry = {"c": c, "co": st.hs.get_company(c.company_id) if c.company_id else None, "clock": first_day(c.createdate, now)}
+        entry = {"c": c, "co": st.hs.get_company(c.company_id) if c.company_id else None, "clock": first_day(c.createdate, now),
+                 "replied": when(replied[cid]) if cid in replied else None}
         if cid in touches:
             t = touches[cid]
             touched.append({**entry, "seen_at": t["touched_at"], "seen_when": when(t["touched_at"]), "seen_type": t["type"] or ""})
         else:
             waiting.append(entry)
-    waiting.sort(key=lambda e: -(e["c"].auxo_probability or 0))
+    # A lead that answered the automated sequence (phase 3) is warm and comes first, whatever its old score.
+    waiting.sort(key=lambda e: (not e["replied"], -(e["c"].auxo_probability or 0)))
     touched.sort(key=lambda e: e["seen_at"], reverse=True)
     today = now_iso()[:10]
     done_rows = [dict(r) for r in st.conn.execute(

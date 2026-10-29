@@ -72,7 +72,7 @@ class Scorer:
         self.hs, self.conn = hs, conn
         self.model = model
         self.enricher = enricher or make_enricher(conn)
-        self.llm = llm or make_llm()
+        self.llm = llm or make_llm(conn=conn)
         self.average_acv = average_acv
 
     @property

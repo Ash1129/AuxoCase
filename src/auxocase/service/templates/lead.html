@@ -23,7 +23,7 @@
 {#- The same dict the queue's open lead is: every key lead_detail returns (views/lead.py); keep the two in step. -#}
 {%- set d = dict(c=c, co=co, score=score, drivers=drivers, band=band, clock=clock, history=history, routing=routing,
                  activity=activity, first_touch=first_touch, touch=touch, no_draft=no_draft, email=email, stored=stored,
-                 mock=mock, enrollments=enrollments, seen=seen, owner=owner, owners=owners, assigned=assigned,
+                 mock=mock, enrollments=enrollments, seen=seen, owner=owner, owners=owners, assigned=assigned, tier2=tier2,
                  decision=decision, activity_rows=activity_rows, touched_in=touched_in, slot_next=slot_next,
                  emails=emails, speed=speed, late_factor=late_factor, pace=pace, watch=watch, enrichment=enrichment,
                  timeline=timeline, last_read=last_read) -%}
@@ -53,6 +53,7 @@
     {%- else -%}
     No SDR owns this lead yet.
     {%- endif %}
+    {%- if tier2 %} {% if tier2.arm == 'control' %}Drawn into the control arm of the phase-3 experiment {{ tier2.when }}: left to the ordinary process, the comparison for the automated sequence.{% elif tier2.status == 'sent' %}In the automated sequence since {{ tier2.when }} (phase 3), sent from {{ owners[tier2.owner_id].name if tier2.owner_id in owners else 'an SDR' }}'s inbox; out of the SDRs' pool until a reply or the sequence ends.{% elif tier2.status == 'replied' %}Replied to the automated email {{ tier2.replied_when }} (phase 3), sent {{ tier2.when }}.{% elif tier2.status == 'no_reply' %}The automated sequence sent {{ tier2.when }} ran its course unanswered (phase 3).{% elif tier2.status == 'refused' %}Drawn for the automated sequence {{ tier2.when }}, but HubSpot refused the enrolment (phase 3).{% endif %}{% endif %}
     {%- if owner and not decision %} Decisions happen in the queue, which checks that nobody else acted on {{ who }} first.{% endif %}
     {%- if decision and touched_in %} {{ owners[decision.owner_id].name if decision.owner_id in owners else 'The SDR' }} {{ {'worked': 'marked it worked', 'junk': 'marked it junk', 'skipped': 'skipped it'}[decision.action] }} {{ decision.when }}{% if env == 'mock' %} (wall clock){% endif %}{% if decision.note %}: {{ decision.note }}{% endif %}.{% endif %}
     {%- if slot_next %}{% set toucher = owners[first_touch.owner_id].name.split(' ')[0] if first_touch.owner_id in owners else 'the SDR' %} The touch freed a slot; the next lead assigned to {{ toucher }} was {{ ld.person(slot_next.c) }}, at {{ slot_next.when }}.{% endif %}

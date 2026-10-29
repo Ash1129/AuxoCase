@@ -420,6 +420,12 @@ class MockHubSpot:
             _insert(self.conn, "hs_sequence_enrollments", _to_row(e))
         return e
 
+    def simulate_sequence_send(self, contact_id: str, owner_id: str, subject: str, at: datetime) -> None:
+        """Mock only: the automated sequence's first step going out, as HubSpot would log it on the contact: an
+        outgoing email from the sender's inbox. Not an SDR's touch (the lead has no owner), so the first-touch job
+        passes it over; a follow-up draft sees it as the first email."""
+        self.log_engagement(contact_id, "EMAIL", "OUTGOING", at, owner_id, subject=subject)
+
     def sequence_enrollments(self, contact_id: str) -> list[SequenceEnrollment]:
         """Mock-only: what the lead page shows the demo in place of HubSpot's sequence view."""
         rows = self.conn.execute("SELECT * FROM hs_sequence_enrollments WHERE contact_id=? ORDER BY enrolled_at, rowid", (contact_id,)).fetchall()

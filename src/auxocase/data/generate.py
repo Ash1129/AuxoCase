@@ -57,6 +57,13 @@ SIZE_MISSING = {"website": 0.15, "paid_ads": 0.18, "email": 0.15, "webinar": 0.5
 FIRST_TOUCH_MEDIAN_DAYS = 3.0
 FAST_TOUCH_DAYS = 1.0
 LATE_TOUCH_FACTOR = 0.5
+# Phase 3 (simulator only): what an automated first email does for a lead no SDR would reach. A lead replies to
+# the sequence at this share of its hidden demo chance (a warm lead answers, a cold one does not), and a lead that
+# replied and is then worked by an SDR books at this rate. Together an automated touch books about 0.3 of what
+# a prompt SDR touch would. Assumptions, not measurements: the real portal measures both (routing/tier2.py).
+TIER2_REPLY_FACTOR = 0.45
+TIER2_DEMO_GIVEN_REPLY = 0.65
+TIER2_REPLY_DAYS = (0.2, 5.0)        # a reply, when it comes, lands this long after the email
 # Answer 5: a 30-day business cycle from demo to close.
 CLOSE_DAYS = (10, 40)
 

@@ -36,6 +36,7 @@
 .bar-ink{fill:var(--ink)}
 .ld-table{min-width:600px}
 .ld-table.narrow{min-width:320px}
+.ld-months td:first-child{white-space:nowrap}
 .ld-table tbody th{font-size:15px;line-height:22px;font-weight:400;letter-spacing:0;text-transform:none;color:var(--ink);border-top:1px solid var(--line);padding:6px 16px 6px 0}
 .ld-table td{padding:6px 0 6px 16px}
 .ld-table tbody tr:last-child>*{border-bottom:1px solid var(--line)}
@@ -285,6 +286,74 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 
 <hr class="rule">
 
+{# ---- phase 3: the automated band and what a demo costs ---- #}
+<div class="ld-grid">
+  <section class="ld-sec" aria-labelledby="ld-tier2">
+    <h2 id="ld-tier2" class="kicker">Automated outreach below the line · phase 3, {{ tier2.state if tier2 else 'off' }}{% if mock %} · simulated{% endif %}</h2>
+    {% if not report %}{{ no_report() }}
+    {% elif not tier2 %}<p class="empty">Off, and no lead has been drawn yet. <code>python run.py tier2 --explore 0.2</code> puts a fifth of the leads below the capacity line in the automated sequence and keeps the rest as the comparison; the stored evaluation then fills this in.</p>
+    {% else %}
+    <p class="lede">{% if tier2.on %}Every lead below the line but a {{ tier2.holdback }}% holdback gets the sequence{% else %}{{ tier2.explore }}% of the leads below the line get the sequence{% endif %}, at most {{ tier2.daily_limit }} a day{{ d() }}.</p>
+    <div class="scroll" role="region" aria-labelledby="ld-tier2" tabindex="0">
+      <table class="ld-table narrow" aria-labelledby="ld-tier2">
+        <thead>
+          <tr>
+            <th scope="col">Arm</th>
+            <th scope="col" class="r">Leads{{ d() }}</th>
+            <th scope="col" class="r">Replied{{ d() }}</th>
+            <th scope="col" class="r">Matured{{ d() }}</th>
+            <th scope="col" class="r">Booked{{ d() }}</th>
+            <th scope="col" class="r">Rate{{ d() }}</th>
+            <th scope="col" class="r">Model said</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in tier2.rows %}
+          <tr><th scope="row">{{ r.label }}</th><td class="r num">{{ '{:,}'.format(r.leads) }}</td><td class="r num">{{ '{:,}'.format(r.replied) }}</td><td class="r num">{{ '{:,}'.format(r.matured) }}</td><td class="r num">{{ '{:,}'.format(r.booked) }}</td><td class="r num">{{ v(r.rate, '{}%') }}</td><td class="r num">{{ v(r.predicted, '{}%') }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="ld-note">{% if tier2.lift is not none %}The sequence lifts a below-the-line lead's chance of a demo by {{ tier2.lift }} points{{ d() }}. {% endif %}"Model said" is the chance if an SDR worked the lead promptly, so the emailed arm's shortfall against it is what an automated email gives up against a person. {% if tier2.ready %}Enough matured labels to judge the band.{% else %}The band waits for {{ tier2.needed }} matured emailed leads; {{ tier2.matured }} so far.{% endif %}{% if not tier2.sequence %} No automated sequence is set in HubSpot (<code>AUXO_TIER2_SEQUENCE_ID</code>){% if mock %}; the mock logs the send itself{% endif %}.{% endif %}</p>
+    {% endif %}
+  </section>
+
+  <section class="ld-sec" aria-labelledby="ld-costs">
+    <h2 id="ld-costs" class="kicker">What a demo costs, by the way the lead was reached{% if mock %} · simulated{% endif %}</h2>
+    {% if not report %}{{ no_report() }}
+    {% elif not costs %}<p class="empty">No routed lead has been worked yet, so there is nothing to price.</p>
+    {% else %}
+    <p class="lede">A demo is worth about {{ '{:,}'.format(costs.value_per_demo) }} dollars in first-year contract value{% if costs.measured_close_rate is not none %}; {{ costs.measured_close_rate }}% of {{ '{:,}'.format(costs.closed_demos) }} demos old enough to have closed did{{ d() }}{% endif %}.</p>
+    <div class="scroll" role="region" aria-labelledby="ld-costs" tabindex="0">
+      <table class="ld-table narrow" aria-labelledby="ld-costs">
+        <thead>
+          <tr>
+            <th scope="col">Route</th>
+            <th scope="col" class="r">Reached{{ d() }}</th>
+            <th scope="col" class="r">Demos{{ d() }}</th>
+            <th scope="col" class="r">SDR hours</th>
+            <th scope="col" class="r">Cost, $</th>
+            <th scope="col" class="r">Per demo, $</th>
+            <th scope="col" class="r">Demos an SDR hour</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in costs.rows %}
+          <tr><th scope="row">{{ r.label }}</th><td class="r num">{{ '{:,}'.format(r.reached) }}</td><td class="r num">{{ '{:,}'.format(r.demos) }}</td><td class="r num">{{ r.hours }}</td><td class="r num">{{ '{:,}'.format(r.cost) }}</td><td class="r num">{{ v(r.per_demo, '{:,.0f}') }}</td><td class="r num">{{ v(r.per_hour, '{}') }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    <p class="ld-note">An SDR hour is costed at {{ '{:.0f}'.format(costs.units.cost_sdr_hour) }} dollars, a cold touch at {{ '{:.0f}'.format(costs.units.sdr_minutes_touch) }} minutes and a reply at {{ '{:.0f}'.format(costs.units.sdr_minutes_reply) }}: settings, not facts. {% if costs.automated.emailed %}Per 100 emails the sequence drew {{ costs.reply_rate }} replies and {{ costs.automated.demos_per_100_emails }} demos{{ d() }}{% if costs.automated.demos_added is not none %}, about {{ costs.automated.demos_added }} demos in all the control arm says would not have come otherwise, worth about {{ '{:,}'.format(costs.automated.value_added) }} dollars{{ d() }}{% endif %}. {% endif %}{% if costs.since %}Both routes are counted from {{ costs.since[:10] }}, the sequence's first day. {% endif %}{% if costs.draft_cost_metered %}Drafting is priced from the service's own Claude calls, metered per call as Revenium meters them: {{ '{:,}'.format(costs.automated.drafts_metered) }} of the {{ '{:,}'.format(costs.automated.emailed) }} drafts at their own cost and the rest at their mean of {{ '%.4f'|format(costs.automated.draft_unit_cost) }} dollars; the service's calls so far: {{ '{:,}'.format(costs.ai.calls) }}, {{ '%.2f'|format(costs.ai.cost_usd) }} dollars in all.{% else %}No priced model call has run yet, so a draft is costed at {{ '%.2f'|format(costs.units.cost_draft) }} dollars; with the Claude CLI reader on, each call's metered cost takes over.{% endif %} The 12 SDRs are fixed, so demos an SDR hour is the number to compare.{% if costs.automated.demos_net is not none %} Each reply took SDR time from a ranked lead: at {{ '{:.0f}'.format(costs.units.sdr_minutes_reply) }} minutes a reply against {{ '{:.0f}'.format(costs.units.sdr_minutes_touch) }} a cold touch, the {{ '{:,}'.format(costs.automated.replied) }} replies displaced about {{ costs.automated.demos_forgone }} ranked demos, for a net of about {{ '{:+}'.format(costs.automated.demos_net) }} demos{{ d() }}{% if costs.automated.break_even_reply_minutes %}; it breaks even at a {{ costs.automated.break_even_reply_minutes }}-minute reply, so how long a reply really takes is the number to measure on the portal{% endif %}.{% endif %}</p>
+    {% if costs.months %}<table class="ld-table narrow ld-months"><caption>Demos booked a month, before and with the sequence{{ d() }}</caption><thead><tr><th>Month</th><th>Demos</th><th>Through the sequence</th><th></th></tr></thead><tbody>
+    {% for m in costs.months %}<tr><td>{{ m.month }}</td><td>{{ m.demos }}</td><td>{{ m.via_sequence }}</td><td class="muted">{{ 'before' if m.period == 'before' else ('the sequence starts' if m.period == 'first' else 'with the sequence') }}</td></tr>
+    {% endfor %}</tbody></table>{% endif %}
+    {% endif %}
+  </section>
+</div>
+
+<hr class="rule">
+
 {# ---- limits ---- #}
 <section class="ld-sec" aria-labelledby="ld-limits">
   <h2 id="ld-limits" class="kicker">What these numbers do not show</h2>
@@ -297,6 +366,8 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
     {% if ranking %}<li>The ranges resample the {{ ranking.months_word }} held-out months. They show how steady a gap is on this generator, not how sure a real portal would be.</li>{% endif %}
     {% if mock and months %}<li>The months are the generator's clock, {{ months.span }}, not real dates.</li>{% endif %}
     {% if gate and not gate.matured %}<li>Phase 2 has no outcomes yet.</li>{% endif %}
+    {% if tier2 and mock %}<li>On the mock a lead answers the automated email at a fixed share of its hidden demo chance, and a lead that replied books at a fixed rate once an SDR follows up: the generator's assumptions, not measurements. On a real portal both are measured.</li>{% endif %}
+    {% if costs %}<li>Unit costs (an SDR's hour, minutes a touch) are settings. The counts are {{ 'simulated' if mock else "HubSpot's" }}.</li>{% endif %}
   </ul>
   {% endif %}
 </section>

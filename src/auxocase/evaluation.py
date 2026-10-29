@@ -30,6 +30,8 @@ import numpy as np
 import pandas as pd
 
 from .feedback import loop as fb
+from .costs import cost_report
+from .routing import tier2
 from .hubspot.client import HubSpotClient
 from .scoring.model import precision_at_k
 from .storage.db import clock, loads
@@ -97,6 +99,8 @@ def evaluate(hs: HubSpotClient, conn: sqlite3.Connection) -> dict:
     out["stale_lead_factor"] = get_setting(conn, "stale_lead_factor") or "1.0"
     out["mql_gate"] = fb.mql_gate_report(hs, conn)
     out["below_gate"] = fb.below_gate_readiness(conn)
+    out["tier2"] = tier2.readiness(conn)
+    out["costs"] = cost_report(conn)
     out["losses"] = fb.loss_report(hs, conn)
     out["enrichment"] = [dict(r) for r in conn.execute(
         "SELECT COUNT(*) asked, SUM(filled <> '{}') filled, SUM(asked LIKE '%job_title%') asked_title, "
@@ -266,6 +270,51 @@ def write_report(hs: HubSpotClient, conn: sqlite3.Connection, path: Path) -> str
               f"{bg['assigned_by_rank']} more handed out by rank. "
               + (f"The model's score at hand-out averaged {bg['predicted_rate']} for the matured ones; {bg['observed_rate']} booked. " if bg["matured"] else "")
               + ("Enough labels to judge ranking below the gate." if bg["ready"] else f"Ranking below the gate waits for {bg['needed']} matured labels."), ""]
+    t2 = e.get("tier2")
+    if t2 and (t2["arms"]["emailed"]["leads"] or t2["arms"]["control"]["leads"] or t2["explore_share"] or t2["band"]):
+        em, co = t2["arms"]["emailed"], t2["arms"]["control"]
+        L += ["## Phase 3: automated outreach below the capacity line", "",
+              f"Explore share {t2['explore_share']:.0%}; the band {'on' if t2['band'] else 'off'} (holdback {t2['holdback']:.0%}); "
+              f"at most {t2['daily_limit']} emails a day; sequence {t2['sequence'] or 'not set'}. Leads below the line are drawn into an arm as they "
+              "become eligible: emailed by the sequence, or left to the ordinary process. A label matures 30 days after the draw.", "",
+              "| Arm | Leads | Replied | Worked by an SDR | Matured | Booked | Demo rate | Model's prediction |", "|---|---|---|---|---|---|---|---|",
+              f"| Emailed | {em['leads']} | {em['replied']} | {em['worked_by_sdr']} | {em['matured']} | {em['booked']} | {_fmt(em['observed_rate'])} | {_fmt(em['predicted_rate'])} |",
+              f"| Control | {co['leads']} | {co['replied']} | {co['worked_by_sdr']} | {co['matured']} | {co['booked']} | {_fmt(co['observed_rate'])} | {_fmt(co['predicted_rate'])} |", "",
+              (f"The sequence lifts the demo rate of a lead below the line by {t2['lift']:+.3f}. " if t2["lift"] is not None else "")
+              + "The model's prediction is the chance of a demo if an SDR worked the lead promptly, so the emailed arm's shortfall against it is what an "
+              "automated email gives up against a person. "
+              + ("Enough matured labels to judge the band." if t2["ready"] else f"The band waits for {t2['needed']} matured emailed leads; refused {t2['refused']}."), ""]
+    c = e.get("costs")
+    if c and (c["sdr"]["worked"] or c["automated"]["emailed"]):
+        u, sd, au, ct = c["units"], c["sdr"], c["automated"], c["control"]
+        L += ["## Cost against outcome: what a demo costs by the way the lead was reached", "",
+              f"Unit costs are settings, not facts: an SDR hour {u['cost_sdr_hour']:.0f} dollars, a cold touch {u['sdr_minutes_touch']:.0f} minutes, answering a "
+              f"reply {u['sdr_minutes_reply']:.0f} minutes, a Claude draft {u['cost_draft']:.2f} dollars. A demo is worth {c['value_per_demo']:,} dollars in first-year "
+              f"contract value (the brief: {u['acv']:,.0f} at a {u['close_rate']:.0%} close rate"
+              + (f"; the outcomes show {c['measured_close_rate']:.0%} on {c['closed_demos']} demos old enough to have closed" if c["measured_close_rate"] is not None else "") + ").", "",
+              "| Route | Leads reached | Demos | Demo rate | SDR hours | Cost | Cost per demo | Demos per SDR hour | Value |", "|---|---|---|---|---|---|---|---|---|",
+              f"| An SDR's touch on a ranked lead | {sd['worked']} | {sd['demos']} | {_fmt(sd['demo_rate'])} | {sd['sdr_hours']} | {sd['cost']:,} | {_fmt(sd['cost_per_demo'], 0)} | {_fmt(sd['demos_per_sdr_hour'])} | {sd['value']:,} |",
+              f"| The automated sequence (phase 3) | {au['emailed']} | {au['demos']} | {_fmt(au['demo_rate'])} | {au['sdr_hours']} | {au['cost']:,} | {_fmt(au['cost_per_demo'], 0)} | {_fmt(au['demos_per_sdr_hour'])} | {au['value']:,} |", ""]
+        if au["emailed"]:
+            pricing = {"metered": f"every draft metered by the Claude CLI, the figure Revenium receives",
+                       "metered mean": f"{au['drafts_metered']} drafts metered by the Claude CLI, the figure Revenium receives, and the rest at their mean of {au['draft_unit_cost']:.4f} dollars",
+                       "assumed": f"each draft at the assumed {au['draft_unit_cost']:.2f} dollars"}[au.get("draft_pricing", "assumed")]
+            L += [(f"Both routes are counted from {c['since'][:10]}, the sequence's first day, so the months match. " if c.get("since") else "")
+                  + f"Per 100 emails: {_fmt(100 * (au['reply_rate'] or 0), 0)} replies and {_fmt(au['demos_per_100_emails'], 1)} demos, for {au['draft_cost']} dollars of drafting ({pricing}) "
+                  f"and {au['sdr_hours']} SDR hours on replies in all. "
+                  + (f"The control arm ({ct['leads']} leads left to the ordinary process) booked {ct['demos']}, a rate of {_fmt(ct['demo_rate'])}, so the sequence added about "
+                     f"{au['demos_added']} demos it would not otherwise have had, worth about {au['value_added']:,} dollars." if au["demos_added"] is not None else "")
+                  + " SDR time is the scarce input (12 SDRs, by the brief), so demos per SDR hour is the number to compare.", ""]
+            if au.get("demos_net") is not None:
+                L += [f"Every reply took SDR time that would have gone to a ranked lead: at {u['sdr_minutes_reply']:.0f} minutes a reply against {u['sdr_minutes_touch']:.0f} a cold touch, "
+                      f"the {au['replied']} replies displaced about {au['demos_forgone']} ranked demos, so the sequence's net is about {au['demos_net']:+} demos, "
+                      f"{au['value_net']:+,} dollars. "
+                      + (f"It breaks even when a reply takes {au['break_even_reply_minutes']} minutes of an SDR's time; the number to measure on the real portal is how long a reply really takes." if au.get("break_even_reply_minutes") else ""), ""]
+            ms = c.get("months") or []
+            if ms:
+                L += ["Demos booked a month, the months before the sequence against the months with it (the 12 SDRs are fixed, so this total is what has to rise):", "",
+                      "| Month | Demos | Through the sequence | |", "|---|---|---|---|"]
+                L += [f"| {m['month']} | {m['demos']} | {m['via_sequence']} | {'before' if m['period'] == 'before' else ('the sequence starts' if m['period'] == 'first' else 'with the sequence')} |" for m in ms] + [""]
     if e.get("slices"):
         L += ["## Ranked slice vs exploration slice", "", "| Slice | Assigned | Worked | Booked |", "|---|---|---|---|"]
         L += [f"| {k} | {v['assigned']} | {v['worked']} | {v['booked']} |" for k, v in e["slices"].items()] + [""]
