@@ -8,28 +8,28 @@ Every lead gets **one calibrated number** ("62" means about a 62% chance of book
 
 ## The numbers so far (synthetic data, `docs/evaluation.md`)
 
-Three years of BrightPath-like history, generated to match the brief and BrightPath's follow-up answers (`docs/blueprint/brief-answers.md`), then three simulated months with the system in place at the same 12 SDRs and ~500 touches a month:
+Three years of BrightPath-like history, generated to match the brief and BrightPath's follow-up answers (`docs/blueprint/brief-answers.md`), then three simulated months with the system in place at the same 12 SDRs and ~500 touches a month. The "after" includes the 8% exploration slice: random leads that cost a few demos a month and are what keeps the model's labels unbiased.
 
 | | Before (history) | After (AuxoCase) |
 |---|---|---|
-| Demos booked per month | 172 | **283** (+64%) |
-| Median hours from lead to first touch | 71 | **16** |
-| Leads touched within 24 hours | 21% | **66%** |
+| Demos booked per month | 172 | **274** (+59%) |
+| Median hours from lead to first touch | 71 | **17** |
+| Leads touched within 24 hours | 21% | **64%** |
 
 Where the gain comes from, one simulated month per setup, averaged over five seeds (`python run.py queue-limits`; ranges in `docs/blueprint/brief-answers.md`):
 
 | Routing | Touched within 24 h | Demos |
 |---|---|---|
-| Model ranking, deep queues (3 leads per SDR), no freshness | 15% | 209 |
-| + freshness discount (a lead past its first day is worth half) | 30% | 223 |
-| + two waiting leads per SDR | 50% | 249 |
-| + one waiting lead per SDR, refilled as they touch it | 64% | 281 |
+| Model ranking, deep queues (3 leads per SDR), no freshness | 15% | 205 |
+| + freshness discount (a lead past its first day is worth half) | 31% | 224 |
+| + two waiting leads per SDR | 49% | 249 |
+| + one waiting lead per SDR, refilled as they touch it | 64% | 274 |
 
-The ranking alone is worth about a fifth more demos than the history's 172 a month. The freshness discount doubles how many leads are touched within a day, but by itself adds only a few demos while queues are three deep (the ranges overlap). The rest of the gain comes from small queues, which let SDRs reach the best leads inside their first day. On the mock, "a lead touched within a day books twice as often" is BrightPath's answer 4 built into the generator. On the real portal it is measured: the report estimates the factor from outcomes (0.46 here, against the 0.5 routing uses).
+The ranking alone is worth about a fifth more demos than the history's 172 a month. The freshness discount doubles how many leads are touched within a day and adds about 20 demos even while queues are three deep. The rest of the gain comes from small queues, which let SDRs reach the best leads inside their first day. On the mock, "a lead touched within a day books twice as often" is BrightPath's answer 4 built into the generator. On the real portal it is measured: the report estimates the factor from outcomes (0.46 here, against the 0.5 routing uses).
 
 How good is the ranking? Every number here is on months the model never trained on: it is fitted on the oldest months, chosen and calibrated on the next two, and tested once on the newest two, and the model that goes live is the one tested. On leads the SDRs chose to work, it beats HubSpot's points at the capacity line (precision@299 0.448 against 0.375), but barely differs from the service's own channel-aware cold-start table (0.445). The worked-leads number understates the gap, because the SDRs' past choices hide it (L05). On the generator's truth, for every MQL worked or not across six held-out months, the model's 500 a month would book **348** demos if worked promptly, against **292** for HubSpot's points (+55 a month, +53 to +58 across months), 345 for the cold-start table and 262 at random, with 376 the best possible. Calibration holds (expected calibration error 0.012). The exploration slice is how real data closes the worked-leads gap over time.
 
-Ranking every lead, not only the MQLs, would add about **48 demos a month** on the same 500 (+45 to +51): 358 of them would be leads HubSpot's gate keeps out, almost all referrals and webinars. The model has never seen an outcome below the gate, though, so this is phase 2: it waits until the exploration slice has worked leads from there (`docs/ARCHITECTURE.md`).
+Ranking every lead, not only the MQLs, would add about **48 demos a month** on the same 500 (+45 to +51): 358 of them would be leads HubSpot's gate keeps out, almost all referrals and webinars. The model has never seen an outcome below the gate, though, so this is phase 2, in two switches, both off by default. `python run.py below-gate --explore 0.5` sends half of the 8% exploration slice to plain leads drawn at random from below the gate, scored as they are handed out; the evaluation report and `python run.py below-gate` then show how many of them have matured and how their demo rate compares with what the model predicted. `python run.py below-gate --rank on` adds plain leads to the ranked pool and has the rescore job score the ones already waiting, best first; it refuses until 100 of those labels exist (`--force` overrides). Either way an assigned plain lead moves to SQL, counts against the SDR's capacity, and carries a "below old threshold" badge (`auxo_below_gate` in HubSpot). A portal set up before this property existed needs `ensure_properties()` run again (go-live step 1).
 
 What the data says for BrightPath beyond the scores:
 
@@ -60,6 +60,7 @@ Step by step:
 | `python run.py losses` | reads new closed-lost reasons into fixed categories (quote checked) |
 | `python run.py simulate --months 3` | replays months in six-hour steps with the system in place: new leads, scoring, routing, SDR touches at the brief's capacity, outcomes, loss reasons, retrain |
 | `python run.py eval` | writes `docs/evaluation.md` |
+| `python run.py below-gate [--explore 0.5] [--rank on\|off]` | phase 2: send part of the exploration slice below HubSpot's MQL gate, and rank there once enough of those leads have outcomes; prints what is known there |
 | `python run.py queue-limits [--seeds 5]` | builds the demo's starting point, then replays one month per routing setup (freshness discount on or off, queue limit 3, 2 or 1) and seed in parallel; prints the speed and demos table with the range across seeds |
 | `python run.py serve` | the pages: SDR queues, lead detail, manager's held queue, model & approvals; `/jobs/*` endpoints; `/webhooks/hubspot`; the jobs on timers (below) |
 | `pytest -q` | the test suite (offline; no model calls) |
@@ -82,7 +83,7 @@ Step by step:
 
 ## Going live in HubSpot
 
-1. Create the `auxo_*` contact properties (`ensure_properties()` does it through the API) and a private app with the scopes in `docs/ARCHITECTURE.md`.
+1. Create the `auxo_*` contact properties (`ensure_properties()` does it through the API; run it again after an upgrade that adds one) and a private app with the scopes in `docs/ARCHITECTURE.md`.
 2. Set `HUBSPOT_PRIVATE_APP_TOKEN`; point a HubSpot webhook subscription (contact creation and property changes) at `/webhooks/hubspot` and set `HUBSPOT_APP_SECRET` (with the real client, unsigned webhooks are refused), or run `score` on a schedule to poll by last-modified. Add the deployment's host name to `AUXO_ALLOWED_HOSTS`.
 3. Confirm the property internal names listed in `hubspot/real.py` against `GET /crm/v3/properties/contacts` on the portal; they vary by portal.
 4. Train the first model on HubSpot's three years of history (the last 12 months, mature labels only; at least 60 demos), with the exploration slice on from day one. Set `stale_lead_factor` from the report's measured speed effect, and set the SDRs' `capacity_limit` to 1.

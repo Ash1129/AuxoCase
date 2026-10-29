@@ -160,7 +160,7 @@ class Scorer:
         return results
 
     def _write_back(self, results: list[ScoredLead]) -> None:
-        updates = []
+        updates, recorded = [], {}
         for r in results:
             # Idempotent against the lead's LATEST score only: if a different model wrote in between (a fallback to
             # the points table, say), the trained model's values must go back to HubSpot even though an older row matches.
@@ -181,6 +181,7 @@ class Scorer:
             if r.incomplete:
                 props["auxo_review_flag"] = "missing: " + ", ".join(r.incomplete)
             updates.append((r.contact_id, props))
+            recorded[r.contact_id] = (r.model_version, r.input_hash)
             self.conn.execute(
                 "INSERT OR IGNORE INTO scores(contact_id, model_version, probability, score, rank, pool_size, reason, contributions, signals, llm_adjustment, checker, review_flag, route, holdout, input_hash, created_at) "
                 "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -196,6 +197,11 @@ class Scorer:
             if res.failed:
                 self.conn.execute("INSERT INTO run_log(job, started_at, finished_at, status, detail) VALUES(?,?,?,?,?)",
                                   ("score.write_back", now_iso(), now_iso(), "partial", dumps(res.failed)))
+                # HubSpot does not have these scores, so the log must not say it does: without the row, the next run
+                # sees the input as new and writes it again instead of skipping it as already written.
+                for cid in res.failed:
+                    if cid in recorded:
+                        self.conn.execute("DELETE FROM scores WHERE contact_id=? AND model_version=? AND input_hash=?", (cid, *recorded[cid]))
 
     # ---- the continuous loop -------------------------------------------------------
     def process_events(self, max_events: int = 100) -> list[ScoredLead]:
@@ -226,9 +232,10 @@ class Scorer:
         return out
 
     def stale_pool(self) -> list[Contact]:
-        """Pool leads scored by another model than this one, best-ranked first."""
+        """Pool leads scored by another model than this one (or not scored at all), best-ranked first, then the
+        unranked newest first: a lead just let into the pool is worth more while it is fresh."""
         stale = [c for c in pool_contacts(self.hs, self.conn) if c.auxo_model_version != self.model_version]
-        return sorted(stale, key=lambda c: (c.auxo_rank is None, c.auxo_rank or 0, c.createdate))
+        return sorted(stale, key=lambda c: (c.auxo_rank is None, c.auxo_rank or 0, -c.createdate.timestamp()))
 
     def rescore_stale(self, budget_s: Optional[float] = None, chunk: int = 10) -> dict:
         """Rescore leads still on an older model, a chunk at a time, until done or `budget_s` seconds have gone."""

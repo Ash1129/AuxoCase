@@ -49,6 +49,8 @@ class State:
     def __init__(self, db_path=DEFAULT_DB):
         self.conn: sqlite3.Connection = connect(db_path)
         self.hs: HubSpotClient = _make_client(self.conn)
+        if isinstance(self.hs, MockHubSpot):
+            self.hs.ensure_properties()      # a demo database from before a new auxo_* property gets it; the real portal: go-live step 1
         self.llm = make_llm()
         self.model = load_live_model(self.conn)
 

@@ -14,7 +14,7 @@
 </table>
 <h2>Top of the pool (not yet assigned)</h2>
 <table><tr><th class="num">Rank</th><th>Lead</th><th>Channel</th><th class="num">Demo likelihood</th><th>Why</th></tr>
-{% for c in pool %}<tr><td class="num">{{ c.auxo_rank }}</td><td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a> <span class="muted small">#{{ c.id }}</span></td><td>{{ c.channel }}</td><td class="num">{{ (100*(c.auxo_probability or 0))|round(1) }}%</td><td class="reason small">{{ c.auxo_reason }}</td></tr>{% endfor %}
+{% for c in pool %}<tr><td class="num">{{ c.auxo_rank }}</td><td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a> <span class="muted small">#{{ c.id }}</span>{% if c.auxo_below_gate or c.lifecycle_stage == 'lead' %} · <span class="pill accent" title="HubSpot's MQL gate did not pass this lead">below old threshold</span>{% endif %}</td><td>{{ c.channel }}</td><td class="num">{{ (100*(c.auxo_probability or 0))|round(1) }}%</td><td class="reason small">{{ c.auxo_reason }}</td></tr>{% endfor %}
 </table>
 <h2>Recent runs</h2>
 <table><tr><th>Job</th><th>When</th><th>Status</th><th>Detail</th></tr>

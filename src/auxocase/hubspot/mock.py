@@ -21,6 +21,8 @@ from ..storage.db import get_setting, now_iso, set_setting, tx
 from .models import (
     AUXO_PROPERTIES,
     OPEN_LEAD_STATUSES,
+    PROMOTED_ON_ASSIGNMENT,
+    SDR_LIFECYCLE_STAGES,
     WAITING_LEAD_STATUSES,
     BatchResult,
     ChangeEvent,
@@ -304,11 +306,12 @@ class MockHubSpot:
         self._count()
         counts = {r["id"]: 0 for r in self.conn.execute("SELECT id FROM hs_owners WHERE active=1")}
         marks = ", ".join("?" for _ in statuses)
+        stage_marks = ", ".join("?" for _ in SDR_LIFECYCLE_STAGES)
         rows = self.conn.execute(
             f"SELECT hubspot_owner_id AS o, COUNT(*) AS n FROM hs_contacts "
             f"WHERE hubspot_owner_id IS NOT NULL AND hubspot_owner_id != '' AND hs_lead_status IN ({marks}) "
-            f"AND lifecycle_stage IN ('marketingqualifiedlead', 'salesqualifiedlead') GROUP BY o",
-            statuses,
+            f"AND lifecycle_stage IN ({stage_marks}) GROUP BY o",
+            (*statuses, *SDR_LIFECYCLE_STAGES),
         ).fetchall()
         for r in rows:
             counts[r["o"]] = r["n"]
@@ -330,7 +333,7 @@ class MockHubSpot:
             changes = {"hubspot_owner_id": owner_id}
             if not row["hs_lead_status"]:
                 changes["hs_lead_status"] = "NEW"
-            if row["lifecycle_stage"] == "marketingqualifiedlead":
+            if row["lifecycle_stage"] in PROMOTED_ON_ASSIGNMENT:
                 changes["lifecycle_stage"] = "salesqualifiedlead"
             self._write_contact_changes(contact_id, changes, at, source="auxocase", emit=True)
         return True

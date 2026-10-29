@@ -8,7 +8,7 @@
 {% for c in leads %}
 <tr>
 <td class="num">{{ c.auxo_rank }}</td>
-<td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a><div class="small muted">{{ c.country }} · {{ 'webinar attended' if c.webinar_attended else ('webinar registered' if c.webinar_registered else '') }}{% if c.auxo_holdout %} · <span class="pill accent">calibration lead</span>{% endif %}{% if c.auxo_review_flag %} · <span class="pill warn">{{ c.auxo_review_flag }}</span>{% endif %}</div></td>
+<td><a href="/lead/{{ c.id }}">{{ c.job_title or 'Contact' }}</a><div class="small muted">{{ c.country }} · {{ 'webinar attended' if c.webinar_attended else ('webinar registered' if c.webinar_registered else '') }}{% if c.auxo_holdout %} · <span class="pill accent">calibration lead</span>{% endif %}{% if c.auxo_below_gate or c.lifecycle_stage == 'lead' %} · <span class="pill accent" title="HubSpot's MQL gate did not pass this lead">below old threshold</span>{% endif %}{% if c.auxo_review_flag %} · <span class="pill warn">{{ c.auxo_review_flag }}</span>{% endif %}</div></td>
 <td>{{ c.channel }}</td>
 <td class="num"><strong>{{ (100*(c.auxo_probability or 0))|round(0)|int }}%</strong></td>
 <td class="reason small">{{ c.auxo_reason }}

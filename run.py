@@ -10,6 +10,7 @@
   python run.py simulate [--months 2]      replay months: score, route, SDRs act, outcomes, retrain
   python run.py eval                       the evaluation report (writes docs/evaluation.md)
   python run.py queue-limits [--seeds 5]   one simulated month per routing setup and seed: speed and demos
+  python run.py below-gate [--explore 0.5] [--rank on|off]   below HubSpot's MQL gate: switch, and what is known there
   python run.py serve [--port 8000]        the pages and the webhook endpoint
   python run.py demo                       seed + score + route + sync + train + approve + serve, in one go
 """
@@ -29,7 +30,7 @@ from auxocase.hubspot.mock import MockHubSpot                # noqa: E402
 from auxocase.llm.client import make_llm                     # noqa: E402
 from auxocase.routing.engine import Router                   # noqa: E402
 from auxocase.scoring.pipeline import Scorer, load_live_model  # noqa: E402
-from auxocase.storage.db import DEFAULT_DB, connect, dumps   # noqa: E402
+from auxocase.storage.db import DEFAULT_DB, connect, dumps, set_setting   # noqa: E402
 
 
 def _ctx(db):
@@ -117,6 +118,20 @@ def cmd_losses(a):
     print(json.dumps(fb.classify_losses(hs, conn, make_llm())))
 
 
+def cmd_below_gate(a):
+    """Phase 2 in two switches (feedback/loop.switch_below_gate). Exploration first: part of the random slice goes to
+    plain leads, so outcomes exist below the gate. Ranking there only once enough of those have matured, or forced."""
+    conn, _ = _ctx(a.db)
+    try:
+        status = fb.switch_below_gate(conn, explore=a.explore, rank=None if a.rank is None else a.rank == "on", force=a.force)
+    except ValueError as e:
+        sys.exit(str(e))
+    print(json.dumps(status, indent=1))
+    if a.rank == "on":
+        print("Plain leads already waiting are marked for rescoring; the server's rescore job scores them best first "
+              "(or run `python run.py score --all` now).")
+
+
 def cmd_eval(a):
     from auxocase.evaluation import write_report
     conn, hs = _ctx(a.db)
@@ -174,6 +189,8 @@ def main(argv=None):
     s = sub.add_parser("eval"); s.set_defaults(fn=cmd_eval)
     s = sub.add_parser("queue-limits"); s.add_argument("--seeds", type=int, default=5); s.add_argument("--processes", type=int, default=None)
     s.add_argument("--out", default="outputs/queue_limits.json"); s.set_defaults(fn=cmd_queue_limits)
+    s = sub.add_parser("below-gate"); s.add_argument("--explore", type=float, default=None); s.add_argument("--rank", choices=["on", "off"], default=None)
+    s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_below_gate)
     s = sub.add_parser("serve"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("demo"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_demo)
     a = p.parse_args(argv)

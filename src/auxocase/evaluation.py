@@ -77,9 +77,13 @@ def evaluate(hs: HubSpotClient, conn: sqlite3.Connection) -> dict:
         out["by_channel_all_history"] = {c: {"n": int((ch == c).sum()), "observed": round(float(y[ch == c].mean()), 3), "predicted": round(float(np.asarray(p)[ch == c].mean()), 3)} for c in sorted(set(ch))}
 
     # Exploration slice vs ranked slice.
-    r = conn.execute("SELECT r.decision, COUNT(*) n, SUM(o.worked) worked, SUM(o.demo_booked) booked FROM routing_log r LEFT JOIN outcomes o ON o.contact_id=r.contact_id "
-                     "WHERE r.decision IN ('assigned','holdout_assigned') GROUP BY r.decision").fetchall()
-    out["slices"] = {row["decision"]: {"assigned": row["n"], "worked": row["worked"] or 0, "booked": row["booked"] or 0} for row in r}
+    # Below-gate leads are a different population (they book at a different rate), so they get rows of their own:
+    # mixed in, they would move the exploration row and the apparent lift of ranking without the ranking changing.
+    r = conn.execute("SELECT r.decision, COALESCE(r.below_gate, 0) bg, COUNT(*) n, SUM(o.worked) worked, SUM(o.demo_booked) booked "
+                     "FROM routing_log r LEFT JOIN outcomes o ON o.contact_id=r.contact_id "
+                     "WHERE r.decision IN ('assigned','holdout_assigned') GROUP BY r.decision, bg ORDER BY bg, r.decision").fetchall()
+    out["slices"] = {row["decision"] + (" (below HubSpot's gate)" if row["bg"] else ""): {"assigned": row["n"], "worked": row["worked"] or 0,
+                                                                                        "booked": row["booked"] or 0} for row in r}
 
     ov = conn.execute("SELECT action, COUNT(*) n, SUM(COALESCE(o.demo_booked,0)) booked FROM overrides v LEFT JOIN outcomes o ON o.contact_id=v.contact_id GROUP BY action").fetchall()
     out["overrides"] = {row["action"]: {"n": row["n"], "booked": row["booked"] or 0} for row in ov}
@@ -92,6 +96,7 @@ def evaluate(hs: HubSpotClient, conn: sqlite3.Connection) -> dict:
     from .storage.db import get_setting
     out["stale_lead_factor"] = get_setting(conn, "stale_lead_factor") or "1.0"
     out["mql_gate"] = fb.mql_gate_report(hs, conn)
+    out["below_gate"] = fb.below_gate_readiness(conn)
     out["losses"] = fb.loss_report(hs, conn)
     out["enrichment"] = [dict(r) for r in conn.execute(
         "SELECT COUNT(*) asked, SUM(filled <> '{}') filled, SUM(asked LIKE '%job_title%') asked_title, "
@@ -119,6 +124,7 @@ def capacity_head_to_head(hs: HubSpotClient, conn: sqlite3.Connection, model, ca
     from .data.generate import true_demo_probability, truth_for
     from .scoring.features import feature_row
     from .scoring.model import score_frame
+    from .pool import passed_gate
     from .scoring.points import points_score
 
     start, now = datetime.strptime(min(test_months), "%Y-%m"), clock(conn)
@@ -143,7 +149,7 @@ def capacity_head_to_head(hs: HubSpotClient, conn: sqlite3.Connection, model, ca
         truth = np.array([true_demo_probability(c, k, random.Random(0), truth_for(conn, c.id)) for c, k in zip(leads, co)])
         hub = np.array([c.hubspot_score or 0 for c in leads], dtype=float)
         pts = np.array([points_score(c, k) for c, k in zip(leads, co)], dtype=float)
-        mql = np.array([c.lifecycle_stage != "lead" for c in leads])
+        mql = np.array([passed_gate(c) for c in leads])
 
         def demos(score: np.ndarray, pool: np.ndarray) -> float:
             idx = np.flatnonzero(pool)
@@ -252,6 +258,14 @@ def write_report(hs: HubSpotClient, conn: sqlite3.Connection, path: Path) -> str
     if e.get("by_channel_all_history"):
         L += ["## By channel (test months, worked leads)", "", "| Channel | n | Observed demo rate | Predicted |", "|---|---|---|---|"]
         L += [f"| {c} | {v['n']} | {v['observed']} | {v['predicted']} |" for c, v in e["by_channel_all_history"].items()] + [""]
+    bg = e.get("below_gate")
+    if bg and (bg["assigned"] or bg["explore_below_gate_share"] or bg["ranks_below_gate"]):
+        L += ["## Below HubSpot's MQL gate: what the exploration slice has learned", "",
+              f"Exploration share drawn below the gate: {bg['explore_below_gate_share']:.0%}; ranking below the gate: {'on' if bg['ranks_below_gate'] else 'off'}. "
+              f"{bg['assigned']} plain leads handed out at random, {bg['worked']} worked, {bg['matured']} with a matured label ({bg['booked']} booked); "
+              f"{bg['assigned_by_rank']} more handed out by rank. "
+              + (f"The model's score at hand-out averaged {bg['predicted_rate']} for the matured ones; {bg['observed_rate']} booked. " if bg["matured"] else "")
+              + ("Enough labels to judge ranking below the gate." if bg["ready"] else f"Ranking below the gate waits for {bg['needed']} matured labels."), ""]
     if e.get("slices"):
         L += ["## Ranked slice vs exploration slice", "", "| Slice | Assigned | Worked | Booked |", "|---|---|---|---|"]
         L += [f"| {k} | {v['assigned']} | {v['worked']} | {v['booked']} |" for k, v in e["slices"].items()] + [""]

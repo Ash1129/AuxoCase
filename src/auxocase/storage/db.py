@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS hs_contacts (
   createdate TEXT, lastmodifieddate TEXT,
   auxo_score REAL, auxo_probability REAL, auxo_rank INTEGER, auxo_reason TEXT, auxo_model_version TEXT,
   auxo_scored_at TEXT, auxo_route TEXT, auxo_review_flag TEXT, auxo_holdout INTEGER,
-  auxo_email_subject TEXT, auxo_email_body TEXT
+  auxo_email_subject TEXT, auxo_email_body TEXT, auxo_below_gate INTEGER
 );
 CREATE INDEX IF NOT EXISTS hs_contacts_modified ON hs_contacts(lastmodifieddate);
 CREATE INDEX IF NOT EXISTS hs_contacts_owner ON hs_contacts(hubspot_owner_id);
@@ -95,7 +95,7 @@ CREATE INDEX IF NOT EXISTS scores_contact ON scores(contact_id);
 CREATE UNIQUE INDEX IF NOT EXISTS scores_idem ON scores(contact_id, model_version, input_hash);
 CREATE TABLE IF NOT EXISTS routing_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT, contact_id TEXT, owner_id TEXT, decision TEXT, reason TEXT,
-  open_count_at_decision INTEGER, capacity_limit INTEGER, task_id TEXT, created_at TEXT
+  open_count_at_decision INTEGER, capacity_limit INTEGER, task_id TEXT, created_at TEXT, probability REAL, below_gate INTEGER
 );
 CREATE TABLE IF NOT EXISTS held_queue (
   contact_id TEXT PRIMARY KEY, held_at TEXT, reason TEXT, released_at TEXT, released_by TEXT, released_to TEXT
@@ -154,7 +154,8 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
 # Columns added after a database may already exist; CREATE TABLE IF NOT EXISTS does not add them.
 _ADDED_COLUMNS = {"hs_deals": {"closed_lost_reason": "TEXT"}, "outcomes": {"lead_created_at": "TEXT"},
                   "hs_owners": {"meetings_link": "TEXT"},
-                  "hs_contacts": {"auxo_email_subject": "TEXT", "auxo_email_body": "TEXT"}}
+                  "routing_log": {"probability": "REAL", "below_gate": "INTEGER"},
+                  "hs_contacts": {"auxo_email_subject": "TEXT", "auxo_email_body": "TEXT", "auxo_below_gate": "INTEGER"}}
 
 
 def _migrate(conn: sqlite3.Connection) -> None:

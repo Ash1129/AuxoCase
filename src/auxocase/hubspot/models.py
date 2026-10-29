@@ -32,6 +32,12 @@ OPEN_LEAD_STATUSES = ("NEW", "OPEN", "IN_PROGRESS", "ATTEMPTED_TO_CONTACT", "CON
 # limit counts these only (BrightPath answer 4: one waiting lead, refilled the
 # moment it is touched), so working a lead frees the slot.
 WAITING_LEAD_STATUSES = ("NEW", "OPEN")
+# Lifecycle stages a lead is in while it is the SDRs' to work, plain leads included (an SDR can be given a lead
+# HubSpot's MQL gate never passed, by the exploration slice or once ranking runs below the gate). Past these it
+# is an opportunity or customer: the AE's load, not the SDR's.
+SDR_LIFECYCLE_STAGES = ("lead", "marketingqualifiedlead", "salesqualifiedlead")
+# Stages an assignment moves forward to salesqualifiedlead: HubSpot allows the jump from lead straight to SQL.
+PROMOTED_ON_ASSIGNMENT = ("lead", "marketingqualifiedlead")
 # A lead is "worked" once an SDR has moved it past the status an assignment sets (NEW/OPEN): the first touch.
 TOUCHED_STATUSES = ("IN_PROGRESS", "ATTEMPTED_TO_CONTACT", "CONNECTED", "UNQUALIFIED", "QUALIFIED")
 
@@ -47,6 +53,7 @@ AUXO_PROPERTIES = {
     "auxo_route": "enumeration",       # assigned | held | holdout | incomplete | review
     "auxo_review_flag": "string",      # why a person should look, or empty
     "auxo_holdout": "bool",            # routed regardless of score, for unbiased labels
+    "auxo_below_gate": "bool",         # HubSpot's MQL gate did not pass it; stays true after an assignment moves it on
     "auxo_email_subject": "string",    # the first email drafted on assignment: tokens for the sequence's step one
     "auxo_email_body": "string",
 }
@@ -103,6 +110,7 @@ class Contact:
     auxo_route: str = ""
     auxo_review_flag: str = ""
     auxo_holdout: bool = False
+    auxo_below_gate: bool = False
     auxo_email_subject: str = ""
     auxo_email_body: str = ""
 

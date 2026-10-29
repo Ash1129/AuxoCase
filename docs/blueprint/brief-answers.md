@@ -34,12 +34,12 @@ The questions were asked after the first build. The answers are verbatim; under 
 >
 > | Freshness discount | Queue limit | Touched within 24 h | Demos |
 > |---|---|---|---|
-> | off | 3 | 15% (13–17%) | 209 (200–219) |
-> | on | 3 | 30% (28–31%) | 223 (206–229) |
-> | on | 2 | 50% (48–51%) | 249 (234–262) |
-> | on | 1 | 64% (61–66%) | 281 (270–296) |
+> | off | 3 | 15% (13–17%) | 205 (196–215) |
+> | on | 3 | 31% (29–33%) | 224 (214–235) |
+> | on | 2 | 49% (49–50%) | 249 (236–259) |
+> | on | 1 | 64% (61–66%) | 274 (267–280) |
 >
-> `python run.py queue-limits --seeds 5` reproduces this: it builds the demo's starting point, then replays one month per setup with seeds 101–105 and the offline reader. On its own, the freshness discount doubles the share of leads touched within a day but adds only a few demos while each SDR holds three waiting leads (223 against 209, with overlapping ranges). The demos come from the small queues, which let the SDRs reach the leads it puts first while those leads are still fresh.
+> `python run.py queue-limits --seeds 5` reproduces this: it builds the demo's starting point, then replays one month per setup with seeds 101–105 and the offline reader. On its own, the freshness discount doubles the share of leads touched within a day and adds about 20 demos while each SDR holds three waiting leads (224 against 205; the ranges barely overlap). The demos come from the small queues, which let the SDRs reach the leads it puts first while those leads are still fresh.
 >
 > Speed is now measured from the lead's creation to the first touch. Before this, the routed-lead figure subtracted a wall-clock assignment time from a simulated touch time, so the "1,148 hours" in the first report was not a measurement.
 

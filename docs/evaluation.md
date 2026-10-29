@@ -1,6 +1,6 @@
 # Evaluation report
 
-Generated 2026-10-29T01:02:13 UTC. Live model: `demo-v1`.
+Generated 2026-10-29T02:20:04 UTC. Live model: `demo-v1`.
 
 ## The win BrightPath asked for: more demos, faster follow-up, same 12 SDRs
 
@@ -20,11 +20,11 @@ Month of first touch. Before: the history, SDRs choosing by gut feel and HubSpot
 | 2028-04 | no | 511 | 178 | 0.35 | 72 | 20% |
 | 2028-05 | no | 493 | 171 | 0.35 | 74 | 21% |
 | 2028-06 | no | 506 | 186 | 0.37 | 83 | 19% |
-| 2028-08 | yes | 505 | 280 | 0.55 | 15 | 66% |
-| 2028-09 | yes | 493 | 284 | 0.58 | 17 | 66% |
-| 2028-10 | yes | 481 | 285 | 0.59 | 16 | 66% |
+| 2028-08 | yes | 505 | 282 | 0.56 | 17 | 63% |
+| 2028-09 | yes | 493 | 268 | 0.54 | 18 | 64% |
+| 2028-10 | yes | 481 | 271 | 0.56 | 17 | 65% |
 
-Average per month: 172 demos from 497 leads worked before, 283 from 493 after (+64% demos at the same capacity). On the mock, the speed effect is the generator's assumption from BrightPath's answer 4 (a lead touched within a day books about twice as often); on the real portal it is measured.
+Average per month: 172 demos from 497 leads worked before, 274 from 493 after (+59% demos at the same capacity). On the mock, the speed effect is the generator's assumption from BrightPath's answer 4 (a lead touched within a day books about twice as often); on the real portal it is measured.
 
 All precision figures are computed on leads an SDR actually worked, because unworked leads have no label. They are biased by the SDRs' past choices until the exploration slice has run for a few months (knowledge base L05).
 
@@ -93,23 +93,23 @@ Trained on 2027-08 to 2028-02 (3404 worked leads), family chosen and calibrated 
 
 | Slice | Assigned | Worked | Booked |
 |---|---|---|---|
-| assigned | 1388 | 1381 | 827 |
-| holdout_assigned | 99 | 98 | 22 |
+| assigned | 1369 | 1361 | 801 |
+| holdout_assigned | 118 | 118 | 20 |
 
 ## SDR overrides
 
 | Action | Count | Booked |
 |---|---|---|
-| skipped | 13 | 0 |
+| skipped | 17 | 0 |
 
 ## Speed to lead (lead created to first touch)
 
 | Leads | Touched | Median hours | Within 24 h |
 |---|---|---|---|
 | Not routed by AuxoCase (history) | 6044 | 70.8 | 21% |
-| Routed by AuxoCase | 1479 | 16.2 | 66% |
+| Routed by AuxoCase | 1479 | 17.1 | 64% |
 
-Measured from outcomes: leads first touched within a day booked at 0.63, later ones at 0.288 (factor 0.46; 2254 and 5269 leads). Routing discounts a lead past its first day by `stale_lead_factor` = 0.5; keep the two close.
+Measured from outcomes: leads first touched within a day booked at 0.62, later ones at 0.289 (factor 0.47; 2229 and 5294 leads). Routing discounts a lead past its first day by `stale_lead_factor` = 0.5; keep the two close.
 
 ## Where HubSpot's MQL gate drops leads (last three months)
 
@@ -132,37 +132,36 @@ Asked the enrichment tool about 394 pool leads missing a field; it filled at lea
 
 | Reason | under 50 | 50 149 | 150 299 | 300 500 | over 500 | unknown | Total |
 |---|---|---|---|---|---|---|---|
-| price | 64 | 498 | 322 | 193 | 16 | 28 | 1121 |
-| competitor | 44 | 421 | 311 | 177 | 30 | 25 | 1008 |
-| no decision | 27 | 391 | 239 | 142 | 27 | 27 | 853 |
-| timing | 35 | 379 | 245 | 130 | 25 | 16 | 830 |
-| missing feature | 20 | 272 | 189 | 104 | 45 | 13 | 643 |
-| other | 22 | 181 | 116 | 73 | 8 | 13 | 413 |
-| poor fit | 30 | 145 | 74 | 55 | 10 | 15 | 329 |
+| price | 63 | 486 | 328 | 198 | 16 | 26 | 1117 |
+| competitor | 47 | 416 | 305 | 184 | 29 | 25 | 1006 |
+| no decision | 25 | 402 | 246 | 132 | 25 | 27 | 857 |
+| timing | 33 | 375 | 245 | 126 | 25 | 17 | 821 |
+| missing feature | 18 | 272 | 174 | 111 | 47 | 15 | 637 |
+| other | 20 | 176 | 117 | 69 | 8 | 11 | 401 |
+| poor fit | 29 | 146 | 80 | 57 | 9 | 14 | 335 |
 
 ## Channel monitor (latest run)
 
 | Period | Channel | Worked | Demos | Observed | Predicted | Flag |
 |---|---|---|---|---|---|---|
-| 2028-07 | events | 1 | 0 | 0.000 | 0.369 | held |
-| 2028-07 | paid_ads | 3 | 1 | 0.333 | 0.276 | held |
+| 2028-07 | paid_ads | 2 | 0 | 0.000 | 0.366 | held |
 | 2028-07 | referral | 2 | 0 | 0.000 | 0.476 | held |
-| 2028-07 | website | 13 | 6 | 0.462 | 0.322 | held |
-| 2028-08 | email | 61 | 30 | 0.492 | 0.429 | ok |
-| 2028-08 | events | 62 | 33 | 0.532 | 0.435 | ok |
-| 2028-08 | paid_ads | 31 | 13 | 0.419 | 0.349 | ok |
-| 2028-08 | referral | 50 | 40 | 0.800 | 0.532 | above |
-| 2028-08 | webinar | 63 | 39 | 0.619 | 0.498 | ok |
-| 2028-08 | website | 231 | 120 | 0.519 | 0.411 | above |
-| 2028-09 | email | 49 | 26 | 0.531 | 0.416 | ok |
-| 2028-09 | events | 56 | 28 | 0.500 | 0.443 | ok |
-| 2028-09 | paid_ads | 18 | 10 | 0.556 | 0.372 | held |
-| 2028-09 | referral | 66 | 53 | 0.803 | 0.518 | above |
-| 2028-09 | webinar | 57 | 34 | 0.596 | 0.490 | ok |
-| 2028-09 | website | 247 | 142 | 0.575 | 0.412 | above |
-| 2028-10 | email | 49 | 20 | 0.408 | 0.415 | ok |
-| 2028-10 | events | 56 | 31 | 0.554 | 0.440 | ok |
-| 2028-10 | paid_ads | 13 | 5 | 0.385 | 0.372 | held |
-| 2028-10 | referral | 46 | 29 | 0.630 | 0.524 | ok |
-| 2028-10 | webinar | 68 | 48 | 0.706 | 0.511 | above |
-| 2028-10 | website | 220 | 137 | 0.623 | 0.412 | above |
+| 2028-07 | website | 11 | 5 | 0.455 | 0.364 | held |
+| 2028-08 | email | 66 | 43 | 0.652 | 0.416 | above |
+| 2028-08 | events | 62 | 34 | 0.548 | 0.434 | ok |
+| 2028-08 | paid_ads | 31 | 12 | 0.387 | 0.354 | ok |
+| 2028-08 | referral | 50 | 36 | 0.720 | 0.532 | ok |
+| 2028-08 | webinar | 62 | 41 | 0.661 | 0.501 | ok |
+| 2028-08 | website | 236 | 120 | 0.508 | 0.409 | above |
+| 2028-09 | email | 45 | 21 | 0.467 | 0.422 | ok |
+| 2028-09 | events | 58 | 31 | 0.534 | 0.437 | ok |
+| 2028-09 | paid_ads | 23 | 10 | 0.435 | 0.337 | held |
+| 2028-09 | referral | 65 | 48 | 0.738 | 0.520 | above |
+| 2028-09 | webinar | 56 | 37 | 0.661 | 0.493 | ok |
+| 2028-09 | website | 239 | 116 | 0.485 | 0.412 | ok |
+| 2028-10 | email | 50 | 28 | 0.560 | 0.418 | ok |
+| 2028-10 | events | 56 | 36 | 0.643 | 0.437 | above |
+| 2028-10 | paid_ads | 13 | 5 | 0.385 | 0.377 | held |
+| 2028-10 | referral | 45 | 36 | 0.800 | 0.524 | above |
+| 2028-10 | webinar | 71 | 41 | 0.577 | 0.507 | ok |
+| 2028-10 | website | 218 | 118 | 0.541 | 0.406 | above |

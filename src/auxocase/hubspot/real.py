@@ -56,6 +56,8 @@ import httpx
 from .models import (
     AUXO_PROPERTIES,
     OPEN_LEAD_STATUSES,
+    PROMOTED_ON_ASSIGNMENT,
+    SDR_LIFECYCLE_STAGES,
     WAITING_LEAD_STATUSES,
     BatchResult,
     ChangeEvent,
@@ -108,7 +110,7 @@ _HS_TO_FIELD = {v: k for k, v in CONTACT_PROPERTY_MAP.items()}
 _CONTACT_INTS = {"hs_analytics_num_page_views", "hs_analytics_num_visits", "num_form_submissions",
                  "pricing_page_views", "email_clicks_30d", "hubspot_score", "auxo_rank"}
 _CONTACT_FLOATS = {"auxo_score", "auxo_probability"}
-_CONTACT_BOOLS = {"webinar_registered", "webinar_attended", "auxo_holdout"}
+_CONTACT_BOOLS = {"webinar_registered", "webinar_attended", "auxo_holdout", "auxo_below_gate"}
 _CONTACT_DATETIMES = {"createdate", "lastmodifieddate", "auxo_scored_at"}
 
 COMPANY_PROPERTIES = ["name", "domain", "industry", "numberofemployees", "annualrevenue", "country", "uses_payroll_vendor"]
@@ -509,7 +511,7 @@ class RealHubSpot:
                 {"propertyName": "hs_lead_status", "operator": "IN", "values": list(statuses)},
                 {"propertyName": "hubspot_owner_id", "operator": "HAS_PROPERTY"},
                 # still the SDR's: once a lead is an opportunity or customer it is the AE's load, not the SDR's
-                {"propertyName": "lifecyclestage", "operator": "IN", "values": ["marketingqualifiedlead", "salesqualifiedlead"]},
+                {"propertyName": "lifecyclestage", "operator": "IN", "values": list(SDR_LIFECYCLE_STAGES)},
             ]}],
             "properties": ["hubspot_owner_id"],
         }
@@ -532,7 +534,7 @@ class RealHubSpot:
         props = {"hubspot_owner_id": owner_id}
         if not p.get("hs_lead_status"):
             props["hs_lead_status"] = "NEW"
-        if p.get("lifecyclestage") == "marketingqualifiedlead":
+        if p.get("lifecyclestage") in PROMOTED_ON_ASSIGNMENT:
             props["lifecyclestage"] = "salesqualifiedlead"
         self._request("PATCH", f"/crm/v3/objects/contacts/{contact_id}", json={"properties": props})
         return True

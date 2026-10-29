@@ -48,7 +48,7 @@ def build_demo_base(db_path: Path | str, months: int = 36, seed: int = 7, llm=No
     except ValueError as e:
         out["model_error"] = str(e)
     out["scored"] = len(Scorer(hs, conn, load_live_model(conn), llm or make_llm()).rescore_pool())
-    d = Router(hs, conn).run()
+    d = Router(hs, conn, seed=11).run()          # fixed, so the demo and the experiment start from the same base
     out["routing"] = {k: sum(1 for x in d if x.decision == k) for k in {x.decision for x in d}}
     # The mock accepts any sequence ID; on a real portal AUXO_SEQUENCE_ID names the SDRs' sequence.
     set_setting(conn, "sequence_id", DEMO_SEQUENCE_ID)

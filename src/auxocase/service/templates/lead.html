@@ -1,6 +1,7 @@
 {% extends "base.html" %}{% block title %}Lead {{ c.id }}{% endblock %}
 {% block body %}
 <h1>{{ c.job_title or 'Contact' }} <span class="muted small">#{{ c.id }}</span></h1>
+{% if c.auxo_below_gate or c.lifecycle_stage == 'lead' %}<p><span class="pill accent">below old threshold</span> <span class="small muted">HubSpot's points ({{ c.hubspot_score }}) did not make this lead an MQL{% if c.auxo_holdout %}; it was drawn at random for the exploration slice, so its outcome shows how well the model ranks leads the gate keeps out{% endif %}.</span></p>{% endif %}
 <p class="sub">{{ co.name if co else 'No company' }}{% if co and co.num_employees %} · {{ co.num_employees }} employees{% endif %}{% if co and co.industry %} · {{ co.industry }}{% endif %} · {{ c.country }} · channel: {{ c.channel }} · source: {{ c.hs_analytics_source }} {{ c.hs_analytics_source_data_1 }}</p>
 <div class="cards">
   <div class="card"><div class="k">Demo likelihood</div><div class="v">{{ (100*(c.auxo_probability or 0))|round(1) }}%</div></div>

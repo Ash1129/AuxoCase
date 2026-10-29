@@ -36,7 +36,8 @@ from ..hubspot.models import OPEN_LEAD_STATUSES, TOUCHED_STATUSES
 from ..scoring.features import feature_row
 from ..scoring.model import DemoModel, Metrics, TrainingTable, train
 from ..scoring.points import points_score
-from ..storage.db import clock, dumps, loads, now_iso, set_setting
+from ..pool import passed_gate
+from ..storage.db import clock, dumps, get_setting, loads, now_iso, set_setting
 
 MIN_GROUP = 30
 def model_dir(conn: sqlite3.Connection) -> Path:
@@ -372,12 +373,65 @@ def mql_gate_report(hs: HubSpotClient, conn: sqlite3.Connection, months: int = 3
         co = companies[c.company_id]
         g = rows.setdefault(c.channel, {"channel": c.channel, "leads": 0, "mql": 0, "no_title": 0, "no_size": 0})
         g["leads"] += 1
-        g["mql"] += int(c.lifecycle_stage != "lead")
+        g["mql"] += int(passed_gate(c))
         g["no_title"] += int(not c.job_title)
         g["no_size"] += int(not (co and co.num_employees))
     out = []
     for g in sorted(rows.values(), key=lambda x: -x["leads"]):
         n = g["leads"]
-        out.append({"channel": g["channel"], "leads": n, "mql_share": round(g["mql"] / n, 3),
+        out.append({"channel": g["channel"], "leads": n, "mqls": g["mql"], "mql_share": round(g["mql"] / n, 3),
                     "no_title": round(g["no_title"] / n, 3), "no_size": round(g["no_size"] / n, 3)})
     return out
+
+
+def below_gate_readiness(conn: sqlite3.Connection) -> dict:
+    """What the exploration slice has learned below HubSpot's MQL gate: the check before ranking there.
+
+    Counts the leads handed out at random from below the gate (the routing log records, at hand-out, whether a lead
+    was below it and the score it had), how many were worked and are old enough for the demo label to have
+    matured, and compares the model's score at hand-out with what happened. It counts them whichever way they were
+    drawn: the below-gate share while ranking is off, the ordinary exploration slice once the pool includes plain
+    leads. Ranking below the gate is worth judging once `BELOW_GATE_READY_WORKED` matured labels exist and the two
+    rates are close. Below-gate leads handed out by rank are counted apart: the SDRs' choice biases them."""
+    from ..pool import BELOW_GATE_READY_WORKED, explore_below_gate_share, ranks_below_gate
+    from ..scoring.model import DEMO_MATURITY_DAYS
+    mature_before = (clock(conn) - timedelta(days=DEMO_MATURITY_DAYS)).isoformat()
+    rows = conn.execute(
+        "SELECT r.contact_id, r.probability, o.worked, o.demo_booked, o.lead_created_at FROM routing_log r "
+        "LEFT JOIN outcomes o ON o.contact_id = r.contact_id WHERE r.decision = 'holdout_assigned' AND r.below_gate = 1").fetchall()
+    ranked = conn.execute("SELECT COUNT(*) n FROM routing_log WHERE decision = 'assigned' AND below_gate = 1").fetchone()["n"]
+    mature = [r for r in rows if r["worked"] and r["lead_created_at"] and r["lead_created_at"] <= mature_before]
+    booked = sum(1 for r in mature if r["demo_booked"])
+    preds = [r["probability"] for r in mature if r["probability"] is not None]
+    return {"explore_below_gate_share": explore_below_gate_share(conn), "ranks_below_gate": ranks_below_gate(conn),
+            "assigned": len(rows), "worked": sum(1 for r in rows if r["worked"]), "matured": len(mature), "booked": booked,
+            "observed_rate": round(booked / len(mature), 3) if mature else None,
+            "predicted_rate": round(sum(preds) / len(preds), 3) if preds else None,
+            "assigned_by_rank": ranked, "needed": BELOW_GATE_READY_WORKED, "ready": len(mature) >= BELOW_GATE_READY_WORKED}
+
+
+def switch_below_gate(conn: sqlite3.Connection, explore: Optional[float] = None, rank: Optional[bool] = None,
+                      force: bool = False) -> dict:
+    """The two phase-2 switches (`run.py below-gate`). Ranking there is refused until the exploration slice has
+    `BELOW_GATE_READY_WORKED` matured labels, unless forced. Switching it on also marks the pool for rescoring:
+    plain leads already waiting were never scored (they were not in the pool), and the scheduler's rescore job
+    then works through them, best first, so they reach the ranking instead of ageing out unseen."""
+    from ..pool import BELOW_GATE_STAGE, DEFAULT_STAGES, ranks_below_gate
+    from ..scoring.pipeline import RESCORE_PENDING
+    from ..scoring.points import POINTS_VERSION
+    if explore is not None:
+        if not 0 <= explore <= 1:
+            raise ValueError("the below-gate share is a share of the exploration slice, between 0 and 1")
+    if rank and not ranks_below_gate(conn):
+        status = below_gate_readiness(conn)
+        if not status["ready"] and not force:
+            raise ValueError(f"not switched on: {status['matured']} of {status['needed']} worked leads from below the gate have "
+                             "matured labels. Send part of the exploration slice there first, or force it.")
+    if explore is not None:
+        set_setting(conn, "explore_below_gate_share", str(explore))
+    if rank is not None and rank != ranks_below_gate(conn):
+        set_setting(conn, "pool_stages", ",".join(DEFAULT_STAGES + ((BELOW_GATE_STAGE,) if rank else ())))
+        if rank:
+            live = live_version(conn)
+            set_setting(conn, RESCORE_PENDING, live["version"] if live else POINTS_VERSION)
+    return below_gate_readiness(conn)

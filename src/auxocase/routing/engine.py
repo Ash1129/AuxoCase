@@ -23,7 +23,10 @@ knowledge base asked for:
 - An exploration slice (L05). A fixed share of the assigned slots (default
   8%) goes to leads drawn at random from below the line, marked
   `auxo_holdout`, so next month's model has labels the SDRs' taste didn't
-  choose. This is the only way the reported lift can be trusted.
+  choose. This is the only way the reported lift can be trusted. With
+  `explore_below_gate_share` set, part of that slice is drawn instead from
+  plain leads HubSpot's MQL gate kept out, scored as they are picked, so the
+  model gets outcomes there before anyone ranks by it (pool.py).
 - Speed to lead (L07). Every assignment creates a task due within hours, and
   assigned leads with no first touch by the SLA are re-alerted, not left.
 
@@ -39,11 +42,11 @@ import random
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Callable, Optional
 
 from ..hubspot.client import HubSpotClient
 from ..hubspot.models import Contact, Owner
-from ..pool import pool_contacts
+from ..pool import BELOW_GATE_REASON, BELOW_GATE_STAGE, below_gate_contacts, explore_below_gate_share, pool_contacts
 from ..storage.db import clock, dumps, get_setting, now_iso, set_setting, tx
 
 DEFAULT_EXPLORATION_SHARE = 0.08
@@ -53,6 +56,8 @@ DEFAULT_TEAM_CAPACITY_PER_MONTH = 500    # the brief: 12 SDRs work about 500 MQL
 DEFAULT_LINE_HORIZON_DAYS = 7
 DEFAULT_HOLD_AFTER_HOURS = 24            # an above-line lead unplaced this long goes to the manager
 DEFAULT_FRESH_HOURS = 24
+EXPLORATION_CREDIT = "exploration_slot_credit"
+BELOW_GATE_CREDIT = "below_gate_slot_credit"
 
 
 def priority(conn: sqlite3.Connection, probability: Optional[float], created: datetime, now: datetime) -> float:
@@ -70,6 +75,8 @@ class RoutingDecision:
     owner_id: Optional[str] = None
     task_id: Optional[str] = None
     reason: str = ""
+    probability: Optional[float] = None   # the lead's score when it was handed out
+    below_gate: bool = False              # HubSpot's MQL gate had not passed it when it was handed out
 
 
 def _missing_fields(c: Contact) -> list[str]:
@@ -84,11 +91,17 @@ def _missing_fields(c: Contact) -> list[str]:
 
 
 class Router:
-    def __init__(self, hs: HubSpotClient, conn: sqlite3.Connection, seed: int = 11,
+    def __init__(self, hs: HubSpotClient, conn: sqlite3.Connection, seed: Optional[int] = None,
                  exploration_share: float = DEFAULT_EXPLORATION_SHARE,
                  task_due_hours: int = DEFAULT_TASK_DUE_HOURS, team: str = "sdr", hold_limit: int = 50,
-                 hold_after_hours: int = DEFAULT_HOLD_AFTER_HOURS):
+                 hold_after_hours: int = DEFAULT_HOLD_AFTER_HOURS,
+                 score: Optional[Callable[[list[Contact]], None]] = None):
         self.hs, self.conn, self.team = hs, conn, team
+        self._score = score or self._score_with_live_model
+        # Which leads the exploration slice draws must be random. A fixed seed on a Router built fresh for each pass
+        # (as the scheduler, the refill and the pages do) would draw the same position every time, so the seed is
+        # left to the OS unless a simulation or a test asks for one. How many slots it gets is not left to chance:
+        # see _take_slots.
         self.rng = random.Random(seed)
         self.exploration_share = exploration_share
         self.task_due_hours = task_due_hours
@@ -142,18 +155,47 @@ class Router:
             set_setting(self.conn, "last_routing_run", now_iso())
             return decisions
 
-        # The exploration share of the free slots, rounded at random so small, frequent runs still honour it.
-        expected = budget * self.exploration_share
-        n_explore = int(expected) + (1 if self.rng.random() < expected - int(expected) else 0)
+        n_explore = min(budget, self._take_slots(EXPLORATION_CREDIT, budget * self.exploration_share))
         n_top = budget - n_explore
         top = pool[:n_top]
         below = pool[n_top:]
+        gated = self._below_gate_picks(n_explore)
+        n_explore -= len(gated)
         explore = self.rng.sample(below, min(n_explore, len(below))) if n_explore and below else []
-        chosen = [(c, False) for c in top] + [(c, True) for c in explore]
-        for contact, is_holdout in chosen:
-            decisions.append(self._assign_one(contact, owners, counts, is_holdout, now))
+        chosen = [(c, False, None) for c in top] + [(c, True, None) for c in explore] + [(c, True, BELOW_GATE_REASON) for c in gated]
+        for contact, is_holdout, reason in chosen:
+            decisions.append(self._assign_one(contact, owners, counts, is_holdout, now, reason))
         set_setting(self.conn, "last_routing_run", now_iso())
         return decisions
+
+    def _below_gate_picks(self, n_explore: int) -> list[Contact]:
+        """The share of this pass's exploration slots that goes below HubSpot's gate, drawn at random from plain leads
+        and scored now: they are not in the pool, so nothing has scored them, and the SDR and the later check of the
+        model's predictions both need the score as it stood when the lead was handed out."""
+        share = explore_below_gate_share(self.conn)
+        if not n_explore or share <= 0:
+            return []
+        n = min(n_explore, self._take_slots(BELOW_GATE_CREDIT, n_explore * share))
+        candidates = [c for c in below_gate_contacts(self.hs, self.conn) if c.email and c.channel] if n else []
+        picks = self.rng.sample(sorted(candidates, key=lambda c: c.id), min(n, len(candidates))) if candidates else []
+        if picks:
+            self._score(picks)
+            picks = [c for c in (self.hs.get_contact(p.id) for p in picks) if c is not None and c.auxo_probability is not None]
+        return picks
+
+    def _take_slots(self, key: str, expected: float) -> int:
+        """Whole slots out of a running fractional credit kept in settings. Most passes free one slot or a few, and
+        8% of one slot rounds to nothing every time; carried over, the credit hands out a slot every twelve or so
+        passes, so the share holds over time however small and frequent the passes are."""
+        credit = float(get_setting(self.conn, key) or 0.0) + expected
+        n = int(credit)
+        set_setting(self.conn, key, repr(credit - n))
+        return n
+
+    def _score_with_live_model(self, contacts: list[Contact]) -> None:
+        from ..llm.client import make_llm
+        from ..scoring.pipeline import Scorer, load_live_model
+        Scorer(self.hs, self.conn, load_live_model(self.conn), make_llm()).score_batch(contacts)
 
     def _line_probability(self, pool: list[Contact], now: datetime) -> Optional[float]:
         """The value at the rank the team reaches in the line horizon at its monthly capacity."""
@@ -162,21 +204,6 @@ class Router:
         k = max(1, int(round(per_month * days / 30.4)))
         c = pool[min(k, len(pool)) - 1]
         return priority(self.conn, c.auxo_probability, c.createdate, now)
-
-        n_explore = int(round(budget * self.exploration_share))
-        n_top = budget - n_explore
-        top = pool[:n_top]
-        below = pool[n_top:]
-        explore = self.rng.sample(below, min(n_explore, len(below))) if n_explore and below else []
-        chosen = [(c, False) for c in top] + [(c, True) for c in explore]
-
-        for contact, is_holdout in chosen:
-            decisions.append(self._assign_one(contact, owners, counts, is_holdout, now))
-        # Everything else stays in the pool, below the line; record the line so the UI can show it.
-        line_p = top[-1].auxo_probability if top else None
-        set_setting(self.conn, "capacity_line_probability", dumps(line_p))
-        set_setting(self.conn, "last_routing_run", now_iso())
-        return decisions
 
     def _next_owner(self, owners: list[Owner], counts: dict[str, int]) -> Optional[Owner]:
         """Round robin starting after the last assigned owner, skipping anyone at their limit."""
@@ -194,7 +221,7 @@ class Router:
         return None
 
     def _assign_one(self, contact: Contact, owners: list[Owner], counts: dict[str, int],
-                    is_holdout: bool, now: datetime) -> RoutingDecision:
+                    is_holdout: bool, now: datetime, reason: Optional[str] = None) -> RoutingDecision:
         missing = _missing_fields(contact)
         if missing:
             self.hs.batch_update_contacts([(contact.id, {"auxo_route": "incomplete", "auxo_review_flag": "missing: " + ", ".join(missing)})])
@@ -218,30 +245,44 @@ class Router:
                 subject = "Calibration lead (please work like any other): " + subject
             task = self.hs.create_task(owner.id, contact.id, subject, contact.auxo_reason or "", due_at=now + timedelta(hours=self.task_due_hours))
             self.hs.batch_update_contacts([(contact.id, {"auxo_route": "assigned", "auxo_holdout": bool(is_holdout)})])
+            below_gate = self._mark_below_gate(fresh)
             self.conn.execute("UPDATE held_queue SET released_at=?, released_by='routing', released_to=? WHERE contact_id=? AND released_at IS NULL",
                               (now.isoformat(timespec="seconds"), owner.id, contact.id))
         d = RoutingDecision(contact.id, "holdout_assigned" if is_holdout else "assigned", owner_id=owner.id, task_id=task.id,
-                            reason="exploration slice" if is_holdout else "above the capacity line")
+                            reason=reason or ("exploration slice" if is_holdout else "above the capacity line"),
+                            probability=fresh.auxo_probability, below_gate=below_gate)
         return self._log(d, counts, owner)
+
+    def _mark_below_gate(self, before: Contact) -> bool:
+        """Whether the lead was still below HubSpot's gate when it was handed out. If so, flag it on the contact,
+        since the assignment just moved it to SQL and its stage no longer says so. A write of its own: a portal
+        that has not created the property yet loses the badge, not the assignment's other fields."""
+        if before.lifecycle_stage != BELOW_GATE_STAGE:
+            return False
+        self.hs.batch_update_contacts([(before.id, {"auxo_below_gate": True})])
+        return True
 
     def _log(self, d: RoutingDecision, counts: dict[str, int], owner: Optional[Owner] = None) -> RoutingDecision:
         self.conn.execute(
-            "INSERT INTO routing_log(contact_id, owner_id, decision, reason, open_count_at_decision, capacity_limit, task_id, created_at) VALUES(?,?,?,?,?,?,?,?)",
+            "INSERT INTO routing_log(contact_id, owner_id, decision, reason, open_count_at_decision, capacity_limit, task_id, created_at, "
+            "probability, below_gate) VALUES(?,?,?,?,?,?,?,?,?,?)",
             (d.contact_id, d.owner_id, d.decision, d.reason, counts.get(d.owner_id or "", None), owner.capacity_limit if owner else None, d.task_id,
-             clock(self.conn).isoformat(timespec="seconds")))
+             clock(self.conn).isoformat(timespec="seconds"), d.probability, int(d.below_gate)))
         return d
 
     # ---- the manager's queue and the SLA ---------------------------------------
     def release_held(self, contact_id: str, owner_id: str, released_by: str, note: str = "") -> bool:
         """A manager assigns a held lead by hand, or raises a limit with a reason elsewhere and re-runs."""
         with tx(self.conn):
-            if not self.hs.set_owner(contact_id, owner_id, expected_current=None):
+            before = self.hs.get_contact(contact_id)
+            if before is None or not self.hs.set_owner(contact_id, owner_id, expected_current=None):
                 return False
             task = self.hs.create_task(owner_id, contact_id, "Lead released from the held queue", note, due_at=clock(self.conn) + timedelta(hours=self.task_due_hours))
             self.conn.execute("UPDATE held_queue SET released_at=?, released_by=?, released_to=? WHERE contact_id=?",
                               (clock(self.conn).isoformat(timespec="seconds"), released_by, owner_id, contact_id))
             self.hs.batch_update_contacts([(contact_id, {"auxo_route": "assigned"})])
-            self._log(RoutingDecision(contact_id, "assigned", owner_id=owner_id, task_id=task.id, reason=f"released by {released_by}"), {})
+            self._log(RoutingDecision(contact_id, "assigned", owner_id=owner_id, task_id=task.id, reason=f"released by {released_by}",
+                                      probability=before.auxo_probability, below_gate=self._mark_below_gate(before)), {})
         return True
 
     def stale_assignments(self, sla_hours: int = DEFAULT_FIRST_TOUCH_SLA_HOURS, now: Optional[datetime] = None) -> list[dict]:
