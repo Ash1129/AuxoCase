@@ -147,3 +147,57 @@ def test_decisions_page_lists_model_and_lead_calls(db):
     for c in leads:
         assert f"/lead/{c.id}" in text
     assert 'href="/decisions"' in client.get("/").text               # reachable from the navigation
+
+
+def test_a_model_going_live_rescores_the_pool_best_ranked_first(db):
+    """Kit step 10: the approved score reaches every lead in the pool, not only leads that change later."""
+    from auxocase.llm.client import Offline
+    from auxocase.pool import pool_contacts
+    from auxocase.scoring.pipeline import RESCORE_PENDING, Scorer, load_live_model
+    from auxocase.storage.db import get_setting
+
+    path, conn, hs = db
+    Scorer(hs, conn, load_live_model(conn), Offline()).rescore_pool()           # the pool on the current live model
+    model, _ = fb.train_candidate(hs, conn, notes="next month's candidate")
+    client = TestClient(create_app(path))
+    client.post(f"/model/{model.version}/approve", data={"team": "marketing", "approver": "m", "decision": "approve"})
+    assert get_setting(conn, RESCORE_PENDING) is None                           # one approval is not enough
+    client.post(f"/model/{model.version}/approve", data={"team": "sales", "approver": "s", "decision": "approve"})
+    assert get_setting(conn, RESCORE_PENDING) == model.version
+
+    sc = Scorer(hs, conn, load_live_model(conn), Offline())
+    stale = sc.stale_pool()
+    ranks = [c.auxo_rank for c in stale if c.auxo_rank]
+    assert stale and ranks == sorted(ranks)                                     # best-ranked first
+    no_time = sc.rescore_stale(budget_s=0)                                      # out of time: nothing done, still pending
+    assert no_time["pending"] and no_time["rescored"] == 0 and 0 < no_time["left"] <= len(stale)   # (the background run is under way)
+
+    client.app.state.rescore_thread.join(timeout=600)                           # the approval started it in the background
+    assert {c.auxo_model_version for c in pool_contacts(hs, conn) if c.auxo_probability is not None} == {model.version}
+    assert get_setting(conn, RESCORE_PENDING) is None
+    assert "rescoring" not in client.get("/model").text
+    assert sc.rescore_stale() == {"pending": False}
+
+
+def test_unchanged_notes_are_not_read_again_when_a_lead_is_rescored(db):
+    from auxocase.llm.client import Offline
+    from auxocase.scoring.pipeline import Scorer, load_live_model
+
+    class Counting(Offline):
+        reads = 0
+
+        def complete(self, system, user, max_tokens=600):
+            if user.startswith("TASK: signals"):
+                Counting.reads += 1
+            return super().complete(system, user, max_tokens)
+
+    path, conn, hs = db
+    c = next(c for c in hs.list_contacts(lifecycle_stage="marketingqualifiedlead") if (c.notes or "").strip())
+    llm = Counting()
+    Scorer(hs, conn, None, llm).score_batch([c])                                # the points table reads the notes
+    assert Counting.reads == 1
+    Scorer(hs, conn, load_live_model(conn), llm).score_batch([hs.get_contact(c.id)])   # a new model, same notes
+    assert Counting.reads == 1
+    hs.batch_update_contacts([(c.id, {"notes": c.notes + " We are hiring twenty more people next quarter."})])
+    Scorer(hs, conn, load_live_model(conn), llm).score_batch([hs.get_contact(c.id)])   # new notes are read
+    assert Counting.reads == 2

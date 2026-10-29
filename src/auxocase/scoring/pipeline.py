@@ -5,7 +5,13 @@ feature), the deterministic part of the score (the trained model, or the
 points table before one is approved), the bounded reading of free text,
 a deterministic merge, a code checker, the review decision, the write-back
 keyed by contact and version, and a log row per lead. A re-run on unchanged
-input is a no-op thanks to `input_hash`.
+input is a no-op thanks to `input_hash`, and the notes are read again only
+when they changed (or the reader did): the reading does not depend on the model.
+
+When a new model goes live, the pool still carries the old model's scores.
+`rescore_stale` works through it from the top rank down, so the leads about
+to be routed get the new score first; the scheduler runs it every minute for
+as long as it has time, and `run.py approve` runs it to the end.
 
 The score is 0-100 for HubSpot views and equals the calibrated probability
 x 100, nudged by at most +/-10 by the free-text reading (and then clipped),
@@ -14,6 +20,7 @@ so "62" always means "about a 62% chance of booking a demo if worked" (L04).
 from __future__ import annotations
 
 import sqlite3
+import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -23,8 +30,8 @@ from ..hubspot.client import HubSpotClient
 from ..hubspot.models import Contact
 from ..llm.client import LLM, make_llm
 from ..llm.reason import write_reason
-from ..llm.signals import SignalReading, read_signals
-from ..storage.db import dumps, get_setting, now_iso, set_setting
+from ..llm.signals import SignalReading, notes_hash, read_signals
+from ..storage.db import dumps, get_setting, loads, now_iso, set_setting
 from ..pool import pool_contacts, stages
 from .enrich import Enricher, enrich_lead, make_enricher
 from .explain import Explanation, explain
@@ -35,6 +42,7 @@ from .points import POINTS_VERSION, points_breakdown, points_score
 REVIEW_BAND = 0.04            # leads within this probability of the capacity line go to a person (Blueprint job 1 step 9)
 PARTNER_DEAL_SIZE = 60000     # partner referrals from companies likely above this ACV go to a person
 REQUIRED_FIELDS = ("email", "channel")
+RESCORE_PENDING = "rescore_pending"     # set to the model version when it goes live; cleared once the pool carries it
 
 
 @dataclass
@@ -95,7 +103,7 @@ class Scorer:
             top = sorted(bd.items(), key=lambda kv: -abs(kv[1]))[:3]
             template = "Points model (no trained model yet): " + ", ".join(f"{k} {v:+d}" for k, v in top) + "."
 
-        signals = read_signals(self.llm, c.notes or "")
+        signals = self._earlier_reading(c) or read_signals(self.llm, c.notes or "")
         p = min(0.99, max(0.01, base_p + signals.adjustment / 100.0))
         if signals.signals:
             template += " Notes mention " + ", ".join(s.type.replace("_", " ") for s in signals.signals) + "."
@@ -110,6 +118,14 @@ class Scorer:
                           expected_value=round(ev, 0), reason=reason, reason_source=source, explanation=expl, signals=signals,
                           base_probability=round(base_p, 4), model_version=self.model_version, review_flag=flag,
                           incomplete=missing, input_hash=h, enriched=enriched)
+
+    def _earlier_reading(self, c: Contact) -> Optional[SignalReading]:
+        """The lead's last reading, if it was of these same notes by this same reader and it worked."""
+        r = self.conn.execute("SELECT signals FROM scores WHERE contact_id=? ORDER BY created_at DESC, id DESC LIMIT 1", (c.id,)).fetchone()
+        d = loads(r["signals"]) if r else None
+        if not d or d.get("error") or d.get("llm") != self.llm.name or d.get("notes_hash") != notes_hash(c.notes or ""):
+            return None
+        return SignalReading.from_dict(d)
 
     def _review_flag(self, c: Contact, company, p: float, cutoff: Optional[float], signals: SignalReading) -> str:
         flags = []
@@ -204,7 +220,29 @@ class Scorer:
         return len(updates)
 
     def rescore_pool(self) -> list[ScoredLead]:
-        return self.score_batch(pool_contacts(self.hs, self.conn))
+        out = self.score_batch(pool_contacts(self.hs, self.conn))
+        if get_setting(self.conn, RESCORE_PENDING) == self.model_version:
+            self.conn.execute("DELETE FROM settings WHERE key=?", (RESCORE_PENDING,))   # the whole pool is on it now
+        return out
+
+    def stale_pool(self) -> list[Contact]:
+        """Pool leads scored by another model than this one, best-ranked first."""
+        stale = [c for c in pool_contacts(self.hs, self.conn) if c.auxo_model_version != self.model_version]
+        return sorted(stale, key=lambda c: (c.auxo_rank is None, c.auxo_rank or 0, c.createdate))
+
+    def rescore_stale(self, budget_s: Optional[float] = None, chunk: int = 10) -> dict:
+        """Rescore leads still on an older model, a chunk at a time, until done or `budget_s` seconds have gone."""
+        if get_setting(self.conn, RESCORE_PENDING) is None:
+            return {"pending": False}
+        stale, done, started = self.stale_pool(), 0, time.monotonic()
+        for i in range(0, len(stale), chunk):
+            if budget_s is not None and time.monotonic() - started >= budget_s:
+                break
+            done += len(self.score_batch(stale[i:i + chunk]))
+        left = len(stale) - done
+        if left == 0:
+            self.conn.execute("DELETE FROM settings WHERE key=?", (RESCORE_PENDING,))
+        return {"pending": left > 0, "model": self.model_version, "rescored": done, "left": left}
 
 
 def _points_to_probability(points: int) -> float:

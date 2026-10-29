@@ -44,6 +44,7 @@ HubSpot (mock in development, real API in production)
 │ time-split precision@500; Platt calibration on the validation window     │
 │ candidate → metrics beside the live model → marketing AND sales approve  │
 │ → live; previous model kept as shadow for one cycle                      │
+│ → pool rescored on the new model, best-ranked leads first                │
 └──────────────────────────────────────────────────────────────────────────┘
 ```
 

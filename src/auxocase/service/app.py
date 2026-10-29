@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -34,7 +35,7 @@ from ..llm.emails import Draft, next_touch
 from ..routing.engine import Router
 from ..routing.outreach import draft_for, log_demo_activity, prepare_outreach, stored_draft
 from ..routing.touches import detect_first_touches
-from ..scoring.pipeline import Scorer, load_live_model
+from ..scoring.pipeline import RESCORE_PENDING, Scorer, load_live_model
 from ..storage.db import DEFAULT_DB, connect, dumps, get_setting, loads, now_iso
 from . import scheduler as sched
 
@@ -208,7 +209,10 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         overrides = st.conn.execute("SELECT action, COUNT(*) n FROM overrides GROUP BY action").fetchall()
         shadow = fb.shadow_comparison(st.hs, st.conn) if any(r["status"] == "shadow" for r in regs) else None
         speed = fb.speed_to_lead(st.conn)
-        return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, regs=regs, monitor=monitor, overrides=[dict(o) for o in overrides], shadow=shadow, speed=speed, hit=_hit_rate(st.conn)))
+        rescoring = None
+        if get_setting(st.conn, RESCORE_PENDING):
+            rescoring = {"version": get_setting(st.conn, RESCORE_PENDING), "left": len(st.scorer().stale_pool())}
+        return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, regs=regs, monitor=monitor, overrides=[dict(o) for o in overrides], shadow=shadow, speed=speed, hit=_hit_rate(st.conn), rescoring=rescoring))
 
     @app.get("/decisions", response_class=HTMLResponse)
     def decisions(request: Request, limit: int = 500):
@@ -234,9 +238,14 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
     @app.post("/model/{version}/approve")
     def approve(version: str, team: str = Form(...), approver: str = Form(...), decision: str = Form(...), note: str = Form("")):
         try:
-            fb.approve(st.conn, version, team, approver, decision, note)
+            res = fb.approve(st.conn, version, team, approver, decision, note)
         except ValueError as e:
             raise HTTPException(400, str(e))
+        if res["status"] == "live" and not (runner and runner.running):
+            # With the scheduler on, its rescore job picks this up within a minute; without it, rescore in the
+            # background here, since with Claude reading notes the whole pool takes far longer than a request.
+            app.state.rescore_thread = threading.Thread(target=_rescore_in_background, args=(db_path, st.hs), daemon=True)
+            app.state.rescore_thread.start()
         return RedirectResponse("/model", status_code=303)
 
     # ---------------- jobs (the three Blueprint jobs, callable from the UI, the CLI or a scheduler) ----------------
@@ -296,6 +305,16 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return JSONResponse({"accepted": len(payload)})
 
     return app
+
+
+def _rescore_in_background(db_path, hs: HubSpotClient) -> None:
+    """Its own connection (and its own mock over it), like the scheduler's, so it never writes inside a request."""
+    conn = connect(db_path)
+    try:
+        client = MockHubSpot(conn) if isinstance(hs, MockHubSpot) else hs
+        Scorer(client, conn, load_live_model(conn), make_llm()).rescore_stale()
+    finally:
+        conn.close()
 
 
 def _signals_for(conn, ids: list[str]) -> dict[str, dict]:

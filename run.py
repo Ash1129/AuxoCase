@@ -96,8 +96,12 @@ def cmd_train(a):
 
 
 def cmd_approve(a):
-    conn, _ = _ctx(a.db)
-    print(json.dumps(fb.approve(conn, a.version, a.team, a.name, a.decision, a.note)))
+    conn, hs = _ctx(a.db)
+    res = fb.approve(conn, a.version, a.team, a.name, a.decision, a.note)
+    print(json.dumps(res))
+    if res["status"] == "live":
+        print("rescoring the pool on the new model, best-ranked leads first...")
+        print(json.dumps(Scorer(hs, conn, load_live_model(conn), make_llm()).rescore_stale()))
 
 
 def cmd_simulate(a):

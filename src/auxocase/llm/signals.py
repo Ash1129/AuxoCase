@@ -9,6 +9,7 @@ asks for a higher score is itself a (negative) signal.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from dataclasses import dataclass, field
@@ -56,10 +57,22 @@ class SignalReading:
     unsure: bool = False
     llm: str = ""
     error: str = ""
+    notes_hash: str = ""        # which notes this reading is of, so unchanged notes need not be read again
 
     def to_dict(self) -> dict:
         return {"signals": [s.__dict__ for s in self.signals], "dropped": self.dropped,
-                "adjustment": self.adjustment, "unsure": self.unsure, "llm": self.llm, "error": self.error}
+                "adjustment": self.adjustment, "unsure": self.unsure, "llm": self.llm, "error": self.error,
+                "notes_hash": self.notes_hash}
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "SignalReading":
+        return cls(signals=[Signal(**s) for s in d.get("signals", [])], dropped=d.get("dropped", []),
+                   adjustment=int(d.get("adjustment", 0)), unsure=bool(d.get("unsure")), llm=d.get("llm", ""),
+                   error=d.get("error", ""), notes_hash=d.get("notes_hash", ""))
+
+
+def notes_hash(notes: str) -> str:
+    return hashlib.sha256((notes or "").strip().encode()).hexdigest()[:16]
 
 
 def _norm(s: str) -> str:
@@ -103,7 +116,7 @@ def check(raw: str, notes: str) -> SignalReading:
 
 def read_signals(llm: LLM, notes: str) -> SignalReading:
     if not (notes or "").strip():
-        return SignalReading(llm=llm.name)
+        return SignalReading(llm=llm.name, notes_hash=notes_hash(notes))
     user = "TASK: signals\nNOTES:\n" + notes.strip()[:3000]
     try:
         raw = llm.complete(SYSTEM, user, max_tokens=400)
@@ -111,6 +124,7 @@ def read_signals(llm: LLM, notes: str) -> SignalReading:
         return SignalReading(llm=llm.name, error=f"{type(e).__name__}: {e}"[:200])
     r = check(raw, notes)
     r.llm = llm.name
+    r.notes_hash = notes_hash(notes)
     return r
 
 

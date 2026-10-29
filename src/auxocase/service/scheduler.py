@@ -6,6 +6,7 @@ decides when to run them:
 | job     | default   | what it does                                                      |
 |---------|-----------|-------------------------------------------------------------------|
 | score   | 5 min     | score leads that are new or changed, then refresh pool ranks      |
+| rescore | 1 min     | after a model goes live, rescore the pool on it, best leads first |
 | route   | 5 min     | fill free SDR slots, hold strong leads that waited, create tasks  |
 | touches | 1 min     | first email or call logged in HubSpot -> lead worked, slot refilled |
 | outreach| 1 min     | draft the first email for new assignments, enrol in the sequence  |
@@ -63,6 +64,7 @@ from ..storage.db import connect, dumps, get_setting, now_iso, set_setting
 
 DEFAULT_SCORE_BATCH = 25
 DEFAULT_TICK_S = 30
+DEFAULT_RESCORE_BUDGET_S = 45       # rescoring stops after this long per run, so the other jobs keep their minute
 
 
 class Skipped(Exception):
@@ -78,6 +80,7 @@ class Job:
 
 DEFAULT_JOBS = (
     Job("score", 5, run_on_first_start=True),
+    Job("rescore", 1, run_on_first_start=True),
     Job("route", 5, run_on_first_start=True),
     Job("touches", 1, run_on_first_start=True),
     Job("outreach", 1, run_on_first_start=True),
@@ -116,11 +119,12 @@ class Scheduler:
         self.jobs = jobs if jobs is not None else jobs_from_env()
         self.score_batch = score_batch or int(os.environ.get("AUXO_SCORE_BATCH") or DEFAULT_SCORE_BATCH)
         self.outreach_batch = int(os.environ.get("AUXO_OUTREACH_BATCH") or DEFAULT_OUTREACH_BATCH)
+        self.rescore_budget_s = float(os.environ.get("AUXO_RESCORE_BUDGET_S") or DEFAULT_RESCORE_BUDGET_S)
         self.tick_s = tick_s or float(os.environ.get("AUXO_SCHEDULER_TICK_S") or DEFAULT_TICK_S)
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self.actions: dict[str, Callable[[], dict]] = {
-            "score": self._score, "route": self._route, "touches": self._touches, "outreach": self._outreach, "remind": self._remind,
+            "score": self._score, "rescore": self._rescore, "route": self._route, "touches": self._touches, "outreach": self._outreach, "remind": self._remind,
             "sync": self._sync, "monitor": self._monitor, "train": self._train,
         }
 
@@ -133,6 +137,9 @@ class Scheduler:
         scored = sc.process_events(max_events=self.score_batch)
         sc.refresh_ranks()
         return {"scored": len(scored), "model": sc.model_version, "reader": self.llm.name}
+
+    def _rescore(self) -> dict:
+        return self._scorer().rescore_stale(budget_s=self.rescore_budget_s)
 
     def _route(self) -> dict:
         d = Router(self.hs, self.conn).run()

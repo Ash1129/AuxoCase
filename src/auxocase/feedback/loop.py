@@ -36,7 +36,7 @@ from ..hubspot.models import OPEN_LEAD_STATUSES, TOUCHED_STATUSES
 from ..scoring.features import feature_row
 from ..scoring.model import DemoModel, Metrics, TrainingTable, train
 from ..scoring.points import points_score
-from ..storage.db import clock, dumps, loads, now_iso
+from ..storage.db import clock, dumps, loads, now_iso, set_setting
 
 MIN_GROUP = 30
 def model_dir(conn: sqlite3.Connection) -> Path:
@@ -232,6 +232,8 @@ def promote(conn: sqlite3.Connection, version: str) -> None:
     conn.execute("UPDATE model_registry SET status='retired' WHERE status='shadow'")
     conn.execute("UPDATE model_registry SET status='shadow' WHERE status='live'")
     conn.execute("UPDATE model_registry SET status='live', promoted_at=? WHERE version=?", (now_iso(), version))
+    # The pool still carries the old model's scores; the rescore job (Scorer.rescore_stale) brings it onto this one.
+    set_setting(conn, "rescore_pending", version)
 
 
 def shadow_comparison(hs: HubSpotClient, conn: sqlite3.Connection, k: int = 500) -> Optional[dict]:
