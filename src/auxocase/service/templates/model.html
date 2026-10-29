@@ -5,6 +5,7 @@
 {% if hit %}<div class="cards"><div class="card"><div class="k">Ranked leads worked this period</div><div class="v">{{ hit.n }}</div></div><div class="card"><div class="k">…that booked a demo</div><div class="v">{{ (100*hit.rate)|round(0)|int }}%</div></div>{% if speed.n %}<div class="card"><div class="k">Median time to first touch</div><div class="v">{{ speed.median_hours }}h</div></div><div class="card"><div class="k">Touched within 24h</div><div class="v">{{ (100*speed.within_24h)|round(0)|int }}%</div></div>{% endif %}</div>{% endif %}
 {% if shadow %}<p class="small">Shadow check on the last labelled month ({{ shadow.n }} leads): live {{ shadow.live.version }} precision@k {{ shadow.live.precision_at_k }} vs previous {{ shadow.shadow.version }} {{ shadow.shadow.precision_at_k }}.</p>{% endif %}
 {% if rescoring %}<p class="small"><span class="pill accent">rescoring</span> {{ rescoring.version }} is live; {{ rescoring.left }} pool leads still carry the previous model's score. They are being rescored best-ranked first.</p>{% endif %}
+{% if stale %}<p><span class="pill warn">not saved</span> {{ stale }} changed after this page loaded (another approval or a send-back). Check its state below before deciding.</p>{% endif %}
 <h2>Versions</h2>
 <table><tr><th>Version</th><th>Status</th><th>Family</th><th class="num">Rows / positives</th><th class="num">Precision@K</th><th class="num">HubSpot points @K</th><th class="num">Lift</th><th class="num">AUC-PR (base)</th><th class="num">ECE</th><th>Approvals</th></tr>
 {% for r in regs %}{% set m = r.metrics %}
@@ -13,7 +14,7 @@
 <td>{{ 'logistic regression' if r.family=='lr' else 'gradient boosting' }}</td>
 <td class="num">{{ m.rows }} / {{ m.positives }}</td><td class="num">{{ m.precision_at_k }}</td><td class="num">{{ m.hubspot_precision_at_k }}</td><td class="num"><strong>{{ m.lift_at_k }}×</strong></td><td class="num">{{ m.auc_pr }} ({{ m.base_rate }})</td><td class="num">{{ m.ece }}</td>
 <td class="small">{% for a in r.approvals %}{{ a.team }}: {{ a.decision }} by {{ a.approver }}{% if a.note %} ({{ a.note }}){% endif %}<br>{% endfor %}
-{% if r.status=='candidate' %}<form class="inline" method="post" action="/model/{{ r.version }}/approve"><select name="team"><option>marketing</option><option>sales</option></select><input name="approver" placeholder="your name" required><input name="note" placeholder="note"><button name="decision" value="approve">Approve</button><button class="quiet" name="decision" value="send_back">Send back</button></form>{% endif %}</td></tr>
+{% if r.status=='candidate' %}<form class="inline" method="post" action="/model/{{ r.version }}/approve"><input type="hidden" name="seen" value="{{ r.token }}"><select name="team"><option>marketing</option><option>sales</option></select><input name="approver" placeholder="your name" required><input name="note" placeholder="note"><button name="decision" value="approve">Approve</button><button class="quiet" name="decision" value="send_back">Send back</button></form>{% endif %}</td></tr>
 {% else %}<tr><td colspan="10" class="muted">No trained model yet; the points table is scoring. Run <code>python run.py train</code>.</td></tr>{% endfor %}
 </table>
 {% for r in regs if r.status in ('live','candidate') %}

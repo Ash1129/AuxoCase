@@ -24,7 +24,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
 from ..feedback import loop as fb
@@ -38,6 +38,8 @@ from ..routing.touches import detect_first_touches
 from ..scoring.pipeline import RESCORE_PENDING, Scorer, load_live_model
 from ..storage.db import DEFAULT_DB, connect, dumps, get_setting, loads, now_iso
 from . import scheduler as sched
+from . import security
+from .security import approval_token, lead_token
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 MAX_RANK_MOVE = 5    # L12: a bounded override buys adoption without handing the queue back to gut feel
@@ -83,6 +85,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
                 runner.stop()
 
     app = FastAPI(title="AuxoCase", lifespan=lifespan)
+    app.middleware("http")(security.guard)       # host and origin checks on every request, security headers on every reply
     app.state.st = st
     app.state.scheduler = runner
 
@@ -102,7 +105,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "home.html", ctx(request, owners=owners, counts=counts, pool=pool[:20], pool_size=len(pool), held=held, runs=runs))
 
     @app.get("/queue/{owner_id}", response_class=HTMLResponse)
-    def queue(request: Request, owner_id: str):
+    def queue(request: Request, owner_id: str, stale: str = ""):
         owner = next((o for o in st.hs.list_owners() if o.id == owner_id), None)
         if not owner:
             raise HTTPException(404)
@@ -111,7 +114,9 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         leads = [c for c in leads if c.id not in acted]
         leads.sort(key=lambda c: -(c.auxo_probability or 0))
         hit = _hit_rate(st.conn)
-        return TEMPLATES.TemplateResponse(request, "queue.html", ctx(request, owner=owner, leads=leads, signals=_signals_for(st.conn, [c.id for c in leads]), hit=hit))
+        tokens = {c.id: lead_token(st.conn, c) for c in leads}
+        return TEMPLATES.TemplateResponse(request, "queue.html", ctx(request, owner=owner, leads=leads, signals=_signals_for(st.conn, [c.id for c in leads]),
+                                                                       hit=hit, tokens=tokens, stale=stale))
 
     @app.get("/lead/{contact_id}", response_class=HTMLResponse)
     def lead(request: Request, contact_id: str, draft: int = 0):
@@ -158,12 +163,18 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return RedirectResponse(f"/lead/{contact_id}", status_code=303)
 
     @app.post("/lead/{contact_id}/action")
-    def lead_action(contact_id: str, owner_id: str = Form(...), action: str = Form(...), note: str = Form(""), move: int = Form(0)):
+    def lead_action(contact_id: str, owner_id: str = Form(...), action: str = Form(...), note: str = Form(""), move: int = Form(0),
+                    seen: str = Form("")):
         c = st.hs.get_contact(contact_id)
         if not c:
             raise HTTPException(404)
         if action not in ("worked", "skipped", "junk", "promote", "demote"):
             raise HTTPException(400, "unknown action")
+        if not seen:
+            raise HTTPException(400, "the form is missing the lead's version; reload the page")
+        if seen != lead_token(st.conn, c):
+            # Someone else acted on it, or HubSpot moved it on, since this page was loaded: say so instead of acting twice.
+            return RedirectResponse(f"/queue/{owner_id}?stale={contact_id}", status_code=303)
         move = max(-MAX_RANK_MOVE, min(MAX_RANK_MOVE, move))
         st.conn.execute("INSERT INTO overrides(contact_id, owner_id, action, note, score_at_time, rank_at_time, created_at) VALUES(?,?,?,?,?,?,?)",
                         (contact_id, owner_id, action, note, c.auxo_score, c.auxo_rank, now_iso()))
@@ -200,11 +211,12 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return RedirectResponse("/held", status_code=303)
 
     @app.get("/model", response_class=HTMLResponse)
-    def model_page(request: Request):
+    def model_page(request: Request, stale: str = ""):
         regs = [dict(r) for r in st.conn.execute("SELECT * FROM model_registry ORDER BY trained_at DESC").fetchall()]
         for r in regs:
             r["metrics"] = loads(r["metrics"]) or {}
             r["approvals"] = [dict(a) for a in st.conn.execute("SELECT * FROM approvals WHERE version=? ORDER BY id", (r["version"],)).fetchall()]
+            r["token"] = approval_token(st.conn, r["version"])
         monitor = [dict(r) for r in st.conn.execute("SELECT * FROM channel_monitor WHERE created_at = (SELECT MAX(created_at) FROM channel_monitor) ORDER BY period, channel").fetchall()]
         overrides = st.conn.execute("SELECT action, COUNT(*) n FROM overrides GROUP BY action").fetchall()
         shadow = fb.shadow_comparison(st.hs, st.conn) if any(r["status"] == "shadow" for r in regs) else None
@@ -212,7 +224,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         rescoring = None
         if get_setting(st.conn, RESCORE_PENDING):
             rescoring = {"version": get_setting(st.conn, RESCORE_PENDING), "left": len(st.scorer().stale_pool())}
-        return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, regs=regs, monitor=monitor, overrides=[dict(o) for o in overrides], shadow=shadow, speed=speed, hit=_hit_rate(st.conn), rescoring=rescoring))
+        return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, regs=regs, monitor=monitor, overrides=[dict(o) for o in overrides], shadow=shadow, speed=speed, hit=_hit_rate(st.conn), rescoring=rescoring, stale=stale))
 
     @app.get("/decisions", response_class=HTMLResponse)
     def decisions(request: Request, limit: int = 500):
@@ -236,7 +248,12 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
                                                                           owners=owners, titles=titles, limit=limit))
 
     @app.post("/model/{version}/approve")
-    def approve(version: str, team: str = Form(...), approver: str = Form(...), decision: str = Form(...), note: str = Form("")):
+    def approve(version: str, team: str = Form(...), approver: str = Form(...), decision: str = Form(...), note: str = Form(""),
+                seen: str = Form("")):
+        if not seen:
+            raise HTTPException(400, "the form is missing the model's version state; reload the page")
+        if seen != approval_token(st.conn, version):
+            return RedirectResponse(f"/model?stale={version}", status_code=303)
         try:
             res = fb.approve(st.conn, version, team, approver, decision, note)
         except ValueError as e:
@@ -289,11 +306,18 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
     def job_realert():
         return {"reminders": st.router().re_alert_stale()}
 
+    @app.get("/assets/app.js")
+    def app_js():
+        return Response(security.APP_JS, media_type="application/javascript")
+
     # ---------------- HubSpot webhook (production path) ----------------
     @app.post("/webhooks/hubspot")
     async def webhook(request: Request):
         body = await request.body()
         secret = os.environ.get("HUBSPOT_APP_SECRET")
+        if not secret and not isinstance(st.hs, MockHubSpot):
+            # With the real portal anyone who finds the URL could feed it events; only signed calls are taken.
+            raise HTTPException(503, "HUBSPOT_APP_SECRET is not set: the real HubSpot client takes signed webhooks only")
         if secret:
             from ..hubspot.real import RealHubSpot
             if not RealHubSpot.verify_signature(secret, body, request.headers.get("X-HubSpot-Signature", "")):

@@ -22,7 +22,7 @@
 {% if email %}<div class="card draft"><p class="small muted">Draft: {{ labels[email.touch] }}</p><p><b>Subject:</b> {{ email.subject }}</p><p class="draft-body">{{ email.body }}</p>
 <p><a href="{{ email.mailto(c.email) }}"><button type="button">Open in your email app</button></a>
 <span class="small muted">Drafted by {{ 'Claude' if email.source == 'llm' else 'the template' }}{% if email.rejected %} · Claude's draft was set aside: {{ email.rejected }}{% endif %}. Edit it before you send; nothing is sent from here.</span></p></div>{% endif %}
-<p><a href="/lead/{{ c.id }}?draft=1" onclick="this.textContent='Drafting… this takes a few seconds'; this.style.pointerEvents='none'">{{ 'Draft it again' if email else 'Draft the ' ~ labels[touch] }}</a></p>
+<p><a href="/lead/{{ c.id }}?draft=1" data-busy="Drafting… this takes a few seconds">{{ 'Draft it again' if email else 'Draft the ' ~ labels[touch] }}</a></p>
 {% endif %}
 {% if mock and c.hubspot_owner_id %}<div class="card draft"><p class="small"><b>Demo: act in HubSpot.</b> On a real portal the SDR sends the email or logs the call in HubSpot, and AuxoCase sees it within a minute; here these buttons stand in for HubSpot.</p>
 <form method="post" action="/lead/{{ c.id }}/hubspot"><input type="hidden" name="subject" value="{{ email.subject if email else '' }}">

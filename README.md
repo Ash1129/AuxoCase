@@ -66,6 +66,8 @@ Step by step:
 
 **The SDR works in HubSpot.** When a lead is assigned, the outreach job drafts the first email, adds the SDR's booking link, writes it to the lead (`auxo_email_subject`, `auxo_email_body`) and enrols the lead in the HubSpot sequence set by `AUXO_SEQUENCE_ID`, sending from the SDR's inbox. The sequence's first step is a manual email task built from those two properties, so the draft waits in the SDR's HubSpot tasks to be read, edited and sent. The first email or call the SDR logs in HubSpot counts as the first touch: within a minute the lead is marked worked, its first-touch time recorded, and the SDR's slot refilled, with no click in AuxoCase. The lead page shows that activity and drafts the follow-up or the last email from it; a lead that replied gets no draft. On the mock, buttons on the lead page stand in for HubSpot (send, log a call, the lead replies).
 
+**Safe from other sites.** The pages answer only to the host names in `AUXO_ALLOWED_HOSTS` (this machine by default), every write coming from another site's page is refused, and every reply carries a content security policy and no-framing headers. Forms that act on a lead or approve a model carry the state the person saw; if someone else acted first or HubSpot moved the lead on, the action is not applied and the page says so. With the real HubSpot client, webhooks must be signed (`service/security.py`).
+
 **The reader.** Free-text notes are read by Claude for buying signals. `AUXO_LLM=cli` uses the Claude Code CLI headlessly (`claude -p`), `AUXO_LLM=api` the Anthropic API, and the default `offline` a scripted reader so everything runs without a model. Whatever answers, code verifies every quoted signal against the notes, drops what isn't there, and caps the effect at ±10 points; the model never sets the score.
 
 ## Where things are
@@ -79,7 +81,7 @@ Step by step:
 ## Going live in HubSpot
 
 1. Create the `auxo_*` contact properties (`ensure_properties()` does it through the API) and a private app with the scopes in `docs/ARCHITECTURE.md`.
-2. Set `HUBSPOT_PRIVATE_APP_TOKEN`; point a HubSpot webhook subscription (contact creation and property changes) at `/webhooks/hubspot` with `HUBSPOT_APP_SECRET` for signature checks, or run `score` on a schedule to poll by last-modified.
+2. Set `HUBSPOT_PRIVATE_APP_TOKEN`; point a HubSpot webhook subscription (contact creation and property changes) at `/webhooks/hubspot` and set `HUBSPOT_APP_SECRET` (with the real client, unsigned webhooks are refused), or run `score` on a schedule to poll by last-modified. Add the deployment's host name to `AUXO_ALLOWED_HOSTS`.
 3. Confirm the property internal names listed in `hubspot/real.py` against `GET /crm/v3/properties/contacts` on the portal; they vary by portal.
 4. Train the first model on HubSpot's three years of history (the last 12 months, mature labels only; at least 60 demos), with the exploration slice on from day one. Set `stale_lead_factor` from the report's measured speed effect, and set the SDRs' `capacity_limit` to 1.
 5. Connect the enrichment tool behind `scoring/enrich.py`'s `Enricher` interface (set `AUXO_ENRICH`), and run `losses` on the closed-lost history.

@@ -2,6 +2,7 @@
 {% block body %}
 <h1>{{ owner.name }}'s queue</h1>
 <p class="sub">Best first. The percentage is the model's calibrated chance this lead books a demo if you work it. You make the final call: mark it worked, skip it with a reason, or move it a few places.{% if hit %} This period the ranked leads you all worked booked {{ (100*hit.rate)|round(0) }}% of the time ({{ hit.booked }} of {{ hit.n }}).{% endif %}</p>
+{% if stale %}<p><span class="pill warn">not saved</span> That lead changed after this page loaded: someone else acted on it, or it moved on in HubSpot. Here is the queue as it stands now.</p>{% endif %}
 <table>
 <tr><th class="num">Rank</th><th>Lead</th><th>Channel</th><th class="num">Demo</th><th>Why it is ranked here</th><th>Your call</th></tr>
 {% for c in leads %}
@@ -13,9 +14,9 @@
 <td class="reason small">{{ c.auxo_reason }}
 {% set s = signals.get(c.id, {}) %}{% if s.signals %}<div class="quote">{% for g in s.signals %}“{{ g.quote }}” ({{ g.type|replace('_',' ') }}){% if not loop.last %} · {% endif %}{% endfor %}</div>{% endif %}</td>
 <td>
-<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><button name="action" value="worked">Worked</button><button class="quiet" name="action" value="junk">Junk</button></form>
-<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><select name="note"><option value="">reason…</option><option>wrong fit</option><option>already a customer</option><option>no contact details</option><option>timing</option><option>other</option></select><button class="quiet" name="action" value="skipped">Skip</button></form>
-<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="move" value="3"><input name="note" placeholder="why move it" size="12"><button class="quiet" name="action" value="promote">↑3</button><button class="quiet" name="action" value="demote">↓3</button></form>
+<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ tokens[c.id] }}"><button name="action" value="worked">Worked</button><button class="quiet" name="action" value="junk">Junk</button></form>
+<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ tokens[c.id] }}"><select name="note"><option value="">reason…</option><option>wrong fit</option><option>already a customer</option><option>no contact details</option><option>timing</option><option>other</option></select><button class="quiet" name="action" value="skipped">Skip</button></form>
+<form class="inline" method="post" action="/lead/{{ c.id }}/action"><input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ tokens[c.id] }}"><input type="hidden" name="move" value="3"><input name="note" placeholder="why move it" size="12"><button class="quiet" name="action" value="promote">↑3</button><button class="quiet" name="action" value="demote">↓3</button></form>
 </td>
 </tr>
 {% else %}<tr><td colspan="6" class="muted">Nothing assigned right now.</td></tr>{% endfor %}

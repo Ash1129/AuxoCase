@@ -7,7 +7,13 @@ from auxocase.data.simulate import simulate_month
 from auxocase.feedback import loop as fb
 from auxocase.hubspot.mock import MockHubSpot
 from auxocase.service.app import create_app
+from auxocase.service.security import approval_token, lead_token
 from auxocase.storage.db import connect
+
+
+def _seen(conn, hs, contact_id):
+    """The version token a page would have put in the form for this lead."""
+    return lead_token(conn, hs.get_contact(contact_id))
 
 
 @pytest.fixture(scope="module")
@@ -72,10 +78,10 @@ def test_service_pages_and_actions(db):
     r = client.get(f"/queue/{owner.id}")
     assert r.status_code == 200 and "queue" in r.text.lower()
     lead = next(c for c in hs.list_contacts() if c.hubspot_owner_id == owner.id)
-    r = client.post(f"/lead/{lead.id}/action", data={"owner_id": owner.id, "action": "skipped", "note": "wrong fit"}, follow_redirects=False)
+    r = client.post(f"/lead/{lead.id}/action", data={"owner_id": owner.id, "action": "skipped", "note": "wrong fit", "seen": _seen(conn, hs, lead.id)}, follow_redirects=False)
     assert r.status_code == 303
     assert conn.execute("SELECT COUNT(*) n FROM overrides WHERE contact_id=?", (lead.id,)).fetchone()["n"] == 1
-    r = client.post(f"/lead/{lead.id}/action", data={"owner_id": owner.id, "action": "promote", "move": "40"}, follow_redirects=False)
+    r = client.post(f"/lead/{lead.id}/action", data={"owner_id": owner.id, "action": "promote", "move": "40", "seen": _seen(conn, hs, lead.id)}, follow_redirects=False)
     assert r.status_code == 303                                    # bounded: 40 is clipped to 5
     assert client.get(f"/lead/{lead.id}").status_code == 200
     assert client.get("/held").status_code == 200
@@ -101,7 +107,7 @@ def test_marking_a_lead_worked_refills_the_sdrs_slot(db):
         again = client.post("/jobs/route").json()["decisions"]
         assert not again.get("assigned") and not again.get("holdout_assigned")  # nothing more while it waits
 
-        r = client.post(f"/lead/{waiting[0].id}/action", data={"owner_id": owner.id, "action": "worked"}, follow_redirects=False)
+        r = client.post(f"/lead/{waiting[0].id}/action", data={"owner_id": owner.id, "action": "worked", "seen": _seen(conn, hs, waiting[0].id)}, follow_redirects=False)
         assert r.status_code == 303
         refill = [c for c in hs.list_contacts() if c.hubspot_owner_id == owner.id and c.hs_lead_status in ("NEW", "OPEN")]
         assert len(refill) == 1 and refill[0].id != waiting[0].id               # a new lead took the freed slot
@@ -131,13 +137,13 @@ def test_decisions_page_lists_model_and_lead_calls(db):
     path, conn, hs = db
     client = TestClient(create_app(path))
     model, _ = fb.train_candidate(hs, conn, notes="for the decisions page")
-    r = client.post(f"/model/{model.version}/approve", data={"team": "sales", "approver": "Dana from sales",
+    r = client.post(f"/model/{model.version}/approve", data={"team": "sales", "approver": "Dana from sales", "seen": approval_token(conn, model.version),
                                                               "decision": "send_back", "note": "wait for more referral data"}, follow_redirects=False)
     assert r.status_code == 303
     owner = hs.list_owners()[0]
     leads = [c for c in hs.list_contacts() if c.hubspot_owner_id == owner.id][:3]
     for c, action, note in zip(leads, ("worked", "junk", "skipped"), ("", "", "already a customer")):
-        client.post(f"/lead/{c.id}/action", data={"owner_id": owner.id, "action": action, "note": note}, follow_redirects=False)
+        client.post(f"/lead/{c.id}/action", data={"owner_id": owner.id, "action": action, "note": note, "seen": _seen(conn, hs, c.id)}, follow_redirects=False)
     page = client.get("/decisions")
     assert page.status_code == 200
     text = page.text
@@ -160,9 +166,9 @@ def test_a_model_going_live_rescores_the_pool_best_ranked_first(db):
     Scorer(hs, conn, load_live_model(conn), Offline()).rescore_pool()           # the pool on the current live model
     model, _ = fb.train_candidate(hs, conn, notes="next month's candidate")
     client = TestClient(create_app(path))
-    client.post(f"/model/{model.version}/approve", data={"team": "marketing", "approver": "m", "decision": "approve"})
+    client.post(f"/model/{model.version}/approve", data={"team": "marketing", "approver": "m", "decision": "approve", "seen": approval_token(conn, model.version)})
     assert get_setting(conn, RESCORE_PENDING) is None                           # one approval is not enough
-    client.post(f"/model/{model.version}/approve", data={"team": "sales", "approver": "s", "decision": "approve"})
+    client.post(f"/model/{model.version}/approve", data={"team": "sales", "approver": "s", "decision": "approve", "seen": approval_token(conn, model.version)})
     assert get_setting(conn, RESCORE_PENDING) == model.version
 
     sc = Scorer(hs, conn, load_live_model(conn), Offline())
