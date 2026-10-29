@@ -6,17 +6,19 @@
 <meta name="color-scheme" content="{{ 'light' if theme == 'light' else ('dark' if theme == 'dark' else 'light dark') }}">
 <title>{% block title %}AuxoCase{% endblock %} · AuxoCase{% if env == 'mock' %} · synthetic{% endif %}</title>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Source+Sans+3:ital,wght@0,400..600;1,400&amp;family=Source+Serif+4:ital,opsz,wght@0,8..60,400..600;1,8..60,400..500&amp;display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,600&amp;family=Lora:ital,wght@0,400..600;1,400..600&amp;display=swap">
 <style>
-/* Broadsheet: warm paper, near-black ink, one ink-blue accent. Hierarchy from type and 1px rules, not boxes. */
-:root{--bg:#F7F5F0;--surface:#FFFFFF;--ink:#1C1E21;--muted:#5C6066;--line:#E2DED5;--accent:#2A4F86;--accentSoft:#E7ECF4;--good:#2D6A3E;--warn:#8A5300;--bad:#A1352A;--onAccent:#FFFFFF;color-scheme:light}
-@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141619;--surface:#1C1F23;--ink:#ECEAE4;--muted:#A4A7AC;--line:#31353B;--accent:#94B3E4;--accentSoft:#1F2A3A;--good:#82C596;--warn:#E2B661;--bad:#F0978C;--onAccent:#141619;color-scheme:dark}}
-:root[data-theme="dark"]{--bg:#141619;--surface:#1C1F23;--ink:#ECEAE4;--muted:#A4A7AC;--line:#31353B;--accent:#94B3E4;--accentSoft:#1F2A3A;--good:#82C596;--warn:#E2B661;--bad:#F0978C;--onAccent:#141619;color-scheme:dark}
+/* Broadsheet, in the palette and type of ashwinprajeeth.com: stone paper, near-black ink, a gold accent; Lora for
+   reading and Cormorant Garamond for headings. Hierarchy from type and 1px rules, not boxes. --accent is for fills,
+   bars and borders; --accentInk is the darker gold that reads as text on the paper. */
+:root{--bg:#F3F2F2;--surface:#EAE9E9;--ink:#201F1D;--muted:#605D5D;--line:#201F1D29;--accent:#B68235;--accentInk:#7D5411;--accentSoft:#FFF3E4;--good:#2D6A3E;--warn:#7D5411;--bad:#A1352A;--onAccent:#FFFFFF;--heading:"Cormorant Garamond","Cormorant Garamond Fallback",Georgia,serif;--body:Lora,"Lora Fallback",Georgia,serif;color-scheme:light}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#1A1919;--surface:#262525;--ink:#F3F1E8;--muted:#AEABA3;--line:#F3F1E838;--accent:#C9964A;--accentInk:#E1AD66;--accentSoft:#3A2A14;--good:#82C596;--warn:#E1AD66;--bad:#F0978C;--onAccent:#1A1919;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#1A1919;--surface:#262525;--ink:#F3F1E8;--muted:#AEABA3;--line:#F3F1E838;--accent:#C9964A;--accentInk:#E1AD66;--accentSoft:#3A2A14;--good:#82C596;--warn:#E1AD66;--bad:#F0978C;--onAccent:#1A1919;color-scheme:dark}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/22px "Source Sans 3",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
-a{color:var(--accent)}a:hover{color:var(--ink)}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 15px/24px var(--body)}
+a{color:var(--accentInk)}a:hover{color:var(--ink)}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-.serif{font-family:"Source Serif 4","Iowan Old Style",Charter,Georgia,serif}
+.serif{font-family:var(--heading);font-weight:600}
 .num{font-variant-numeric:tabular-nums lining-nums}
 .muted{color:var(--muted)}.small{font-size:14px;line-height:20px}.tiny{font-size:13px;line-height:18px}
 .good{color:var(--good)}.warn{color:var(--warn)}.bad{color:var(--bad)}
@@ -25,8 +27,8 @@ a{color:var(--accent)}a:hover{color:var(--ink)}
 /* the shell: a sidebar beside the page, stacked on a phone */
 .shell{display:flex;flex-wrap:wrap;min-height:100vh}
 .side{flex:1 1 240px;max-width:240px;border-right:1px solid var(--line);padding:20px 12px;display:flex;flex-direction:column;gap:2px}
-.brand{font-family:"Source Serif 4",Georgia,serif;font-size:22px;line-height:28px;font-weight:500;padding:4px 12px 8px;color:var(--ink);text-decoration:none}
-.glabel{font-size:13px;line-height:18px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);padding:16px 12px 4px;margin:0}
+.brand{font-family:var(--heading);font-size:26px;line-height:30px;font-weight:600;padding:4px 12px 8px;color:var(--ink);text-decoration:none}
+.glabel{font-size:12px;line-height:18px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);padding:16px 12px 4px;margin:0}
 .nav{display:flex;align-items:center;justify-content:space-between;min-height:44px;padding:0 12px;border-radius:4px;color:var(--ink);text-decoration:none;font-weight:500}
 .nav:hover{background:var(--accentSoft);color:var(--ink)}
 .nav[aria-current="page"]{background:var(--accentSoft)}
@@ -43,21 +45,21 @@ a{color:var(--accent)}a:hover{color:var(--ink)}
 
 /* type */
 h1,h2,h3{margin:0}
-.title{font-family:"Source Serif 4",Georgia,serif;font-size:40px;line-height:48px;font-weight:500}
-.lede{font-family:"Source Serif 4",Georgia,serif;font-size:22px;line-height:32px;max-width:760px;margin:0}
-.kicker{font-size:13px;line-height:18px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:0;font-weight:400}
-.big{font-family:"Source Serif 4",Georgia,serif;font-size:72px;line-height:76px;font-weight:500}
-.mid{font-family:"Source Serif 4",Georgia,serif;font-size:32px;line-height:40px;font-weight:500}
+.title{font-family:var(--heading);font-size:50px;line-height:54px;font-weight:600}
+.lede{font-size:19px;line-height:32px;max-width:760px;margin:0}
+.kicker{font-size:12px;line-height:18px;letter-spacing:.14em;text-transform:uppercase;color:var(--accentInk);margin:0;font-weight:400}
+.big{font-family:var(--heading);font-size:88px;line-height:88px;font-weight:600}
+.mid{font-family:var(--heading);font-size:40px;line-height:44px;font-weight:600}
 .rule{border:0;border-top:1px solid var(--line);margin:0}
 .dagger{font-size:13px;color:var(--muted)}
-.footnote{border-top:1px dashed var(--line);padding-top:12px;font-size:13px;line-height:18px;color:var(--muted);max-width:760px}
-@media (max-width:640px){.title{font-size:30px;line-height:36px}.big{font-size:56px;line-height:60px}.mid{font-size:26px;line-height:32px}.lede{font-size:19px;line-height:28px}}
+.footnote{border-top:1px dashed var(--line);padding-top:12px;font-size:13px;line-height:20px;color:var(--muted);max-width:760px}
+@media (max-width:640px){.title{font-size:38px;line-height:42px}.big{font-size:66px;line-height:68px}.mid{font-size:32px;line-height:36px}.lede{font-size:17px;line-height:28px}}
 
-/* controls */
-.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:4px;border:1px solid var(--line);background:transparent;color:var(--ink);font-family:inherit;font-weight:600;font-size:15px;line-height:22px;cursor:pointer;text-decoration:none}
+/* controls: outlined, like the site's buttons; the primary one is drawn in the gold */
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:4px;border:1px solid var(--line);background:transparent;color:var(--ink);font-family:inherit;font-weight:500;font-size:15px;line-height:22px;cursor:pointer;text-decoration:none}
 .btn:hover{border-color:var(--muted);color:var(--ink)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--onAccent)}
-.btn.primary:hover{color:var(--onAccent)}
+.btn.primary{border-color:var(--accent);color:var(--accentInk)}
+.btn.primary:hover{background:var(--accentSoft);color:var(--accentInk)}
 .actions{display:flex;flex-wrap:wrap;gap:12px}
 input,select,textarea{font:inherit;font-size:16px;line-height:24px;min-height:44px;padding:8px 10px;border:1px solid var(--line);border-radius:4px;background:var(--surface);color:var(--ink)}
 label{font-size:14px}
@@ -68,7 +70,7 @@ form.inline{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
 .scroll{overflow-x:auto;position:relative}
 table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 12px 10px 0;border-top:1px solid var(--line);vertical-align:top}
-th{font-size:13px;line-height:18px;font-weight:400;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);border-top:0;padding-bottom:6px}
+th{font-size:12px;line-height:18px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-top:0;padding-bottom:6px}
 td.r,th.r{text-align:right;padding-right:0}
 
 /* badges: words with a small shape, told apart without colour */
@@ -92,7 +94,7 @@ td.r,th.r{text-align:right;padding-right:0}
 .drivers .hd{border-top:0;padding:0 0 6px;font-size:13px;line-height:18px;color:var(--muted)}
 .bar-good{fill:var(--good)}.bar-worse{fill:var(--muted)}.bar-track{fill:var(--line)}.bar-warn{fill:var(--warn)}.bar-accent{fill:var(--accent)}
 @media (max-width:640px){.drivers{grid-template-columns:minmax(0,1fr) max-content;column-gap:12px}.drivers .barcell{grid-column:1 / -1;border-top:0;padding-top:0}}
-.quote{font-family:"Source Serif 4",Georgia,serif;font-style:italic}
+.quote{font-style:italic}
 .draft-body{white-space:pre-wrap;margin:0}
 {% block style %}{% endblock %}
 </style>
@@ -110,7 +112,7 @@ td.r,th.r{text-align:right;padding-right:0}
     <a class="nav" href="/leadership"{% if nav == 'leadership' %} aria-current="page"{% endif %}>Leadership</a>
     <a class="nav" href="/decisions"{% if nav == 'decisions' %} aria-current="page"{% endif %}>Decisions</a>
     <p class="glabel">Model</p>
-    <a class="nav" href="/model"{% if nav == 'model' %} aria-current="page"{% endif %}>Model &amp; approvals{% if candidates %} <span class="num" style="color: var(--accent)">{{ candidates }}</span>{% endif %}</a>
+    <a class="nav" href="/model"{% if nav == 'model' %} aria-current="page"{% endif %}>Model &amp; approvals{% if candidates %} <span class="num" style="color: var(--accentInk)">{{ candidates }}</span>{% endif %}</a>
     <dl class="system" data-scheduler="{{ scheduler }}">
       <dt>Live model</dt><dd>{{ live.version if live else 'points table' }}</dd>
       <dt>Reader</dt><dd>{{ 'Claude' if llm != 'offline' else 'rules' }}</dd>
