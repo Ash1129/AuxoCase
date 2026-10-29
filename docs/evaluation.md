@@ -1,6 +1,6 @@
 # Evaluation report
 
-Generated 2026-10-29T21:42:15 UTC. Live model: `demo-v1`.
+Generated 2026-10-29T21:49:36 UTC. Live model: `demo-v1`.
 
 ## The win BrightPath asked for: more demos, faster follow-up, same 12 SDRs
 
@@ -58,14 +58,14 @@ The sequence lifts the demo rate of a lead below the line by +0.101. The model's
 
 ## Cost against outcome: what a demo costs by the way the lead was reached
 
-Unit costs are settings, not facts: an SDR hour 45 dollars, a cold touch 20 minutes, answering a reply 10 minutes, a Claude draft 0.01 dollars. A demo is worth 4,800 dollars in first-year contract value (the brief: 24,000 at a 20% close rate; the outcomes show 23% on 3211 demos old enough to have closed).
+Unit costs are settings, not facts: an SDR hour 45 dollars, a cold touch 20 minutes, answering a reply 10 minutes, a Claude draft 0.02 dollars. A demo is worth 4,800 dollars in first-year contract value (the brief: 24,000 at a 20% close rate; the outcomes show 23% on 3211 demos old enough to have closed).
 
 | Route | Leads reached | Demos | Demo rate | SDR hours | Cost | Cost per demo | Demos per SDR hour | Value |
 |---|---|---|---|---|---|---|---|---|
 | An SDR's touch on a ranked lead | 1268 | 734 | 0.579 | 422.7 | 19,020 | 26 | 1.740 | 3,523,200 |
-| The automated sequence (phase 3) | 1867 | 197 | 0.106 | 53.7 | 2,419 | 12 | 3.670 | 945,600 |
+| The automated sequence (phase 3) | 1867 | 197 | 0.106 | 53.7 | 2,457 | 12 | 3.670 | 945,600 |
 
-Both routes are counted from 2028-10-30, the sequence's first day, so the months match. Per 100 emails: 17 replies and 10.6 demos, for 3.98 dollars of drafting (6 drafts metered by the Claude CLI, the figure Revenium receives, and the rest at their mean of 0.0021 dollars) and 53.7 SDR hours on replies in all. The control arm (1865 leads left to the ordinary process) booked 14, a rate of 0.007, so the sequence added about 183.0 demos it would not otherwise have had, worth about 878,400 dollars. SDR time is the scarce input (12 SDRs, by the brief), so demos per SDR hour is the number to compare.
+Both routes are counted from 2028-10-30, the sequence's first day, so the months match. Per 100 emails: 17 replies and 10.6 demos, for 41.8 dollars of drafting (6 drafts metered by the Claude CLI, the figure Revenium receives, and the rest at their mean of 0.0224 dollars) and 53.7 SDR hours on replies in all. The control arm (1865 leads left to the ordinary process) booked 14, a rate of 0.007, so the sequence added about 183.0 demos it would not otherwise have had, worth about 878,400 dollars. SDR time is the scarce input (12 SDRs, by the brief), so demos per SDR hour is the number to compare.
 
 Every reply took SDR time that would have gone to a ranked lead: at 10 minutes a reply against 20 a cold touch, the 322 replies displaced about 93.2 ranked demos, so the sequence's net is about +89.8 demos, +431,040 dollars. It breaks even when a reply takes 19.6 minutes of an SDR's time; the number to measure on the real portal is how long a reply really takes.
 

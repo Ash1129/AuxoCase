@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-29T21:42:15",
+ "generated_at": "2026-10-29T21:49:36",
  "live": "demo-v1",
  "metrics": {
   "rows": 5404,
@@ -430,7 +430,7 @@
    "cost_sdr_hour": 45.0,
    "sdr_minutes_touch": 20.0,
    "sdr_minutes_reply": 10.0,
-   "cost_draft": 0.01,
+   "cost_draft": 0.02,
    "acv": 24000.0,
    "close_rate": 0.2
   },
@@ -440,25 +440,25 @@
   "closed_demos": 3211,
   "ai": {
    "calls": 6,
-   "cost_usd": 0.0128,
+   "cost_usd": 0.1344,
    "priced": 6,
-   "input_tokens": 8506,
-   "output_tokens": 860,
+   "input_tokens": 12,
+   "output_tokens": 2277,
    "by_task": [
     {
      "task": "outreach_email",
      "calls": 6,
-     "input_tokens": 8506,
-     "output_tokens": 860,
-     "cost_usd": 0.0128,
+     "input_tokens": 12,
+     "output_tokens": 2277,
+     "cost_usd": 0.1344,
      "priced": 6,
-     "first": "2026-10-29T21:41:24",
-     "last": "2026-10-29T21:41:50"
+     "first": "2026-10-29T21:48:37",
+     "last": "2026-10-29T21:49:15"
     }
    ],
-   "first": "2026-10-29T21:41:24",
-   "last": "2026-10-29T21:41:50",
-   "draft_mean_cost": 0.00213,
+   "first": "2026-10-29T21:48:37",
+   "last": "2026-10-29T21:49:15",
+   "draft_mean_cost": 0.02239,
    "drafts_priced": 6,
    "source": "metered per call by the Claude CLI, the same figure it reports to Revenium"
   },
@@ -480,12 +480,12 @@
    "demos": 197,
    "demo_rate": 0.106,
    "sdr_hours": 53.7,
-   "draft_cost": 3.98,
-   "draft_unit_cost": 0.00213,
+   "draft_cost": 41.8,
+   "draft_unit_cost": 0.02239,
    "drafts_metered": 6,
    "draft_pricing": "metered mean",
    "draft_cost_metered": true,
-   "cost": 2419,
+   "cost": 2457,
    "cost_per_demo": 12.0,
    "demos_per_sdr_hour": 3.67,
    "demos_per_100_emails": 10.6,

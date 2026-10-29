@@ -35,12 +35,30 @@ class LLM(Protocol):
     def complete(self, system: str, user: str, max_tokens: int = 600) -> str: ...
 
 
+CLI_MODELS = ("sonnet", "opus")      # the CLI runs on the owner's Claude Code plan: Sonnet for the checked, short answers, Opus for what a lead reads
+DRAFT_TASKS = ("outreach_email",)
+
+
+def _cli_model(value: str, what: str) -> str:
+    if not any(m in value for m in CLI_MODELS):
+        raise ValueError(f"{what} must be one of {CLI_MODELS} (or a full model id of one), not {value!r}")
+    return value
+
+
 @dataclass
 class ClaudeCLI:
-    model: str = os.environ.get("AUXO_CLI_MODEL", "haiku")
+    model: str = os.environ.get("AUXO_CLI_MODEL", "sonnet")                 # signals, reasons, loss reasons
+    draft_model: str = os.environ.get("AUXO_CLI_DRAFT_MODEL", "opus")       # the emails a lead reads
     timeout_s: int = 90
     name: str = "claude-cli"
     conn: Optional[sqlite3.Connection] = field(default=None, repr=False)   # where each call's metered cost is recorded
+
+    def __post_init__(self) -> None:
+        _cli_model(self.model, "AUXO_CLI_MODEL")
+        _cli_model(self.draft_model, "AUXO_CLI_DRAFT_MODEL")
+
+    def model_for(self, task: str) -> str:
+        return self.draft_model if task in DRAFT_TASKS else self.model
 
     def command(self, exe: str, system: str, user: str) -> list[str]:
         if os.environ.get("ANTHROPIC_API_KEY"):
@@ -48,7 +66,7 @@ class ClaudeCLI:
         else:                            # a claude.ai sign-in: same isolation, flag by flag
             isolation = ["--restricted", "--tools", "", "--strict-mcp-config", "--disable-slash-commands"]
         return [exe, "-p", "--output-format", "json", *isolation, "--no-session-persistence",
-                "--model", self.model, "--system-prompt", system, user]
+                "--model", self.model_for(usage.task_of(user)), "--system-prompt", system, user]
 
     def complete(self, system: str, user: str, max_tokens: int = 600) -> str:
         exe = shutil.which("claude")
@@ -70,14 +88,14 @@ class ClaudeCLI:
         if data.get("is_error"):
             raise RuntimeError(f"claude CLI error: {data.get('result')}")
         if self.conn is not None:
-            model = next(iter(data.get("modelUsage") or {}), self.model)
+            model = next(iter(data.get("modelUsage") or {}), self.model_for(task))
             usage.record(self.conn, self.name, model, task, data.get("usage"), data.get("total_cost_usd"), data.get("duration_api_ms"))
         return str(data.get("result", ""))
 
 
 @dataclass
 class AnthropicAPI:
-    model: str = os.environ.get("AUXO_API_MODEL", "claude-haiku-5-5")
+    model: str = os.environ.get("AUXO_API_MODEL", "claude-sonnet-5-5")
     name: str = "anthropic-api"
     conn: Optional[sqlite3.Connection] = field(default=None, repr=False)
 

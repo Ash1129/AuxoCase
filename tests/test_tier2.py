@@ -238,10 +238,10 @@ def test_the_cli_reader_tags_calls_for_revenium_and_records_their_metered_cost(w
     seen = {}
 
     def fake_run(cmd, **kw):
-        seen.update(kw)
+        seen.update(kw, cmd=cmd)
         return SimpleNamespace(stdout=json.dumps({"result": "ok", "is_error": False, "total_cost_usd": 0.00092, "duration_api_ms": 1078,
                                                   "usage": {"input_tokens": 620, "output_tokens": 60, "cache_read_input_tokens": 0, "cache_creation_input_tokens": 0},
-                                                  "modelUsage": {"claude-haiku-4-5-20251001": {"costUSD": 0.00092}}}), stderr="", returncode=0)
+                                                  "modelUsage": {"claude-opus-5-5": {"costUSD": 0.00092}}}), stderr="", returncode=0)
 
     monkeypatch.setattr(client.shutil, "which", lambda _: "/usr/bin/claude")
     monkeypatch.setattr(subprocess, "run", fake_run)
@@ -254,11 +254,19 @@ def test_the_cli_reader_tags_calls_for_revenium_and_records_their_metered_cost(w
                      "revenium.task.type": "outreach_email", "revenium.agent.name": "auxocase"}
     row = conn.execute("SELECT * FROM llm_usage ORDER BY id DESC LIMIT 1").fetchone()
     assert row["task"] == "outreach_email" and row["reference"] == "333" and row["cost_usd"] == 0.00092 and row["input_tokens"] == 620
-    assert row["model"] == "claude-haiku-4-5-20251001" and row["reader"] == "claude-cli"
+    assert row["model"] == "claude-opus-5-5" and row["reader"] == "claude-cli"
+    assert seen["cmd"][seen["cmd"].index("--model") + 1] == "opus"        # a lead reads the draft: Opus
     assert usage.task_of("no marker") == "unknown" and usage.current_reference() == ""
     # Without a connection nothing is recorded, and an offline reader never is.
     client.make_llm("cli").complete("sys", "TASK: reason\n")
     assert conn.execute("SELECT COUNT(*) n FROM llm_usage").fetchone()["n"] == 1
+    assert seen["cmd"][seen["cmd"].index("--model") + 1] == "sonnet"      # a short checked answer: Sonnet
+    # The CLI runs on the owner's plan, Sonnet or Opus only.
+    with pytest.raises(ValueError):
+        client.ClaudeCLI(model="haiku")
+    with pytest.raises(ValueError):
+        client.ClaudeCLI(draft_model="claude-haiku-4-5")
+    assert client.ClaudeCLI(model="claude-sonnet-5-5", draft_model="opus").model_for("signals") == "claude-sonnet-5-5"
 
 
 def test_revenium_read_back_needs_a_read_key_and_never_raises(monkeypatch):
