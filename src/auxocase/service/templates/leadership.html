@@ -172,33 +172,23 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
   {% elif not setups %}<p class="empty">No summary rows in <code>{{ queue_limits_path }}</code>. Run <code>python run.py queue-limits</code> again.</p>
   {% elif setups.first_off and shared %}<p class="lede">With {{ setups.first_desk }}, better picks take the month from {{ shared.before.demos_a_month }} to {{ setups.first_demos }}.{% if setups.speed_adds %} The rest is speed: small queues reach the best leads on their first day.{% endif %}{% if gain and gain.projected %} The time the AI steps save takes it to {{ shared.after.demos_a_month }}.{% endif %}</p>{% endif %}
   {% if gain %}
-  {% macro steps(key, title, unit, bar_key, max_text) %}
+  {% macro waterfall(rows, title, what, caption) %}
   <figure class="chart">
     <h3 class="kicker">{{ title }}</h3>
-    <svg viewBox="0 0 640 {{ 8 + 30 * gain.steps|length }}" role="img" aria-label="{{ title }} by step">
-      {% for s in gain.steps %}{% set y = 4 + 30 * loop.index0 %}
+    <svg viewBox="0 0 640 {{ 8 + 30 * rows|length }}" role="img" aria-label="{{ title }}: history, then what each step changes">
+      {% for s in rows %}{% set y = 4 + 30 * loop.index0 %}
       <text class="lbl{{ ' on' if s.in_use }}" x="0" y="{{ y + 15 }}">{{ s.label }}{% if s.in_use %} · in use{% endif %}</text>
-      <rect class="bar-{{ s.kind }}" x="290" y="{{ y + 3 }}" width="{{ s[bar_key] }}" height="16" rx="0"><title>{{ s.label }}{% if s.in_use %}, the setup in use now{% endif %}: {{ s[key] }}{{ unit }}{% if s.range %} ({{ s.range }}){% endif %}</title></rect>
-      <text class="val" x="{{ 296 + s[bar_key] }}" y="{{ y + 15 }}">{{ s[key] }}{{ unit }}</text>
+      <rect class="bar-{{ 'down' if s.down else s.kind }}" x="{{ 290 + s.x0 }}" y="{{ y + 3 }}" width="{{ s.w }}" height="16"><title>{{ s.label }}{% if s.in_use %}, the setup in use now{% endif %}: {{ '{:g}'.format(s.value) }}{{ s.unit }} {{ what }}{% if s.kind not in ('history', 'total') %} ({{ s.text }}){% endif %}{% if s.range %} ({{ s.range }}){% endif %}</title></rect>
+      <text class="val" x="{{ 296 + s.x0 + s.w }}" y="{{ y + 15 }}">{{ s.text }}</text>
+      {% if s.edge is not none and not loop.last %}<line class="axis" x1="{{ 290 + s.edge }}" x2="{{ 290 + s.edge }}" y1="{{ y + 19 }}" y2="{{ y + 33 }}"></line>{% endif %}
       {% endfor %}
     </svg>
-    <figcaption class="small muted">{{ max_text }}</figcaption>
+    <figcaption class="small muted">{{ caption }}</figcaption>
   </figure>
   {% endmacro %}
   <div class="charts">
-    <figure class="chart">
-      <h3 class="kicker">Demos a month</h3>
-      <svg viewBox="0 0 640 {{ 8 + 30 * gain.water|length }}" role="img" aria-label="Demos a month: history, then what each step adds">
-        {% for s in gain.water %}{% set y = 4 + 30 * loop.index0 %}
-        <text class="lbl{{ ' on' if s.in_use }}" x="0" y="{{ y + 15 }}">{{ s.label }}{% if s.in_use %} · in use{% endif %}</text>
-        <rect class="bar-{{ 'down' if s.down else s.kind }}" x="{{ 290 + s.x0 }}" y="{{ y + 3 }}" width="{{ s.w }}" height="16"><title>{{ s.label }}{% if s.in_use %}, the setup in use now{% endif %}: {{ s.demos }} demos a month{% if s.kind not in ('history', 'total') %} ({{ s.text }}){% endif %}{% if s.range %} ({{ s.range }}){% endif %}</title></rect>
-        <text class="val" x="{{ 296 + s.x0 + s.w }}" y="{{ y + 15 }}">{{ s.text }}</text>
-        {% if s.edge is not none and not loop.last %}<line class="axis" x1="{{ 290 + s.edge }}" x2="{{ 290 + s.edge }}" y1="{{ y + 19 }}" y2="{{ y + 33 }}"></line>{% endif %}
-        {% endfor %}
-      </svg>
-      <figcaption class="small muted">History is the twelve months before routing; each step adds one change to the one above it and the bar is what it adds.{% if gain.projected %} The AI steps' row is the months simulated ahead.{% endif %}</figcaption>
-    </figure>
-    {{ steps('within', 'Touched within 24 hours', '%', 'bar_within', 'The share of leads touched within a day of arriving, by the same steps.') }}
+    {{ waterfall(gain.water, 'Demos a month', 'demos a month', 'History is the twelve months before routing; each step adds one change to the one above it and the bar is what it changes.' ~ (" The AI steps' row is the months simulated ahead." if gain.projected else '')) }}
+    {{ waterfall(gain.water_within, 'Touched within 24 hours', 'touched within 24 hours', 'The share of leads touched within a day of arriving, by the same steps; a grey bar is a drop.') }}
     <figure class="chart">
       <h3 class="kicker">Leads worked a month</h3>
       <svg viewBox="0 0 {{ gain.leads.width + 8 }} {{ 20 + 120 + 28 }}" role="img" aria-label="Leads worked a month, month by month">
