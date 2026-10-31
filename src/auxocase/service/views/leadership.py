@@ -18,6 +18,7 @@ from typing import Optional
 from ...data.generate import LATE_TOUCH_FACTOR
 from ...hubspot.mock import MockHubSpot
 from ...capacity import FOLLOWUPS, breakdown, touches_per_month
+from ...routing import skips as skip_counts
 from ...routing.engine import DEFAULT_LINE_HORIZON_DAYS
 from ...scoring.model import DEMO_MATURITY_DAYS
 from ...storage.db import get_setting
@@ -325,7 +326,15 @@ def _capacity(st, sdrs: int) -> dict:
     b["at"] = [{"minutes": m, "per_month": round(sdrs * b["hours"] * 60 / (m + later))} for m in (20, 15, 12, 10) if abs(m - b["minutes_touch"]) > 0.5]
     b["switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_touch"] - b["call_log_saving"] + (FOLLOWUPS * b["minutes_followup"] if b["auto"] else 0.0)))
     saving = b["call_share"] * max(0.0, b["minutes_call_log"] - b["minutes_call_log_auto"])
-    b["notes_switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_touch"] + (saving if b["call_notes_auto"] else -saving) - b["call_log_saving"] + later))
+    b["notes_switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_touch"] + (saving if b["call_notes_auto"] else -saving) - b["call_log_saving"] - b["skips"]["saving"] + later))
+    model = skip_counts.stored(st.conn) or {}
+    rep = model.get("replay") or {}
+    would_save = b["skips"]["share"] * b["skips"]["caught"] * b["minutes_skip"]
+    b["skips_switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_lead"] + (b["skips"]["saving"] if b["skips_auto"] else -would_save)))
+    b["skip_model"] = {"replay": rep, "threshold": model.get("threshold"),
+                       "traits": sorted(((skip_counts.word(t), n[0], n[1]) for t, n in (model.get("traits") or {}).items()
+                                         if n[1] >= skip_counts.MIN_DECISIONS and skip_counts.rate(n) >= max(model.get("threshold") or 0.5, (model.get("base") or 0.0) + skip_counts.MARGIN)),
+                                        key=lambda x: -x[1] / x[2])}
     return b
 
 

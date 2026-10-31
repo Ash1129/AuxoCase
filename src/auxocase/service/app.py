@@ -236,7 +236,8 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
     @app.post("/leadership/capacity")
     def capacity_set(minutes_touch: str = Form(""), minutes_followup: str = Form(""), minutes_reply: str = Form(""), hours: str = Form(""),
                      followups: str = Form(""), minutes_reply_triaged: str = Form(""), replies: str = Form(""),
-                     minutes_call_log: str = Form(""), minutes_call_log_auto: str = Form(""), call_notes: str = Form("")):
+                     minutes_call_log: str = Form(""), minutes_call_log_auto: str = Form(""), call_notes: str = Form(""),
+                     minutes_skip: str = Form(""), skips: str = Form("")):
         """The capacity inputs: minutes a cold touch, a follow-up and a reply, hours an SDR gives leads a month, and who
         sends the follow-ups ('auto' or 'sdr'). Blank leaves one as it is; a value out of range is refused and nothing
         is set."""
@@ -244,9 +245,10 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             given = {k: (float(v) if v.strip() else None) for k, v in (("minutes_touch", minutes_touch), ("minutes_followup", minutes_followup),
                                                                       ("minutes_reply", minutes_reply), ("minutes_reply_triaged", minutes_reply_triaged),
                                                                       ("minutes_call_log", minutes_call_log), ("minutes_call_log_auto", minutes_call_log_auto),
-                                                                      ("hours", hours))}
+                                                                      ("minutes_skip", minutes_skip), ("hours", hours))}
             flags = {"auto": True, "sdr": False}
-            changed = set_assumptions(st.conn, auto=flags.get(followups), replies=flags.get(replies), call_notes=flags.get(call_notes), **given)
+            changed = set_assumptions(st.conn, auto=flags.get(followups), replies=flags.get(replies), call_notes=flags.get(call_notes),
+                                      skips=flags.get(skips), **given)
         except ValueError as e:
             return RedirectResponse(f"/leadership?refused={quote(str(e))}#ld-capacity", status_code=303)
         return RedirectResponse(f"/leadership?set={len(changed)}#ld-capacity", status_code=303)

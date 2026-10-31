@@ -219,6 +219,7 @@ def held_page(st) -> dict:
         "frozen": clock_frozen(st.conn),
         "held": held, "shown": SHOWN,
         "held_span": {"first": _when(datetime.fromisoformat(min(held_ats))), "last": _when(datetime.fromisoformat(max(held_ats)))} if held_ats else None,
+        "likely_held": sum(1 for r in rows if (r["reason"] or "").startswith("likely skipped")),
         "pool_size": len(pool), "ranked_at": ranked_at, "score_every": every.get("score"), "remind_every": every.get("remind"),
         "p_lo": round(100 * min(probs)) if probs else None, "p_hi": round(100 * max(probs)) if probs else None,
         "bands": _bands(metrics, min(probs), max(probs)) if probs else [],

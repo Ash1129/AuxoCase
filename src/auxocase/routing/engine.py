@@ -47,7 +47,8 @@ from typing import Callable, Optional
 from ..hubspot.client import HubSpotClient
 from ..hubspot.models import Contact, Owner
 from ..pool import BELOW_GATE_REASON, BELOW_GATE_STAGE, below_gate_contacts, explore_below_gate_share, pool_contacts
-from ..capacity import touches_per_month
+from ..capacity import skips_auto, touches_per_month
+from . import skips
 from ..storage.db import clock, dumps, get_setting, now_iso, set_setting, tx
 
 DEFAULT_EXPLORATION_SHARE = 0.08
@@ -149,6 +150,9 @@ class Router:
             return decisions
         line_p = self._line_probability(pool, now)
         set_setting(self.conn, "capacity_line_probability", dumps(line_p))
+        # The skip counts are kept current every pass (the Leadership page reads them); they hold a lead only when switched on.
+        model = skips.refresh(self.hs, self.conn)
+        self._skip_model = model if skips_auto(self.conn) else None
         budget = free if max_assignments is None else min(free, max_assignments)
         if budget <= 0:
             # Nobody is free. Above-line leads that have waited past the hold time go to the manager's queue,
@@ -252,6 +256,16 @@ class Router:
             fresh = self.hs.get_contact(contact.id)
             if fresh is None or fresh.hubspot_owner_id:
                 return self._log(RoutingDecision(contact.id, "already_owned", owner_id=fresh.hubspot_owner_id if fresh else None), counts)
+            model = getattr(self, "_skip_model", None)
+            why = skips.likely(model, fresh, self.hs.get_company(fresh.company_id) if fresh.company_id else None) if model and not is_holdout else None
+            if why and self.conn.execute("SELECT 1 FROM held_queue WHERE contact_id=? AND released_at IS NOT NULL AND released_by NOT IN ('routing', 'left the pool')", (contact.id,)).fetchone() is None:
+                # The SDRs skip leads like this: the manager's queue, with the reason, not an SDR's minutes. A lead the manager
+                # once released by hand is theirs to place: it is never held for this again.
+                self.conn.execute("INSERT INTO held_queue(contact_id, held_at, reason) VALUES(?,?,?) ON CONFLICT(contact_id) DO UPDATE SET "
+                                  "held_at=excluded.held_at, reason=excluded.reason, released_at=NULL, released_by=NULL, released_to=NULL",
+                                  (contact.id, now.isoformat(timespec="seconds"), why))
+                self.hs.batch_update_contacts([(contact.id, {"auxo_route": "held", "auxo_review_flag": why[:200]})])
+                return self._log(RoutingDecision(contact.id, "held", reason=why), counts)
             owner = self._next_owner(owners, counts, prefer)
             if owner is None:
                 self.conn.execute("INSERT OR IGNORE INTO held_queue(contact_id, held_at, reason) VALUES(?,?,?)",
