@@ -92,7 +92,7 @@ def test_headline_numbers_come_from_the_stored_files(client, tmp_path, monkeypat
     assert "212" in t and "201–220" in t and "266" in t and "the setup in use now" in t and "--seeds 3" in t
     # sources named, figures daggered on the mock, no empty states
     assert str(leadership.REPORT) in t and str(leadership.QUEUE_LIMITS) in t
-    assert "†" in t and "Simulated · synthetic data" in t
+    assert 'id="fn-sim"' in t and "Simulated · synthetic data" in t
     assert "Run <code>python run.py eval</code>" not in t and "Run <code>python run.py queue-limits</code>" not in t
     assert "<script>" not in t and "onclick=" not in t
 

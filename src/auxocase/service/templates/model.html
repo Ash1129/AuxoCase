@@ -1,4 +1,5 @@
-{% extends "base.html" %}{% block title %}Model &amp; approvals{% endblock %}
+{% extends "base.html" %}
+{% from "_notes.html" import note %}{% block title %}Model &amp; approvals{% endblock %}
 {% block style %}
 .mhead{display:flex;flex-direction:column;gap:8px}
 .facts{margin:8px 0 0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px}
@@ -38,7 +39,7 @@ details[open]>summary{margin-bottom:8px}
 {# Log times are now_iso(): UTC wall clock, "2026-10-28T18:30:10", shown as "28 Oct 2026 18:30". #}
 {% macro when(ts) %}{% if ts and ts|length >= 16 and (ts[5:7]|int) in range(1, 13) %}<time class="num" datetime="{{ ts[:16] }}">{{ ts[8:10]|int }} {{ ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(ts[5:7]|int) - 1] }} {{ ts[:4] }} {{ ts[11:16] }}</time>{% elif ts %}{{ ts }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}{% endmacro %}
 {% macro nr() %}<span class="muted">[NOT RECORDED]</span>{% endmacro %}
-{% macro dg() %}{% if env == 'mock' %}<span class="dagger">†</span>{% endif %}{% endmacro %}
+{% macro dg() %}{% if env == 'mock' %}<sup class="fn"><a href="#fn-sim" aria-label="footnote 1">1</a></sup>{% endif %}{% endmacro %}
 {% macro n(x) %}{% if x is none %}{{ nr() }}{% else %}{{ '{:,}'.format(x) }}{% endif %}{% endmacro %}
 {% macro f3(x) %}{% if x is none %}{{ nr() }}{% else %}{{ '%.3f'|format(x) }}{% endif %}{% endmacro %}
 {% macro names(xs) %}{% for x in xs %}{{ x }}{% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}{% endmacro %}
@@ -90,13 +91,11 @@ details[open]>summary{margin-bottom:8px}
     <button class="btn" type="submit" name="decision" value="send_back">Send back</button>
   </div>
 </form>
-<p class="small muted">Goes live when both slots approve; until then routing keeps {{ current.version if current else 'the cold-start points table' }}. When it goes live, the pool is rescored on {{ r.version }}, best-ranked leads first. Sending it back retires it.</p>
 {% endmacro %}
 
 <header class="mhead">
   <p class="kicker">Model &amp; approvals · {% if waiting %}{{ waiting|length }} candidate{{ 's' if waiting|length != 1 }} waiting{% else %}no candidate waiting{% endif %}</p>
   <h1 class="title">One shared model</h1>
-  <p class="muted" style="margin: 0; max-width: 760px">One model scores every lead for both teams. A version goes live when one named person from marketing and one from sales approve it; sending it back retires it.</p>
   <dl class="facts">
     <dt>Live</dt>
     <dd>{% if current %}{{ current.version }}, approved by {% for t in ['marketing', 'sales'] %}{% if current.signed[t] %}{{ current.signed[t].approver }}{% else %}{{ nr() }}{% endif %} ({{ t }}){% if loop.first %} and {% endif %}{% endfor %}, {{ when(current.promoted_at) }} log time{% else %}None: the cold-start points table is scoring{% endif %}</dd>
@@ -119,7 +118,7 @@ details[open]>summary{margin-bottom:8px}
 </section>
 {% else %}
 <section class="msec" aria-labelledby="md-adds">
-  <h2 id="md-adds" class="kicker">What the model adds over the points tables</h2>
+  <h2 id="md-adds" class="kicker">What the model adds over the points tables{% call note('adds-note', 'How to read this') %}Precision at K, the model minus each table, on the same test leads. K is capacity's share of each version's test leads ({{ capacity }} touches a month), so it differs by version. A full bar is {{ '%.2f'|format(bar_scale) }}.{% endcall %}</h2>
   {% if plainly %}<p class="lede">{{ plainly }}</p>{% endif %}
   <div class="scroll" role="region" aria-label="What the model adds, scrolls sideways" tabindex="0">
     <div class="drivers adds num" role="table" aria-label="Precision at K, model minus each points table">
@@ -138,14 +137,13 @@ details[open]>summary{margin-bottom:8px}
       </div>{% endfor %}
     </div>
   </div>
-  <p class="small muted">Precision at K, the model minus each table, on the same test leads. K is capacity's share of each version's test leads ({{ capacity }} touches a month), so it differs by version. A full bar is {{ '%.2f'|format(bar_scale) }}.</p>
 </section>
 
 <hr class="rule">
 
 <section class="msec" aria-labelledby="md-side">
-  <h2 id="md-side" class="kicker">{% if current and waiting %}Live against the candidates{% elif waiting %}The candidates{% else %}The live model{% endif %}</h2>
-  {% if tested_where or side|length > 1 %}<p>{% if tested_where %}{{ tested_where }} {% endif %}{% if side|length > 1 %}Compare columns on the lifts and the calibration error; read precision only against its own column.{% if current %} Changes are against {{ current.version }}.{% endif %}{% endif %}</p>{% endif %}
+  {% set unsplit = side|rejectattr('split')|map(attribute='version')|list %}
+  <h2 id="md-side" class="kicker">{% if current and waiting %}Live against the candidates{% elif waiting %}The candidates{% else %}The live model{% endif %}{% if tested_where or side|length > 1 or unsplit %}{% call note('side-note', 'How to read the columns') %}{% if tested_where or side|length > 1 %}{% if tested_where %}{{ tested_where }} {% endif %}{% if side|length > 1 %}Compare columns on the lifts and the calibration error; read precision only against its own column.{% if current %} Changes are against {{ current.version }}.{% endif %}{% endif %}{% endif %}{% if unsplit %} {% if unsplit %}Months trained on and calibrated on: [NOT RECORDED] for {{ names(unsplit) }}. {{ 'This registry row predates' if unsplit|length == 1 else 'These registry rows predate' }} the train, calibrate and test split and store{{ 's' if unsplit|length == 1 }} only the months {{ 'it was' if unsplit|length == 1 else 'they were' }} tested on. {% endif %}{% if side|selectattr('test_n')|rejectattr('metrics.test_rows')|list %}Test leads are the sum of the calibration bands. {% endif %}{% if families %}{{ families }} {% endif %}{% if sent_back %}Sent back: {% for r in sent_back %}{{ r.version }}{% if r.sent_back %} by {{ r.sent_back.approver }} ({{ r.sent_back.team }}){% if r.sent_back.note %}, <span class="quote">“{{ r.sent_back.note }}”</span>{% endif %}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}.{% else %}No version has been sent back.{% endif %}{% if shadow_reg %} {{ shadow_reg.version }} is kept as the shadow, the previous live model{% if shadow %}: on {{ n(shadow.n) }} recent labelled leads, live {{ shadow.live.version }} found {{ f3(shadow.live.precision_at_k) }} precision in its top {{ shadow.k }} against {{ f3(shadow.shadow.precision_at_k) }} for {{ shadow.shadow.version }}{% endif %}.{% endif %}{% if retired %} Retired: {{ names(retired) }}.{% endif %}{% endif %}{% endcall %}{% endif %}</h2>
   <div class="scroll" role="region" aria-label="{% if current and waiting %}Live against the candidates{% else %}Measures by version{% endif %}, scrolls sideways" tabindex="0">
     <table class="versus" aria-labelledby="md-side">
       <thead><tr><th scope="col">Measure</th>{% for r in side %}<th scope="col" class="vcol">{{ r.version }}<span class="sub {{ 'good' if r.status == 'live' else 'acc' }}">{{ r.status }}{% if r.simulated %}{{ dg() }}{% endif %}</span></th>{% endfor %}</tr></thead>
@@ -162,8 +160,6 @@ details[open]>summary{margin-bottom:8px}
       </tbody>
     </table>
   </div>
-  {% set unsplit = side|rejectattr('split')|map(attribute='version')|list %}
-  <p class="small muted">{% if unsplit %}Months trained on and calibrated on: [NOT RECORDED] for {{ names(unsplit) }}. {{ 'This registry row predates' if unsplit|length == 1 else 'These registry rows predate' }} the train, calibrate and test split and store{{ 's' if unsplit|length == 1 }} only the months {{ 'it was' if unsplit|length == 1 else 'they were' }} tested on. {% endif %}{% if side|selectattr('test_n')|rejectattr('metrics.test_rows')|list %}Test leads are the sum of the calibration bands. {% endif %}{% if families %}{{ families }} {% endif %}{% if sent_back %}Sent back: {% for r in sent_back %}{{ r.version }}{% if r.sent_back %} by {{ r.sent_back.approver }} ({{ r.sent_back.team }}){% if r.sent_back.note %}, <span class="quote">“{{ r.sent_back.note }}”</span>{% endif %}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}.{% else %}No version has been sent back.{% endif %}{% if shadow_reg %} {{ shadow_reg.version }} is kept as the shadow, the previous live model{% if shadow %}: on {{ n(shadow.n) }} recent labelled leads, live {{ shadow.live.version }} found {{ f3(shadow.live.precision_at_k) }} precision in its top {{ shadow.k }} against {{ f3(shadow.shadow.precision_at_k) }} for {{ shadow.shadow.version }}{% endif %}.{% endif %}{% if retired %} Retired: {{ names(retired) }}.{% endif %}</p>
 </section>
 {% endif %}
 
@@ -171,7 +167,7 @@ details[open]>summary{margin-bottom:8px}
 
 <section id="sign-off" class="msec" aria-labelledby="md-sign">
   {% if waiting %}{% set r = waiting[0] %}
-  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}</h2>
+  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}{% call note('sign-note', 'How a version goes live') %}One model scores every lead for both teams. A version goes live when one named person from marketing and one from sales approve it; until then routing keeps {{ current.version if current else 'the cold-start points table' }}. When it goes live, the pool is rescored on the new version, best-ranked leads first. Sending it back retires it.{% endcall %}</h2>
   {{ signoff(r) }}
   {% if waiting|length > 1 %}{% set older = waiting[1:] %}
   <p>Also waiting{% if not (older|selectattr('approvals')|list) %}, unsigned{% endif %}: {% for o in older %}{{ o.version }} (trained {{ o.trained or '[NOT RECORDED]' }}{% if o.signed.marketing or o.signed.sales %}; {{ signed_teams(o) }}{% endif %}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}.</p>
@@ -182,7 +178,7 @@ details[open]>summary{margin-bottom:8px}
   {% endif %}
   <a class="tap" href="/decisions">Every approval and send-back so far, on Decisions</a>
   {% else %}
-  <h2 id="md-sign" class="kicker">Sign off</h2>
+  <h2 id="md-sign" class="kicker">Sign off{% call note('sign-note', 'How a version goes live') %}One model scores every lead for both teams. A version goes live when one named person from marketing and one from sales approve it; until then routing keeps {{ current.version if current else 'the cold-start points table' }}. When it goes live, the pool is rescored on the new version, best-ranked leads first. Sending it back retires it.{% endcall %}</h2>
   <p>No candidate is waiting. The next one appears here after a retrain (<code>python run.py train</code>, or the scheduler's monthly job), with its numbers beside the live model's.</p>
   {% endif %}
 </section>
@@ -191,8 +187,8 @@ details[open]>summary{margin-bottom:8px}
 
 <section class="msec" aria-labelledby="md-cal">
   {% if current and calibration %}
-  <h2 id="md-cal" class="kicker">Calibration · {{ current.version }} on {{ current.tested or '[NOT RECORDED]' }}</h2>
-  <p>{% if calibration.typical %}When {{ current.version }} says {{ calibration.typical.predicted }}%, about {{ calibration.typical.observed }}% book. {% endif %}{% if calibration.ece_points is not none %}Across {{ n(current.test_n) }} test leads it is off by {{ calibration.ece_points }} points on average. {% endif %}Bands with fewer than {{ small_band }} leads are marked few; read them loosely.</p>
+  <h2 id="md-cal" class="kicker">Calibration · {{ current.version }} on {{ current.tested or '[NOT RECORDED]' }}{% call note('cal-note', 'How to read the bands') %}{% if calibration.ece_points is not none %}Across {{ n(current.test_n) }} test leads it is off by {{ calibration.ece_points }} points on average. {% endif %}Bands with fewer than {{ small_band }} leads are marked few; read them loosely.{% endcall %}</h2>
+  {% if calibration.typical %}<p class="lede">When {{ current.version }} says {{ calibration.typical.predicted }}%, about {{ calibration.typical.observed }}% book.</p>{% endif %}
   <div class="cal">
     <div class="scroll">{{ bandtable(current) }}</div>
     <figure>
@@ -229,7 +225,7 @@ details[open]>summary{margin-bottom:8px}
 <hr class="rule">
 
 <section class="msec" aria-labelledby="md-mon">
-  <h2 id="md-mon" class="kicker">Channel monitor{% if monitor %} · {{ monitor.period }}{% endif %}, worked leads {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}{{ dg() }}</h2>
+  <h2 id="md-mon" class="kicker">Channel monitor{% if monitor %} · {{ monitor.period }}{% endif %}, worked leads {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}{{ dg() }}{% if monitor %}{% call note('mon-note', 'How the limits work') %}Share booked against the average score the same leads carried, with limits three standard errors either side: inside is noise, outside is a real shift. A channel with under {{ min_group }} worked leads in a month is held, not judged.{% if monitor.earlier %} Earlier months in the same run: {{ monitor.earlier|join(' ') }}{% endif %} Run {{ when(monitor.run) }} log time.{% endcall %}{% endif %}</h2>
   {% if monitor %}
   <p class="lede">{{ monitor.headline }}</p>
   <div class="scroll" role="region" aria-label="Channel monitor, scrolls sideways" tabindex="0">
@@ -248,7 +244,6 @@ details[open]>summary{margin-bottom:8px}
       </tbody>
     </table>
   </div>
-  <p class="small muted">Share booked against the average score the same leads carried, with limits three standard errors either side: inside is noise, outside is a real shift. A channel with under {{ min_group }} worked leads in a month is held, not judged.{% if monitor.earlier %} Earlier months in the same run: {{ monitor.earlier|join(' ') }}{% endif %} Run {{ when(monitor.run) }} log time.</p>
   {% if monitor.earlier %}<details>
     <summary>Every month in this run</summary>
     <div class="scroll" role="region" aria-label="Every month of the channel monitor, scrolls sideways" tabindex="0">
@@ -270,7 +265,7 @@ details[open]>summary{margin-bottom:8px}
   <p>The monitor has not run yet. It runs with the scheduler, or with <code>python run.py monitor</code>.</p>
   {% endif %}
 
-  <h3 class="kicker" style="margin-top: 12px">Since routing began{% if began %}, {{ began }}{% endif %}{{ dg() }}</h3>
+  <h3 class="kicker" style="margin-top: 12px">Since routing began{% if began %}, {{ began }}{% endif %}{{ dg() }}{% if effect.factor is not none %}{% call note('since-note', 'The first-day effect') %}{% if learned_wait %}{{ current.version }} learned from leads worked before routing, which waited {{ learned_wait }} for a first touch. {% endif %}{% if env == 'mock' %}On the mock, a lead first touched after a day booked {{ (100 * effect.rate_slow)|round|int }}% of the time against {{ (100 * effect.rate_fast)|round|int }}% within a day: a factor of {{ effect.factor }} in the outcomes, against the generator's built-in {{ built_in }}.{% if late_factor and late_factor|float != built_in %} Routing discounts a lead past its first day by {{ late_factor }}.{% endif %}{{ dg() }}{% else %}A lead first touched after a day booked {{ (100 * effect.rate_slow)|round|int }}% of the time against {{ (100 * effect.rate_fast)|round|int }}% within a day, a factor of {{ effect.factor }}; routing discounts a lead past its first day by {{ late_factor or '1.0' }}. Fast touches were not given at random, so read the factor as a range.{% endif %}{% endcall %}{% endif %}</h3>
   {% if (hit and hit.n) or speed.n %}
   <div class="figs">
     {% if hit and hit.ranked.n %}<div><span class="mid num">{{ (100 * hit.ranked.booked / hit.ranked.n)|round|int }}%</span><span>of worked ranked leads booked</span><span class="small muted num">{{ n(hit.ranked.booked) }} of {{ n(hit.ranked.n) }}</span></div>{% endif %}
@@ -279,13 +274,12 @@ details[open]>summary{margin-bottom:8px}
     <div><span class="mid num">{{ (100 * speed.within_24h)|round|int }}%</span><span>first touched within a day</span>{% if speed.baseline.n %}<span class="small muted num">{{ (100 * speed.baseline.within_24h)|round|int }}% of {{ n(speed.baseline.n) }} before routing</span>{% endif %}</div>{% endif %}
   </div>
   {% else %}<p>No lead AuxoCase handed out has been worked yet.</p>{% endif %}
-  {% if effect.factor is not none %}<p class="small muted">{% if learned_wait %}{{ current.version }} learned from leads worked before routing, which waited {{ learned_wait }} for a first touch. {% endif %}{% if env == 'mock' %}On the mock, a lead first touched after a day booked {{ (100 * effect.rate_slow)|round|int }}% of the time against {{ (100 * effect.rate_fast)|round|int }}% within a day: a factor of {{ effect.factor }} in the outcomes, against the generator's built-in {{ built_in }}.{% if late_factor and late_factor|float != built_in %} Routing discounts a lead past its first day by {{ late_factor }}.{% endif %}{{ dg() }}{% else %}A lead first touched after a day booked {{ (100 * effect.rate_slow)|round|int }}% of the time against {{ (100 * effect.rate_fast)|round|int }}% within a day, a factor of {{ effect.factor }}; routing discounts a lead past its first day by {{ late_factor or '1.0' }}. Fast touches were not given at random, so read the factor as a range.{% endif %}</p>{% endif %}
 </section>
 
 <hr class="rule">
 
 <section class="msec" aria-labelledby="md-over">
-  <h2 id="md-over" class="kicker">SDR overrides</h2>
+  <h2 id="md-over" class="kicker">SDR overrides{% call note('over-note', 'What the skips say') %}{% set rs = overrides.reason %}{% if rs %}{% if rs[1] == overrides.skips %}{{ 'The one skip' if overrides.skips == 1 else 'All ' ~ overrides.skips ~ ' skips' }} gave the reason <span class="quote">“{{ rs[0] }}”</span>{% else %}{{ rs[1] }} of the {{ overrides.skips }} skips gave the reason <span class="quote">“{{ rs[0] }}”</span>{% endif %}. {% endif %}{% if overrides.total %}{% if overrides.first_day == overrides.last_day %}{{ 'It was' if overrides.total == 1 else 'All ' ~ overrides.total ~ ' were' }} logged on {{ overrides.first_day }}, log time.{% else %}Logged from {{ overrides.first_day }} to {{ overrides.last_day }}, log time.{% endif %} {% else %}No SDR has overridden the ranking yet. {% endif %}Booked later is the lead's outcome {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}, whoever worked it. Moves up and down show in each lead's own history.{% endcall %}</h2>
   <div class="scroll" style="max-width: 560px">
     <table class="num" aria-labelledby="md-over">
       <thead><tr><th scope="col">Action</th><th scope="col" class="r">Times</th><th scope="col" class="r">Leads</th><th scope="col" class="r">Booked later{{ dg() }}</th></tr></thead>
@@ -297,9 +291,8 @@ details[open]>summary{margin-bottom:8px}
       </tbody>
     </table>
   </div>
-  <p class="small muted">{% set rs = overrides.reason %}{% if rs %}{% if rs[1] == overrides.skips %}{{ 'The one skip' if overrides.skips == 1 else 'All ' ~ overrides.skips ~ ' skips' }} gave the reason <span class="quote">“{{ rs[0] }}”</span>{% else %}{{ rs[1] }} of the {{ overrides.skips }} skips gave the reason <span class="quote">“{{ rs[0] }}”</span>{% endif %}. {% endif %}{% if overrides.total %}{% if overrides.first_day == overrides.last_day %}{{ 'It was' if overrides.total == 1 else 'All ' ~ overrides.total ~ ' were' }} logged on {{ overrides.first_day }}, log time.{% else %}Logged from {{ overrides.first_day }} to {{ overrides.last_day }}, log time.{% endif %} {% else %}No SDR has overridden the ranking yet. {% endif %}Booked later is the lead's outcome {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}, whoever worked it. Moves up and down show in each lead's own history.</p>
   <a class="tap" href="/decisions">Every worked, skipped and junk call, on Decisions</a>
 </section>
 
-{% if env == 'mock' %}<footer class="footnote"><span class="dagger">†</span> Simulated · synthetic data. Every lead comes from the mock portal, not a real HubSpot portal. {% set sims = regs|selectattr('simulated')|list|reverse|map(attribute='version')|list %}{% if sims %}{{ names(sims) }} {{ 'was' if sims|length == 1 else 'were each' }} trained after the generator simulated one more month{% if seeds_text %} ({{ seeds_text }}){% endif %}, and every{% else %}Every{% endif %} booking and first touch is generated or simulated; on a real portal they are measured. Log times are the demo run's wall clock, in UTC; the service clock is frozen at {{ clock_text }}.</footer>{% endif %}
+{% if env == 'mock' %}<footer><ol class="fnotes"><li id="fn-sim">Simulated · synthetic data. Every lead comes from the mock portal, not a real HubSpot portal. {% set sims = regs|selectattr('simulated')|list|reverse|map(attribute='version')|list %}{% if sims %}{{ names(sims) }} {{ 'was' if sims|length == 1 else 'were each' }} trained after the generator simulated one more month{% if seeds_text %} ({{ seeds_text }}){% endif %}, and every{% else %}Every{% endif %} booking and first touch is generated or simulated; on a real portal they are measured. Log times are the demo run's wall clock, in UTC; the service clock is frozen at {{ clock_text }}.</li></ol></footer>{% endif %}
 {% endblock %}

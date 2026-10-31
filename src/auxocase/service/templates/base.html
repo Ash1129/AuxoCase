@@ -51,9 +51,10 @@ h1,h2,h3{margin:0}
 .big{font-family:var(--heading);font-size:88px;line-height:88px;font-weight:600}
 .mid{font-family:var(--heading);font-size:40px;line-height:44px;font-weight:600}
 .rule{border:0;border-top:1px solid var(--line);margin:0}
-.dagger{font-size:13px;color:var(--muted)}
 /* an explanation behind an "i": hover or focus it and the sentence opens in a box under the nearest positioned ancestor */
 .info-wrap{display:inline}
+.kicker{position:relative}
+.kicker .info-box{right:auto;width:560px;max-width:calc(100vw - 32px)}
 .info{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:6px;vertical-align:2px;border-radius:50%;border:1px solid var(--muted);background:transparent;color:var(--muted);font:600 11px/1 var(--body);font-style:italic;padding:0;cursor:help}
 .info:hover,.info:focus-visible,.info-wrap:hover .info{border-color:var(--ink);color:var(--ink)}
 .info-box{position:absolute;left:0;right:0;top:calc(100% + 8px);z-index:5;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);box-shadow:0 6px 20px rgba(0,0,0,.14);font:400 14px/20px var(--body);letter-spacing:0;text-transform:none;text-align:left;white-space:normal;visibility:hidden;opacity:0;transition:opacity .12s}
@@ -106,6 +107,24 @@ td.r,th.r{text-align:right;padding-right:0}
 @media (max-width:640px){.drivers{grid-template-columns:minmax(0,1fr) max-content;column-gap:12px}.drivers .barcell{grid-column:1 / -1;border-top:0;padding-top:0}}
 .quote{font-style:italic}
 .draft-body{white-space:pre-wrap;margin:0}
+/* the outline: dashes at the right edge, one per section, that unfold their labels when the pointer comes near */
+.outline{position:fixed;top:50%;right:10px;transform:translateY(-50%);z-index:9;opacity:.45;transition:opacity .25s}
+.outline.is-near,.outline:focus-within{opacity:1}
+.outline ul{list-style:none;margin:0;padding:6px 5px;display:flex;flex-direction:column;gap:1px;border:1px solid transparent;border-radius:14px;transition:background-color .25s,border-color .25s,box-shadow .25s}
+.outline ul:hover,.outline:focus-within ul{background:color-mix(in srgb,var(--bg) 70%,transparent);backdrop-filter:blur(18px) saturate(170%);border-color:var(--line);box-shadow:0 6px 22px #00000014}
+.outline a{display:flex;justify-content:flex-end;align-items:center;gap:10px;padding:3px;font-size:12px;line-height:16px;text-decoration:none;color:var(--muted)}
+.outline a:hover,.outline a.is-active{color:var(--ink)}
+.outline__label{white-space:nowrap;opacity:0;max-width:0;overflow:hidden;transition:max-width .25s,opacity .2s}
+.outline ul:hover .outline__label,.outline:focus-within .outline__label{opacity:1;max-width:220px}
+.outline__dash{flex:0 0 auto;width:8px;height:1.5px;border-radius:2px;background:color-mix(in srgb,var(--ink) 30%,transparent);transition:width .2s,background-color .2s}
+.outline.is-near .outline__dash,.outline:focus-within .outline__dash{width:11px}
+.outline a:hover .outline__dash{background:color-mix(in srgb,var(--ink) 60%,transparent)}
+.outline a.is-active .outline__dash{background:var(--ink);width:12px}
+.outline.is-near a.is-active .outline__dash,.outline:focus-within a.is-active .outline__dash{width:16px}
+h2.kicker[id]{scroll-margin-top:24px}
+@media (prefers-reduced-motion:no-preference){html{scroll-behavior:smooth}}
+@media (max-width:860px){.outline{display:none}}
+@media (prefers-reduced-motion:reduce){.outline,.outline ul,.outline__label,.outline__dash{transition:none}}
 {% block style %}{% endblock %}
 </style>
 <script src="/assets/app.js" defer></script>

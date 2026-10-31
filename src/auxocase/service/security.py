@@ -40,11 +40,71 @@ CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' 
        "frame-ancestors 'none'")
 HEADERS = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Referrer-Policy": "same-origin"}
 
-# The lead page's one script: show that a draft is on its way, since with Claude it takes a few seconds.
+# The pages' one script. First, show that a draft is on its way, since with Claude it takes a few seconds. Then the
+# outline: a column of dashes at the right edge, one per section heading, that unfolds its labels when the pointer
+# comes near, with the section in view marked. Built from the headings, so a page with fewer than two has none.
 APP_JS = """document.addEventListener('click', function (e) {
   var a = e.target.closest && e.target.closest('a[data-busy]');
   if (a) { a.textContent = a.dataset.busy; a.style.pointerEvents = 'none'; }
 });
+(function () {
+  var main = document.querySelector('main');
+  if (!main) return;
+  var heads = Array.prototype.filter.call(main.querySelectorAll('h2.kicker[id]'), function (h) {
+    return h.offsetParent !== null;
+  });
+  if (heads.length < 2) return;
+  function label(h) {
+    var c = h.cloneNode(true);
+    Array.prototype.forEach.call(c.querySelectorAll('.info-wrap, .fn, sup'), function (x) { x.parentNode.removeChild(x); });
+    var t = c.textContent.replace(/\s+/g, ' ').trim().split(' \u00b7 ')[0];
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }
+  var nav = document.createElement('nav');
+  nav.className = 'outline';
+  nav.setAttribute('aria-label', 'On this page');
+  var ul = document.createElement('ul');
+  var items = [{ id: 'top', text: 'Top', el: main }].concat(heads.map(function (h) { return { id: h.id, text: label(h), el: h }; }));
+  var links = items.map(function (it) {
+    var li = document.createElement('li'), a = document.createElement('a'), l = document.createElement('span'), d = document.createElement('span');
+    a.href = '#' + it.id;
+    l.className = 'outline__label'; l.textContent = it.text;
+    d.className = 'outline__dash'; d.setAttribute('aria-hidden', 'true');
+    a.appendChild(l); a.appendChild(d); li.appendChild(a); ul.appendChild(li);
+    return a;
+  });
+  nav.appendChild(ul);
+  document.body.appendChild(nav);
+  if (!main.id) main.id = 'top';
+  var current = -1;
+  function mark() {
+    var line = window.innerHeight * 0.35, at = 0;
+    for (var i = 1; i < items.length; i++) {
+      if (items[i].el.getBoundingClientRect().top <= line) at = i;
+    }
+    if (window.innerHeight + window.scrollY >= document.documentElement.scrollHeight - 2) at = items.length - 1;
+    if (at === current) return;
+    current = at;
+    links.forEach(function (a, i) {
+      a.classList.toggle('is-active', i === at);
+      if (i === at) a.setAttribute('aria-current', 'location'); else a.removeAttribute('aria-current');
+    });
+  }
+  var queued = false;
+  function onScroll() {
+    if (queued) return;
+    queued = true;
+    requestAnimationFrame(function () { queued = false; mark(); });
+  }
+  window.addEventListener('scroll', onScroll, { passive: true });
+  window.addEventListener('resize', onScroll);
+  document.addEventListener('mousemove', function (e) {
+    var r = nav.getBoundingClientRect();
+    var near = e.clientX >= r.left - 120 && e.clientY >= r.top - 120 && e.clientY <= r.bottom + 120;
+    nav.classList.toggle('is-near', near);
+  }, { passive: true });
+  mark();
+})();
 """
 
 

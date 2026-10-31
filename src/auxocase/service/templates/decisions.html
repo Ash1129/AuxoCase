@@ -1,4 +1,5 @@
-{% extends "base.html" %}{% block title %}Decisions{% endblock %}
+{% extends "base.html" %}
+{% from "_notes.html" import note %}{% block title %}Decisions{% endblock %}
 {% block style %}
 .tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:24px 32px;margin:0}
 .tally>div{display:flex;flex-direction:column;gap:4px}
@@ -20,33 +21,32 @@
 {% macro nr() %}<span class="muted small">[NOT RECORDED]</span>{% endmacro %}
 {# On the mock every count is synthetic: the demo build approves the first model, the simulator's SDRs skip leads,
    and the rest are clicks in the demo on generated leads and models. #}
-{% macro dg() %}{% if env == 'mock' %}<span class="dagger">†</span>{% endif %}{% endmacro %}
+{#- numbered footnotes: 1 the simulated data (mock), then the clocks -#}
+{% macro ref(key) %}{% set n = 1 if key == 'sim' else (2 if env == 'mock' else 1) %}{% if key == 'clocks' or env == 'mock' %}<sup class="fn"><a href="#fn-{{ key }}" aria-label="footnote {{ n }}">{{ n }}</a></sup>{% endif %}{% endmacro %}
 
 <header style="display: flex; flex-direction: column; gap: 8px">
-  <p class="kicker">Results · marketing, sales and SDR calls{% if env == 'mock' %} · mock HubSpot portal{% endif %}</p>
+  <p class="kicker">Results · marketing, sales and SDR calls{% if env == 'mock' %} · mock HubSpot portal{{ ref('sim') }}{% endif %}</p>
   <h1 class="title">Decisions</h1>
-  <p class="muted" style="margin: 0; max-width: 760px">Every call people made: which model versions marketing and sales approved or sent back, and which leads SDRs worked or turned down. Newest first. Times are when each call was logged, in UTC.</p>
 </header>
 
 <hr class="rule">
 
 <section class="tally" aria-labelledby="hd-counts">
   <h2 id="hd-counts" class="vh">Counts</h2>
-  <div><span class="mid num">{{ counts.approve }}{{ dg() }}</span><span>Model approvals</span></div>
-  <div><span class="mid num">{{ counts.send_back }}{{ dg() }}</span><span>Models sent back</span></div>
-  <div><span class="mid num">{{ counts.worked }}{{ dg() }}</span><span>Leads worked</span></div>
-  <div><span class="mid num">{{ counts.junk }}{{ dg() }}</span><span>Leads junked</span></div>
-  <div><span class="mid num">{{ counts.skipped }}{{ dg() }}</span><span>Leads skipped</span></div>
+  <div><span class="mid num">{{ counts.approve }}</span><span>Model approvals</span></div>
+  <div><span class="mid num">{{ counts.send_back }}</span><span>Models sent back</span></div>
+  <div><span class="mid num">{{ counts.worked }}</span><span>Leads worked</span></div>
+  <div><span class="mid num">{{ counts.junk }}</span><span>Leads junked</span></div>
+  <div><span class="mid num">{{ counts.skipped }}</span><span>Leads skipped</span></div>
 </section>
 
 <hr class="rule">
 
 <section class="dsec" aria-labelledby="hd-models">
-  <h2 id="hd-models" class="kicker">Model versions</h2>
-  <p class="small muted">A version goes live once one person from marketing and one from sales approve it. Sending it back retires it.</p>
+  <h2 id="hd-models" class="kicker">Model versions{% call note('models-note', 'How a version goes live') %}Which versions marketing and sales approved or sent back, newest first. A version goes live once one person from marketing and one from sales approve it; sending it back retires it.{% endcall %}</h2>
   <div class="scroll" role="region" aria-label="Model decisions, scrolls sideways" tabindex="0">
     <table aria-labelledby="hd-models">
-      <thead><tr><th scope="col">When</th><th scope="col">Version</th><th scope="col">Team</th><th scope="col">Who</th><th scope="col">Decision</th><th scope="col">Note</th><th scope="col">Version now</th></tr></thead>
+      <thead><tr><th scope="col">When{{ ref('clocks') }}</th><th scope="col">Version</th><th scope="col">Team</th><th scope="col">Who</th><th scope="col">Decision</th><th scope="col">Note</th><th scope="col">Version now</th></tr></thead>
       <tbody>
       {% for a in models %}<tr>
         <td class="small">{{ when(a.created_at) }}</td>
@@ -65,11 +65,11 @@
 <hr class="rule">
 
 <section class="dsec" aria-labelledby="hd-leads">
-  <h2 id="hd-leads" class="kicker">Leads</h2>
-  <p class="small muted">Worked means the SDR made first contact. Junk and skipped are leads they turned down, with their reason. Score and rank are what the SDR saw at the time. These are the calls logged in AuxoCase; a first touch seen only in HubSpot shows on the lead's page.{% if leads|length >= limit %} Showing the latest {{ limit }}.{% endif %}</p>
+  <h2 id="hd-leads" class="kicker">Leads{% call note('leads-note', 'What these calls mean') %}Which leads SDRs worked or turned down, newest first. Worked means the SDR made first contact. Junk and skipped are leads they turned down, with their reason. Score and rank are what the SDR saw at the time. These are the calls logged in AuxoCase; a first touch seen only in HubSpot shows on the lead's page.{% endcall %}</h2>
+  {% if leads|length >= limit %}<p class="small muted">The latest {{ limit }}.</p>{% endif %}
   <div class="scroll" role="region" aria-label="Lead decisions, scrolls sideways" tabindex="0">
     <table aria-labelledby="hd-leads">
-      <thead><tr><th scope="col">When</th><th scope="col">SDR</th><th scope="col">Lead</th><th scope="col">Decision</th><th scope="col">Reason</th><th scope="col" class="r">Score then</th><th scope="col" class="r">Rank then</th></tr></thead>
+      <thead><tr><th scope="col">When{{ ref('clocks') }}</th><th scope="col">SDR</th><th scope="col">Lead</th><th scope="col">Decision</th><th scope="col">Reason</th><th scope="col" class="r">Score then</th><th scope="col" class="r">Rank then</th></tr></thead>
       <tbody>
       {% for o in leads %}<tr>
         <td class="small">{{ when(o.created_at) }}</td>
@@ -85,5 +85,5 @@
   </div>
 </section>
 
-{% if env == 'mock' %}<footer class="footnote"><span class="dagger">†</span> Simulated · synthetic data. This is the mock HubSpot portal: its leads and SDRs come from a generator and its models are trained on them. When the demo build trains the first model it also records that model's two approvals, under demo approver names; the lead calls mix the simulator's SDRs (which skip with the reason "wrong fit") with anything clicked in this demo. On a real portal this page lists the calls your own SDRs and your marketing and sales leads make in AuxoCase. Times are the demo run's wall clock, in UTC; the service clock is frozen at {{ clock_text }}.</footer>{% endif %}
+<footer><ol class="fnotes">{% if env == 'mock' %}<li id="fn-sim">Simulated · synthetic data. This is the mock HubSpot portal: its leads and SDRs come from a generator and its models are trained on them. When the demo build trains the first model it also records that model's two approvals, under demo approver names; the lead calls mix the simulator's SDRs (which skip with the reason "wrong fit") with anything clicked in this demo. On a real portal this page lists the calls your own SDRs and your marketing and sales leads make in AuxoCase. Times are the demo run's wall clock, in UTC; the service clock is frozen at {{ clock_text }}.</li>{% endif %}<li id="fn-clocks">Times are when each call was logged, in UTC.</li></ol></footer>
 {% endblock %}

@@ -4,8 +4,9 @@
 .ov-head{display:flex;flex-direction:column;gap:8px}
 .ov-head p,.ov-sec p{margin:0}
 .ov-text{max-width:760px}
-.ov-figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:32px}
-.ov-fig{position:relative;display:flex;flex-direction:column;gap:4px}
+.ov-figs{display:flex;flex-wrap:wrap;gap:24px 48px}
+.ov-fig{position:relative;display:flex;flex-direction:column;gap:4px;flex:0 1 auto}.ov-fig .big{white-space:nowrap}
+.ov-fig>span:not(.big){max-width:280px}
 .ov-fig a{display:inline-flex;align-items:center;min-height:44px;align-self:flex-start}
 /* each figure's "i" opens under the figure; the last one hangs from its right edge so it stays on the page */
 .ov-fig .info-box{right:auto;width:320px;max-width:calc(100vw - 32px)}
@@ -59,17 +60,17 @@
     <span>unassigned {{ pool_label }} in the pool{% call note('pool-note', 'What the pool is') %}The pool is every unassigned {{ pool_noun }} from the last {{ pool_days }} days, scored and waiting. {% if not pool_size %}Nothing scored is waiting.{% elif models|length == 1 %}Every one scored by {{ (models|list)[0] }} and ranked.{% else %}Ranked, and scored by {% for v, n in models.most_common() %}{{ v }} ({{ '{:,}'.format(n) }}){{ ', ' if not loop.last }}{% endfor %}.{% endif %}{% endcall %}</span>
   </div>
   <div class="ov-fig">
-    <span class="mid num{{ ' warn' if held }}">{{ '{:,}'.format(held) }}</span>
+    <span class="big num{{ ' warn' if held }}">{{ '{:,}'.format(held) }}</span>
     <span>held for the manager{% call note('held-note', 'When a lead is held') %}A lead is held when it has waited {{ hold_after }} above the capacity line with every SDR at their limit. The manager places it from Held &amp; overdue.{% endcall %}</span>
     {% if held %}<a href="/held">Place them in Held &amp; overdue</a>{% endif %}
   </div>
   <div class="ov-fig">
-    <span class="mid num">{{ team.waiting }} of {{ team.slots }}</span>
+    <span class="big num">{{ team.waiting }} of {{ team.slots }}</span>
     <span>slots waiting for a first touch{% call note('slots-note', 'What a slot is') %}A slot is room on an SDR's desk for one lead not yet touched; the first touch frees it. {{ team.sdrs }} SDR{{ 's' if team.sdrs != 1 }} active{% if team.sdrs %}, {% if team.limit == 1 %}one slot each{% elif team.limit is not none %}{{ team.limit }} slots each{% else %}each with their own limit{% endif %}{% endif %}.{% endcall %}</span>
     {% if team.overdue %}<a href="/held">{{ team.overdue }} first touch{{ 'es' if team.overdue != 1 }} overdue</a>{% endif %}
   </div>
   <div class="ov-fig">
-    <span class="mid num">{% if cap and cap.value is not none %}{{ (100 * cap.value)|round|int }}%{% else %}[NOT SET]{% endif %}</span>
+    <span class="big num">{% if cap and cap.value is not none %}{{ (100 * cap.value)|round|int }}%{% else %}[NOT SET]{% endif %}</span>
     <span>capacity line{% call note('line-note', 'How the capacity line is drawn') %}How far down the pool the team reaches in {{ horizon }}. {% if cap %}The touch-now value at place {{ '{:,}'.format(cap.place) }} of {{ '{:,}'.format(pool_size) }}{% if cap.place < cap.k %}, the end of the pool: the team reaches all of it in {{ horizon }} at its {{ per_month }} leads a month{% else %}: {{ horizon_work }} at the team's {{ per_month }} leads a month{% endif %}.{% if cap.value is none %} Routing sets it on its next run.{% elif cap.set_at %} Set by the {{ cap.set_at }} UTC route run.{% endif %}{% else %}Drawn once the pool holds a scored lead: the value at the place the team reaches in {{ horizon }}.{% endif %}{% endcall %}</span>
   </div>
 </section>
