@@ -83,6 +83,14 @@ def calibration_band(metrics: Optional[dict], p: Optional[float]) -> Optional[di
     return None
 
 
+def _call_steps(activity, first_touch) -> list[dict]:
+    """The SDR's calls so far, oldest first, each with HubSpot's outcome: connected calls count as a conversation."""
+    calls = sorted((e for e in activity if e.type == "CALL" and e.direction == "OUTGOING"), key=lambda e: e.timestamp)
+    return [{"when": when(e.timestamp), "state": "sent" if e.connected else "later",
+             "note": (CALL_DISPOSITIONS.get(e.disposition) or ("connected" if e.connected else "no answer")).lower(),
+             "first": bool(first_touch and first_touch["engagement_id"] == e.id)} for e in calls]
+
+
 def _email_steps(activity, touch: Optional[int], no_draft: str, email: Optional[Draft]) -> list[dict]:
     """The three emails of the sequence and where each stands: sent (seen in HubSpot), next, later, or stopped."""
     sent = sorted((e for e in activity if e.type == "EMAIL" and e.direction == "OUTGOING"), key=lambda e: e.timestamp)
@@ -220,7 +228,8 @@ def lead_detail(st, contact_id: str, draft: bool = False, call: bool = False) ->
             "owner": owner, "owners": owners, "assigned": assigned,
             "decision": next((h for h in reversed(history) if h["action"] in DECISIONS), None),
             "activity_rows": activity_rows, "touched_in": touched_in, "slot_next": slot_next,
-            "emails": _email_steps(activity, touch, no_draft, email), "speed": speed_effect(st.conn),
+            "emails": _email_steps(activity, touch, no_draft, email), "calls": _call_steps(activity, first_touch),
+            "speed": speed_effect(st.conn),
             "late_factor": LATE_TOUCH_FACTOR if mock else None, "pace": speed_to_lead(st.conn), "watch": watch,
             "enrichment": enrichment, "timeline": _timeline(c, score, routing, stored, first_touch, history, owners),
             "last_read": when(get_setting(st.conn, TOUCHES_READ))}

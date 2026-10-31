@@ -16,6 +16,7 @@
 .info-wrap:hover .info-box,.info-wrap:focus-within .info-box{visibility:visible;opacity:1}
 /* footnotes are numbered: a small superscript number in the text, the notes as a numbered list at the foot */
 .drivers .info-wrap{position:relative;display:inline-block;line-height:0}
+.block>h3{position:relative}.block>h3 .info-box{font-weight:400;font-size:14px}
 .drivers .info-box{left:auto;right:0;width:360px;max-width:70vw;font-weight:400}
 .fn{font-size:11px;line-height:0;vertical-align:super;margin-left:1px}
 .fn a{color:var(--muted);text-decoration:none}.fn a:hover{color:var(--ink)}
@@ -42,6 +43,9 @@
 .list a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
 .draft-body{overflow-wrap:anywhere}
 .part.wide .block,.part.wide .demo{max-width:none}
+/* the email draft and the call brief side by side where the section is full width and the page wide enough */
+.duo{display:grid;grid-template-columns:minmax(0,1fr);gap:32px;align-items:start}
+@media (min-width:1100px){.part.wide .duo{grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:0}.part.wide .duo>*+*{border-left:1px solid var(--line);padding-left:48px}.part.wide .duo>*:first-child{padding-right:48px}}
 .brief{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:16px 48px}
 .brief h4{margin:0 0 4px;font-size:12px;line-height:18px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:400}
 .brief p{margin:0}.brief-q{margin:0;padding-left:1.3em}.brief-q li+li{margin-top:4px}
@@ -191,24 +195,34 @@
 {% macro reach_head(d, where, below=false) -%}
 {%- set c = d.c -%}{%- set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} -%}
 {%- set tasks = 'your' if where == 'queue' else ((d.owner.name ~ "'s") if d.owner else "the SDR's") -%}
-<section class="part" aria-labelledby="reach-{{ c.id }}">
+<section class="part{{ ' wide' if below }}" aria-labelledby="reach-{{ c.id }}">
   <h2 class="kicker" id="reach-{{ c.id }}">Reach out</h2>
+  {% if c.email %}<p><a class="tap" href="mailto:{{ c.email }}">{{ c.email }}</a>{% if d.touched_in %} <span class="badge seen">first touch seen {{ d.touched_in.at }}</span>{% endif %}</p>{% endif %}
+  <div class="duo">
   {% if not c.email -%}
   <p class="muted">No email address on record.</p>
   {%- else -%}
-  <p><a class="tap" href="mailto:{{ c.email }}">{{ c.email }}</a>{% if d.touched_in %} <span class="badge seen">first touch seen {{ d.touched_in.at }}</span>{% endif %}</p>
   <div class="block">
-    <h3>Emails · {{ d.emails|selectattr('state', 'equalto', 'sent')|list|length }} of {{ d.emails|length }} sent</h3>
+    <h3>Emails · {{ d.emails|selectattr('state', 'equalto', 'sent')|list|length }} of {{ d.emails|length }} sent{% if d.stored or d.enrollments %}{% call note('seq-note-' ~ c.id, 'Where the first email stands in HubSpot') %}{% if d.stored %}{% set o = d.stored %}The first email was drafted on assignment, {{ o.when }}{% if o.status == 'enrolled' %}, and the lead enrolled in sequence {{ o.sequence_id }}: step one waits in {{ tasks }} HubSpot tasks to approve and send{% elif o.status == 'refused' %}, but HubSpot refused the sequence enrolment (already in a sequence, unsubscribed, or the SDR's inbox isn't connected){% else %}; no sequence is set (AUXO_SEQUENCE_ID), so it waits here{% endif %}.{% endif %}{% for en in d.enrollments %}<br><br>In HubSpot: sequence {{ en.sequence_id }} from {{ en.sender_email }}, enrolled {{ en.enrolled_at.strftime('%d %b %Y %H:%M') }} · {{ en.status|lower }}.{% endfor %}{% endcall %}{% endif %}</h3>
     <ol class="steps">
       {% for x in d.emails %}<li><span class="dot {{ x.state }}" aria-hidden="true"></span><span><b>{{ x.label }}</b> <span class="muted">· {{ x.note }}</span></span></li>
       {% endfor %}
     </ol>
-    {% if d.stored %}{% set o = d.stored %}<p class="small muted">The first email was drafted on assignment, {{ o.when }}{% if o.status == 'enrolled' %}, and the lead enrolled in sequence {{ o.sequence_id }}: step one waits in {{ tasks }} HubSpot tasks to approve and send{% elif o.status == 'refused' %}, but HubSpot refused the sequence enrolment (already in a sequence, unsubscribed, or the SDR's inbox isn't connected){% else %}; no sequence is set (AUXO_SEQUENCE_ID), so it waits here{% endif %}.</p>{% endif %}
-    {% for en in d.enrollments %}<p class="small muted">In HubSpot: sequence {{ en.sequence_id }} from {{ en.sender_email }}, enrolled {{ en.enrolled_at.strftime('%d %b %Y %H:%M') }} · {{ en.status|lower }}.</p>
-    {% endfor %}
+  </div>
+  {%- endif %}
+  {%- set calls = d.get('calls') or [] %}{%- set spoke = calls|selectattr('state', 'equalto', 'sent')|list|length %}
+  <div class="block">
+    <h3>Calls · {% if not calls %}none yet{% else %}{{ calls|length }} made{% if spoke %}, {{ spoke }} connected{% endif %}{% endif %}</h3>
+    {% if calls -%}
+    <ol class="steps">
+      {% for x in calls %}<li><span class="dot {{ x.state }}" aria-hidden="true"></span><span><b>{{ x.note|capitalize }}</b> <span class="muted">· {{ x.when }}{% if x.first %} · first touch{% endif %}</span></span></li>
+      {% endfor %}
+    </ol>
+    {%- endif %}
+    <p class="small muted">{% if calls and not spoke %}Nobody has picked up yet. {% endif %}{{ 'The' if d.get('call') else 'A' }} call brief{{ '' if d.get('call') else ', prepared on request,' }} gives you an opener, what to ask, the objection to expect and a voicemail. Log each call in HubSpot with its outcome{{ "; here the mock's demo panel stands in for that" if d.mock }}.</p>
+  </div>
   </div>
   {% if below and d.touch %}<p class="small muted" style="margin: 0"><a class="muted" href="#draft-{{ c.id }}">The {{ labels[d.touch] }}{{ "'s draft" if d.email else '' }} and the call brief are further down this page.</a></p>{% endif %}
-  {%- endif %}
 </section>
 {%- endmacro %}
 
@@ -216,6 +230,7 @@
 {%- set c = d.c -%}{%- set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} -%}
 {%- set tasks = 'your' if where == 'queue' else ((d.owner.name ~ "'s") if d.owner else "the SDR's") -%}
 <section class="part{{ ' wide' if wide }}" id="draft-{{ c.id }}" aria-label="Reaching {{ first(c) }}">
+  <div class="duo">
   {% if c.email -%}
   {% if not d.touch -%}
   <p class="muted">{% if d.no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif d.no_draft == 'finished' %}All three emails have gone; nothing more to send.{% else %}{{ d.no_draft }}{% endif %}</p>
@@ -263,6 +278,7 @@
     {%- endif %}
   </div>
   {%- endif %}
+  </div>
   {{ extra }}
   {%- set automated = d.get('tier2') and d.get('tier2').status == 'sent' and not c.hubspot_owner_id %}
   {% if d.mock and (c.hubspot_owner_id or automated) -%}

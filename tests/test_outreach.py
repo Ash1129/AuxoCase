@@ -161,3 +161,15 @@ def test_call_brief_on_request_and_hubspots_call_outcome_as_the_first_touch(worl
 
     r = client.post(f"/lead/{lead}/hubspot", data={"kind": "call", "disposition": "connected"}, follow_redirects=False)
     assert r.status_code == 303 and hs.engagements_for_contact(lead)[-1].connected
+
+
+def test_the_reach_out_header_counts_the_calls_and_their_outcomes(world):
+    path, conn, hs, owner, cid = world
+    client = TestClient(create_app(path))
+    page = client.get(f"/lead/{cid}").text
+    assert "Calls · none yet" in page and "A call brief, prepared on request," in page
+    client.post(f"/lead/{cid}/hubspot", data={"kind": "call", "disposition": "left_voicemail"}, follow_redirects=False)
+    client.post(f"/lead/{cid}/hubspot", data={"kind": "call", "disposition": "connected"}, follow_redirects=False)
+    page = client.get(f"/lead/{cid}").text
+    assert "Calls · 2 made, 1 connected" in page and "<b>Left voicemail</b>" in page and "<b>Connected</b>" in page
+    assert "first touch" in page
