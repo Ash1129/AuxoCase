@@ -35,7 +35,7 @@
 .chart svg{display:block;width:100%;height:auto;font:13px/18px var(--body);fill:var(--ink)}
 .chart .lbl{fill:var(--ink)}.chart .lbl.on{font-weight:600}.chart .val{fill:var(--ink)}.chart .mut{fill:var(--muted)}
 .chart .axis{stroke:var(--line);stroke-width:1}
-.chart .bar-setup,.chart .bar-history{fill:var(--accent)}.chart .bar-after{fill:var(--accentInk)}
+.chart .bar-setup,.chart .bar-history{fill:var(--accent)}.chart .bar-after,.chart .bar-total{fill:var(--accentInk)}.chart .bar-down{fill:var(--muted)}
 .chart .col-before{fill:var(--muted);opacity:.55}.chart .col-after{fill:var(--accent)}
 .chart .gap{stroke:var(--bg);stroke-width:2}
 .pie{display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px}
@@ -186,7 +186,18 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
   </figure>
   {% endmacro %}
   <div class="charts">
-    {{ steps('demos', 'Demos a month', '', 'bar', 'Each step adds one change to the one above it; history is the twelve months before routing.' ~ (' The last bar is the months simulated ahead with the AI steps on.' if gain.projected else '')) }}
+    <figure class="chart">
+      <h3 class="kicker">Demos a month</h3>
+      <svg viewBox="0 0 640 {{ 8 + 30 * gain.water|length }}" role="img" aria-label="Demos a month: history, then what each step adds">
+        {% for s in gain.water %}{% set y = 4 + 30 * loop.index0 %}
+        <text class="lbl{{ ' on' if s.in_use }}" x="0" y="{{ y + 15 }}">{{ s.label }}{% if s.in_use %} · in use{% endif %}</text>
+        <rect class="bar-{{ 'down' if s.down else s.kind }}" x="{{ 290 + s.x0 }}" y="{{ y + 3 }}" width="{{ s.w }}" height="16"><title>{{ s.label }}{% if s.in_use %}, the setup in use now{% endif %}: {{ s.demos }} demos a month{% if s.kind not in ('history', 'total') %} ({{ s.text }}){% endif %}{% if s.range %} ({{ s.range }}){% endif %}</title></rect>
+        <text class="val" x="{{ 296 + s.x0 + s.w }}" y="{{ y + 15 }}">{{ s.text }}</text>
+        {% if s.edge is not none and not loop.last %}<line class="axis" x1="{{ 290 + s.edge }}" x2="{{ 290 + s.edge }}" y1="{{ y + 19 }}" y2="{{ y + 33 }}"></line>{% endif %}
+        {% endfor %}
+      </svg>
+      <figcaption class="small muted">History is the twelve months before routing; each step adds one change to the one above it and the bar is what it adds.{% if gain.projected %} The AI steps' row is the months simulated ahead.{% endif %}</figcaption>
+    </figure>
     {{ steps('within', 'Touched within 24 hours', '%', 'bar_within', 'The share of leads touched within a day of arriving, by the same steps.') }}
     <figure class="chart">
       <h3 class="kicker">Leads worked a month</h3>

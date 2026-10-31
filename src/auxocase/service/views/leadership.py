@@ -266,6 +266,18 @@ def _gain(setups: Optional[dict], shared: Optional[dict], mo: Optional[dict], st
     for s in steps:
         s["bar"] = round(BAR_W * s["demos"] / top, 1)
         s["bar_within"] = round(BAR_W * (s["within"] or 0) / 100, 1)
+    # Demos a month as a waterfall: history is the base, each step floats from the value before it by its gain, and
+    # the last row is the whole; `x0` and `w` are the floating bar's start and width, `edge` where the running value is.
+    water, prev = [], 0
+    for i, s in enumerate(steps):
+        lo, hi = min(prev, s["demos"]), max(prev, s["demos"])
+        delta = s["demos"] - prev
+        water.append({**s, "x0": round(BAR_W * lo / top, 1), "w": round(BAR_W * (hi - lo) / top, 1), "edge": round(BAR_W * s["demos"] / top, 1),
+                      "text": f"{s['demos']}" if i == 0 else f"{delta:+d}", "down": delta < 0 and i > 0})
+        prev = s["demos"]
+    if len(steps) > 1:
+        water.append({"label": "All together", "demos": prev, "kind": "total", "x0": 0.0, "w": round(BAR_W * prev / top, 1), "edge": None,
+                      "text": f"{prev}", "down": False, "range": None, "in_use": False})
     rows = [{**r, "group": "before"} for r in mo["before_rows"]] + [{**r, "group": "after"} for r in mo["after_rows"]]
     peak = max((r["worked"] for r in rows), default=0) or 1
     tick = 500 if peak <= 1500 else 1000
@@ -276,7 +288,7 @@ def _gain(setups: Optional[dict], shared: Optional[dict], mo: Optional[dict], st
         r["show"] = i == 0 or i == len(rows) - 1 or r["month"][:3] == "Jan" or (i > 0 and rows[i - 1]["group"] != r["group"])
     ticks = [{"v": v, "y": round(COL_H - COL_H * v / axis_top, 1), "text": f"{v / 1000:g}K" if v >= 1000 else f"{v:,}"}
              for v in range(0, axis_top + 1, tick)]
-    return {"steps": steps, "projected": mo["projected"], "leads": {"rows": rows, "ticks": ticks, "width": COL_X0 + len(rows) * COL_STEP,
+    return {"steps": steps, "water": water, "projected": mo["projected"], "leads": {"rows": rows, "ticks": ticks, "width": COL_X0 + len(rows) * COL_STEP,
             "before_avg": b["worked_a_month"], "after_avg": a["worked_a_month"]},
             "channels": _channels(st, [m["month"] for m in mo["after"]]), "after_span": span(mo["after"][0]["month"], mo["after"][-1]["month"])}
 
@@ -458,8 +470,8 @@ def leadership_page(st) -> dict:
     setups: from queue_limits, {rows: [{label, demos, demos_lo, demos_hi, within, within_lo, within_hi, bar, in_use}],
       scale, line (the history's demos a month on the bars' scale, or None), seeds, seeds_word, fresh_words,
       first_desk, first_off, first_demos, speed_adds}.
-    gain: the charts (see _gain): steps, projected, leads {rows, ticks, width, before_avg, after_avg}, channels
-      {total, slices}, after_span."""
+    gain: the charts (see _gain): steps, water (demos a month as a waterfall), projected, leads {rows, ticks, width,
+      before_avg, after_avg}, channels {total, slices}, after_span."""
     report, ql, in_use = _load(REPORT), _load(QUEUE_LIMITS), _in_use(st)
     sdrs = sum(1 for o in st.hs.list_owners(active_only=True) if o.team == "sdr")
     fresh_as_often, late_as_often = _as_often(LATE_TOUCH_FACTOR)
