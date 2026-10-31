@@ -464,7 +464,7 @@ class MockHubSpot:
                 self._enqueue(meeting.id, "meeting.creation", "", row["createdate"])
 
     def log_engagement(self, contact_id: str, type: str, direction: str, at: datetime, owner_id: Optional[str] = None,
-                       subject: str = "", connected: bool = False, disposition: str = "") -> Engagement:
+                       subject: str = "", connected: bool = False, disposition: str = "", body: str = "") -> Engagement:
         """What sending an email or logging a call in HubSpot leaves behind. A call carries HubSpot's outcome
         (`disposition`, a CALL_DISPOSITIONS key); "connected" is the one that means the SDR reached the lead. A reply
         from the lead ends any active sequence, as HubSpot's unenroll-on-reply does."""
@@ -472,7 +472,7 @@ class MockHubSpot:
             disposition = disposition or ("connected" if connected else "no_answer")
             connected = disposition == "connected"
         e = Engagement(id=self._next_id("hs_engagements", "eng-"), contact_id=contact_id, type=type, direction=direction,
-                       timestamp=at, owner_id=owner_id, subject=subject, connected=connected, disposition=disposition,
+                       timestamp=at, owner_id=owner_id, subject=subject, connected=connected, disposition=disposition, body=body,
                        logged_at=datetime.fromisoformat(now_iso()))
         with self._write():
             _insert(self.conn, "hs_engagements", _to_row(e))

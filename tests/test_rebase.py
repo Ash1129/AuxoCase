@@ -4,7 +4,7 @@ import json
 from datetime import datetime
 
 from auxocase.data.generate import generate
-from auxocase.data.rebase import rebase, shift_text, years_to_now
+from auxocase.data.rebase import rebase, shift_text, wall_window, years_to_now
 from auxocase.feedback import loop as fb
 from auxocase.hubspot.mock import MockHubSpot
 from auxocase.llm.client import Offline
@@ -31,6 +31,7 @@ def test_rebase_moves_demo_dates_keeps_wall_logs_and_runs_the_clock_live(tmp_pat
     before = clock(conn)
     assert before.year == 2025 and clock_frozen(conn)
     scores_before = conn.execute("SELECT MIN(created_at), MAX(created_at) FROM scores").fetchone()
+    wall_start = wall_window(conn)[0]                                  # the first logged run: the service's rows start here
     wall_mods = conn.execute("SELECT COUNT(*) FROM hs_contacts WHERE lastmodifieddate >= ?", (scores_before[0],)).fetchone()[0]
     assert wall_mods > 0
     years = 2025 - datetime.utcnow().year + 2                           # whatever lands the data two years back from here
@@ -46,7 +47,7 @@ def test_rebase_moves_demo_dates_keeps_wall_logs_and_runs_the_clock_live(tmp_pat
     # The service's own timestamps did not move.
     assert conn.execute("SELECT MIN(created_at), MAX(created_at) FROM scores").fetchone() == scores_before
     assert conn.execute("SELECT COUNT(*) FROM hs_contacts WHERE lastmodifieddate >= ?", (scores_before[0],)).fetchone()[0] == wall_mods
-    assert conn.execute("SELECT COUNT(*) FROM hs_property_history WHERE source='auxocase' AND changed_at < ?", (scores_before[0],)).fetchone()[0] == 0
+    assert conn.execute("SELECT COUNT(*) FROM hs_property_history WHERE source='auxocase' AND changed_at < ?", (wall_start,)).fetchone()[0] == 0
     # The evaluation's months moved, its wall times did not.
     ev = json.loads(evaluation.read_text())
     assert ev["metrics"]["validation_months"] == [shift_text("2025-10", years), shift_text("2025-11", years)]

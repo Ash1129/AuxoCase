@@ -134,7 +134,7 @@ def stored_draft(conn: sqlite3.Connection, contact_id: str) -> Optional[dict]:
     return dict(r) if r else None
 
 
-def log_demo_activity(hs, conn: sqlite3.Connection, contact_id: str, kind: str, subject: str = "", disposition: str = "") -> None:
+def log_demo_activity(hs, conn: sqlite3.Connection, contact_id: str, kind: str, subject: str = "", disposition: str = "", body: str = "") -> None:
     """Mock only: stand in for the SDR (or the lead) acting in HubSpot, at the service clock's time. A call carries
     HubSpot's outcome (`disposition`, a CALL_DISPOSITIONS key); the older kinds name the two common ones."""
     c = hs.get_contact(contact_id)
@@ -149,6 +149,6 @@ def log_demo_activity(hs, conn: sqlite3.Connection, contact_id: str, kind: str, 
             raise ValueError(disposition)
         hs.log_engagement(contact_id, "CALL", "OUTGOING", at, c.hubspot_owner_id, disposition=disposition)
     elif kind == "reply":
-        hs.log_engagement(contact_id, "EMAIL", "INCOMING", at, None, subject=f"Re: {subject}" if subject else "")
+        hs.log_engagement(contact_id, "EMAIL", "INCOMING", at, None, subject=f"Re: {subject}" if subject else "", body=body)
     else:
         raise ValueError(kind)

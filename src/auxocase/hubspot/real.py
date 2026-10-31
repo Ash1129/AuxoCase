@@ -117,7 +117,7 @@ COMPANY_PROPERTIES = ["name", "domain", "industry", "numberofemployees", "annual
 DEAL_PROPERTIES = ["dealstage", "amount", "createdate", "closedate", "hs_is_closed_won", "hubspot_owner_id", "hs_lastmodifieddate", "closed_lost_reason"]
 MEETING_PROPERTIES = ["hs_meeting_start_time", "hs_meeting_outcome", "hubspot_owner_id", "hs_timestamp", "hs_createdate"]
 TASK_PROPERTIES = ["hs_task_subject", "hs_task_body", "hs_task_status", "hubspot_owner_id", "hs_timestamp", "hs_createdate"]
-EMAIL_PROPERTIES = ["hs_timestamp", "hs_email_direction", "hs_email_subject", "hubspot_owner_id", "hs_createdate"]
+EMAIL_PROPERTIES = ["hs_timestamp", "hs_email_direction", "hs_email_subject", "hs_email_text", "hubspot_owner_id", "hs_createdate"]
 CALL_PROPERTIES = ["hs_timestamp", "hs_call_direction", "hs_call_disposition", "hubspot_owner_id", "hs_createdate"]
 CALL_CONNECTED_DISPOSITION = "f240bbac-87c9-4f6e-bf70-924b57d47db7"   # HubSpot's default "Connected" call outcome
 # HubSpot's default call outcomes by id (Calls API docs); a portal with its own outcomes maps them here.
@@ -322,7 +322,8 @@ class RealHubSpot:
         disposition = CALL_DISPOSITION_IDS.get(p.get("hs_call_disposition") or "", "") if kind == "CALL" else ""
         return Engagement(id=f"{object_type}-{obj['id']}", contact_id=contact_id, type=kind, direction=direction,
                           timestamp=_parse_dt(p.get("hs_timestamp")) or logged, owner_id=p.get("hubspot_owner_id") or None,
-                          subject=subject, connected=connected, disposition=disposition, logged_at=logged)
+                          subject=subject, connected=connected, disposition=disposition, logged_at=logged,
+                          body=(p.get("hs_email_text") or "") if kind == "EMAIL" else "")
 
     @staticmethod
     def _task_from_json(obj: dict, contact_id: str) -> Task:

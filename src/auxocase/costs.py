@@ -49,7 +49,8 @@ def unit(conn: sqlite3.Connection, key: str) -> float:
 
 
 def units(conn: sqlite3.Connection) -> dict:
-    return {k: unit(conn, k) for k in DEFAULTS}
+    """The unit settings; `sdr_minutes_reply` is what a reply takes now: less with replies triaged (capacity.py)."""
+    return {**{k: unit(conn, k) for k in DEFAULTS}, "sdr_minutes_reply": capacity.minutes_per_reply(conn)}
 
 
 def _per(a: float, b: float, nd: int = 2) -> Optional[float]:

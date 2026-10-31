@@ -141,6 +141,13 @@ CREATE TABLE IF NOT EXISTS followups (
   reason TEXT, created_at TEXT, updated_at TEXT, PRIMARY KEY (contact_id, step)
 );
 CREATE INDEX IF NOT EXISTS followups_due ON followups(status, due_at);
+-- A lead's reply read before the SDR opens it (routing/replies.py): what it is, the answer drafted when one is due,
+-- and what was done (closed, follow-ups moved, handed to the SDR).
+CREATE TABLE IF NOT EXISTS replies (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, contact_id TEXT, engagement_id TEXT UNIQUE, owner_id TEXT, kind TEXT, summary TEXT, until TEXT,
+  subject TEXT, body TEXT, source TEXT, rejected TEXT, acted TEXT, replied_at TEXT, created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS replies_contact ON replies(contact_id);
 -- Phase 3: leads below the capacity line put in an automated sequence (arm 'emailed') or left to the ordinary
 -- process as the comparison (arm 'control'). One row per lead, written when the lead became eligible.
 CREATE TABLE IF NOT EXISTS tier2 (
@@ -180,7 +187,7 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
 
 # Columns added after a database may already exist; CREATE TABLE IF NOT EXISTS does not add them.
 _ADDED_COLUMNS = {"hs_deals": {"closed_lost_reason": "TEXT"}, "outcomes": {"lead_created_at": "TEXT"},
-                  "hs_owners": {"meetings_link": "TEXT"}, "hs_engagements": {"disposition": "TEXT"},
+                  "hs_owners": {"meetings_link": "TEXT"}, "hs_engagements": {"disposition": "TEXT", "body": "TEXT"},
                   "routing_log": {"probability": "REAL", "below_gate": "INTEGER"},
                   "hs_contacts": {"auxo_email_subject": "TEXT", "auxo_email_body": "TEXT", "auxo_below_gate": "INTEGER"}}
 

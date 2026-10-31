@@ -223,7 +223,23 @@
 <section class="part{{ ' wide' if wide }}" id="draft-{{ c.id }}" aria-label="Reaching {{ first(c) }}">
   <div class="duo">
   {% if c.email -%}
-  {% if not d.touch -%}
+  {% if d.get('reply') and (not d.touch or d.reply.kind == 'out_of_office') -%}
+  {%- set r = d.reply -%}
+  <div class="block" id="reply-{{ c.id }}">
+    <h3 class="kicker">Replied {{ r.when }} · {{ r.word }}</h3>
+    <p><b>{{ r.summary }}</b>{% if r.acted %} <span class="muted">· {{ r.acted }}</span>{% endif %}</p>
+    {% if r.text %}<p class="draft-body small muted">“{{ r.text[:400] }}{{ '…' if r.text|length > 400 }}”</p>{% endif %}
+    {% if r.body -%}
+    <p><span class="vh">Subject: </span><b>{{ r.subject }}</b></p>
+    <p class="draft-body">{{ r.body }}</p>
+    <div class="actions"><a class="btn primary" href="mailto:{{ c.email }}?subject={{ r.subject|urlencode }}&body={{ r.body|urlencode }}">Open the answer in your email app</a><span class="small muted">Drafted by {{ 'Claude' if r.source == 'llm' else 'the template' }}{% if r.rejected %}; Claude's answer was set aside: {{ r.rejected }}{% endif %}. Edit it before you send.</span></div>
+    {%- elif r.kind == 'out_of_office' -%}
+    <p class="small muted">Not an answer: the sequence carries on once they are back.</p>
+    {%- elif r.kind == 'other' -%}
+    <p class="small muted">Not understood: read it in HubSpot and answer from there.</p>
+    {%- endif %}
+  </div>
+  {%- elif not d.touch -%}
   <p class="muted">{% if d.no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif d.no_draft == 'finished' %}All three emails sent.{% else %}{{ d.no_draft }}{% endif %}</p>
   {%- elif d.get('followups') and d.followups.next and d.followups.next.step == d.touch and not d.email -%}
   {%- set f = d.followups.next -%}
@@ -288,7 +304,7 @@
     <p class="small muted"><b>Demo: the lead answers.</b> In the automated sequence (phase 3). On a real portal the reply lands in the sender's HubSpot inbox; AuxoCase sees it within a minute and hands the lead to that SDR.</p>
     <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
       <input type="hidden" name="subject" value="{{ d.get('tier2').subject or '' }}">
-      <button class="btn" type="submit" name="kind" value="reply">The lead replies</button>
+      <span class="outcome"><label class="vh" for="reply-kind-{{ c.id }}">What the lead says</label><select id="reply-kind-{{ c.id }}" name="reply">{% for k, v in d.demo_replies %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="reply">The lead replies</button></span>
     </form>
     {%- else -%}
     <p class="small muted"><b>Demo: act in HubSpot.</b> On a real portal {{ d.owner.name if d.owner else 'the SDR' }} sends the email or logs the call there; AuxoCase sees it within a minute.{% if where == 'queue' %} Each button then opens the lead page.{% endif %}</p>
@@ -296,7 +312,7 @@
       <input type="hidden" name="subject" value="{{ d.email.subject if d.email else '' }}">
       <button class="btn" type="submit" name="kind" value="email">Send {{ 'this ' ~ labels[d.email.touch] if d.email else 'an email' }}</button>
       <span class="outcome"><label class="vh" for="outcome-{{ c.id }}">Call outcome</label><select id="outcome-{{ c.id }}" name="disposition">{% for k, v in d.dispositions.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="call">Log a call</button></span>
-      <button class="btn" type="submit" name="kind" value="reply">The lead replies</button>
+      <span class="outcome"><label class="vh" for="reply-kind-{{ c.id }}">What the lead says</label><select id="reply-kind-{{ c.id }}" name="reply">{% for k, v in d.demo_replies %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="reply">The lead replies</button></span>
     </form>
     {%- endif %}
   </section>

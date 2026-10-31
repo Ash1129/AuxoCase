@@ -12,6 +12,7 @@ from typing import Optional
 
 from ...hubspot.models import SDR_LIFECYCLE_STAGES, WAITING_LEAD_STATUSES
 from ...storage.db import clock, now_iso
+from ...llm.replies import ANSWERED, WORDS as REPLY_WORDS
 from .lead import first_day, lead_detail, when
 
 QUEUE_DAYS = 30
@@ -30,6 +31,8 @@ def queue_groups(st, owner_id: str) -> dict:
     decided = {r["contact_id"] for r in st.conn.execute("SELECT DISTINCT contact_id FROM overrides WHERE action IN ('worked','junk','skipped')")}
     touches = {r["contact_id"]: dict(r) for r in st.conn.execute("SELECT contact_id, touched_at, type FROM touches WHERE owner_id=?", (owner_id,))}
     replied = {r["contact_id"]: r["replied_at"] for r in st.conn.execute("SELECT contact_id, replied_at FROM tier2 WHERE status='replied'")}
+    triaged = {r["contact_id"]: dict(r) for r in st.conn.execute(
+        "SELECT contact_id, kind, summary, replied_at, acted FROM replies WHERE owner_id=? ORDER BY id", (owner_id,))}     # the latest wins
     now = clock(st.conn)
     waiting, touched = [], []
     for cid in ids:
@@ -42,7 +45,9 @@ def queue_groups(st, owner_id: str) -> dict:
         if cid not in touches and not is_waiting:
             continue
         entry = {"c": c, "co": st.hs.get_company(c.company_id) if c.company_id else None, "clock": first_day(c.createdate, now),
-                 "replied": when(replied[cid]) if cid in replied else None}
+                 "replied": when(replied[cid]) if cid in replied else None,
+                 "reply": {**triaged[cid], "when": when(triaged[cid]["replied_at"]), "word": REPLY_WORDS.get(triaged[cid]["kind"], triaged[cid]["kind"]),
+                           "answer": triaged[cid]["kind"] in ANSWERED} if cid in triaged else None}
         if cid in touches:
             t = touches[cid]
             touched.append({**entry, "seen_at": t["touched_at"], "seen_when": when(t["touched_at"]), "seen_type": t["type"] or ""})
@@ -51,6 +56,7 @@ def queue_groups(st, owner_id: str) -> dict:
     # A lead that answered the automated sequence (phase 3) is warm and comes first, whatever its old score.
     waiting.sort(key=lambda e: (not e["replied"], -(e["c"].auxo_probability or 0)))
     touched.sort(key=lambda e: e["seen_at"], reverse=True)
+    touched.sort(key=lambda e: not (e["reply"] and e["reply"]["answer"]))          # a reply waiting for its answer comes first
     today = now_iso()[:10]
     done_rows = [dict(r) for r in st.conn.execute(
         "SELECT * FROM overrides WHERE owner_id=? AND action IN ('worked','junk','skipped') AND created_at >= ? ORDER BY id DESC",

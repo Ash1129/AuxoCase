@@ -102,7 +102,7 @@
   <h2 class="kicker" id="q-touched">{{ 'Also yours · ' if open else '' }}touch seen in HubSpot · log your call</h2>
   <ul class="list">
     {% for e in others_touched %}<li><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a>
-      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · {{ (e.seen_type or 'activity')|lower }} seen {{ e.seen_when }}; log your call.</p>{{ ld.marks(e.c) }}</li>
+      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · {{ (e.seen_type or 'activity')|lower }} seen {{ e.seen_when }}{% if e.reply %} · <b>replied {{ e.reply.when }}, {{ e.reply.word }}</b>: {{ e.reply.summary }}{% if e.reply.answer %} Answer drafted{% endif %}{% else %}; log your call{% endif %}.</p>{{ ld.marks(e.c) }}</li>
     {% endfor %}
   </ul>
 </section>

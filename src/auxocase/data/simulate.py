@@ -27,7 +27,7 @@ import random
 import sqlite3
 from datetime import datetime, timedelta
 
-from ..capacity import touches_per_month
+from ..capacity import minutes_per_reply, touches_per_month
 from ..feedback import loop as fb
 from ..hubspot.mock import MockHubSpot
 from ..hubspot.models import Contact
@@ -163,7 +163,7 @@ def simulate_month(conn: sqlite3.Connection, hs: MockHubSpot, seed: int = 101, n
     per_tick_leads = new_leads / ticks
     sdr_count = sum(1 for o in hs.list_owners(active_only=True) if o.team == "sdr") or None
     per_tick_touches = touches_per_month(conn, sdr_count) * TICK_HOURS / (30.4 * 24)   # the brief's 500 at the defaults
-    reply_cost = unit(conn, "sdr_minutes_reply") / unit(conn, "sdr_minutes_touch")
+    reply_cost = minutes_per_reply(conn) / unit(conn, "sdr_minutes_touch")
     scorer = Scorer(hs, conn, load_live_model(conn), make_llm(conn=conn))
     router = Router(hs, conn, seed=seed)
     tally = {"new_leads": 0, "scored": 0, "assigned": 0, "held": 0, "worked": 0, "skipped_by_rep": 0,

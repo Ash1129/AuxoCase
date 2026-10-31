@@ -30,6 +30,7 @@ from ..llm.client import LLM
 from ..llm.emails import LAST_TOUCH, next_touch
 from ..storage.db import clock, get_setting, now_iso
 from .outreach import draft_for
+from .replies import without_auto_replies
 
 DEFAULT_DAYS = "3,7"          # the follow-up three days after the first email, the last email a week after
 DEFAULT_LIMIT = 10            # drafts a run: with Claude on, each is a model call of seconds
@@ -109,7 +110,7 @@ def send_due(hs: HubSpotClient, conn: sqlite3.Connection, llm: LLM, now: Optiona
             _stop(conn, r["contact_id"], "the lead moved on" if c else "the lead is gone")
             out["stopped"] += 1
             continue
-        history = hs.engagements_for_contact(c.id)
+        history = without_auto_replies(conn, hs.engagements_for_contact(c.id))     # an out-of-office is not the lead answering
         touch, why = next_touch(history)
         if touch is None:
             _stop(conn, c.id, "the lead replied" if why == "replied" else "all three emails sent")
