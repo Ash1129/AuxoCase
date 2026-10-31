@@ -52,7 +52,7 @@ def test_the_page_reads_both_phases_live_and_says_what_the_estimate_needs(world)
     t = r.text
     assert "phase 2 off · phase 3 off" in t and "0 of 100" in t and "0 of 200" in t
     assert "no estimate of the gain yet" in t and "no matured outcome below the gate yet" in t and "no lift measured yet" in t
-    assert "Run <code>python run.py eval</code>" in t and "No switch has been thrown from this page yet" in t
+    assert "Run <code>python run.py eval</code>" in t and "No switch thrown from this page yet" in t
     assert "<script>" not in t and "onclick=" not in t
     assert 'href="/phases"' in client.get("/").text                                      # in the navigation
 

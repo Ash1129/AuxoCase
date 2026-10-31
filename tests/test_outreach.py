@@ -125,7 +125,7 @@ def test_lead_page_walks_from_the_first_email_to_a_follow_up(world):
     subject = stored_draft(conn, lead)["subject"]
     client = TestClient(create_app(path))
     page = client.get(f"/lead/{lead}").text
-    assert "Draft: first email" in page and "enrolled in sequence seq-42" in page and owner.meetings_link in page
+    assert "Draft: first email" in page and "Enrolled in sequence seq-42" in page and owner.meetings_link in page
     assert "Demo: act in HubSpot." in page
 
     r = client.post(f"/lead/{lead}/hubspot", data={"kind": "email", "subject": subject}, follow_redirects=False)

@@ -43,7 +43,7 @@
 <hr class="rule">
 
 <section class="dsec" aria-labelledby="hd-models">
-  <h2 id="hd-models" class="kicker">Model versions{% call note('models-note', 'How a version goes live') %}Which versions marketing and sales approved or sent back, newest first. A version goes live once one person from marketing and one from sales approve it; sending it back retires it.{% endcall %}</h2>
+  <h2 id="hd-models" class="kicker">Model versions{% call note('models-note', 'How a version goes live') %}<span class="ln">Approvals and send-backs, newest first.</span><span class="ln">Live: one person from marketing and one from sales approved it.</span><span class="ln">Sent back: the version is retired.</span>{% endcall %}</h2>
   <div class="scroll" role="region" aria-label="Model decisions, scrolls sideways" tabindex="0">
     <table aria-labelledby="hd-models">
       <thead><tr><th scope="col">When{{ ref('clocks') }}</th><th scope="col">Version</th><th scope="col">Team</th><th scope="col">Who</th><th scope="col">Decision</th><th scope="col">Note</th><th scope="col">Version now</th></tr></thead>
@@ -65,7 +65,7 @@
 <hr class="rule">
 
 <section class="dsec" aria-labelledby="hd-leads">
-  <h2 id="hd-leads" class="kicker">Leads{% call note('leads-note', 'What these calls mean') %}Which leads SDRs worked or turned down, newest first. Worked means the SDR made first contact. Junk and skipped are leads they turned down, with their reason. Score and rank are what the SDR saw at the time. These are the calls logged in AuxoCase; a first touch seen only in HubSpot shows on the lead's page.{% endcall %}</h2>
+  <h2 id="hd-leads" class="kicker">Leads{% call note('leads-note', 'What these calls mean') %}<span class="ln">SDR calls logged in AuxoCase, newest first. Score and rank: what the SDR saw at the time.</span><span class="ln">Worked: the SDR made first contact.</span><span class="ln">Junk, skipped: turned down, with the reason.</span><span class="ln">A first touch seen only in HubSpot shows on the lead's page.</span>{% endcall %}</h2>
   {% if leads|length >= limit %}<p class="small muted">The latest {{ limit }}.</p>{% endif %}
   <div class="scroll" role="region" aria-label="Lead decisions, scrolls sideways" tabindex="0">
     <table aria-labelledby="hd-leads">
@@ -85,5 +85,5 @@
   </div>
 </section>
 
-<footer><ol class="fnotes">{% if env == 'mock' %}<li id="fn-sim">Simulated · synthetic data. This is the mock HubSpot portal: its leads and SDRs come from a generator and its models are trained on them. When the demo build trains the first model it also records that model's two approvals, under demo approver names; the lead calls mix the simulator's SDRs (which skip with the reason "wrong fit") with anything clicked in this demo. On a real portal this page lists the calls your own SDRs and your marketing and sales leads make in AuxoCase. Times are the demo run's wall clock, in UTC; the service clock is frozen at {{ clock_text }}.</li>{% endif %}<li id="fn-clocks">Times are when each call was logged, in UTC.</li></ol></footer>
+<footer><ol class="fnotes">{% if env == 'mock' %}<li id="fn-sim">Simulated · synthetic data. Leads, SDRs and models come from the generator. The demo build records the first model's two approvals under demo names; the lead calls mix the simulator's SDRs (they skip with "wrong fit") with clicks in this demo. On a real portal these are your own teams' calls. Times are the demo run's wall clock, UTC; the service clock is frozen at {{ clock_text }}.</li>{% endif %}<li id="fn-clocks">Times are when each call was logged, in UTC.</li></ol></footer>
 {% endblock %}

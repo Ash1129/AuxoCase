@@ -21,7 +21,7 @@
 {%- set labels = {'worked': 'worked', 'junk': 'junk', 'skipped': 'skipped'} -%}
 {%- set others_waiting = waiting|rejectattr('c.id', 'equalto', open.c.id if open else none)|list -%}
 {%- set others_touched = touched|rejectattr('c.id', 'equalto', open.c.id if open else none)|list -%}
-{% if stale %}<p class="notice warn" role="status"><b>Not saved.</b> That lead changed after this page loaded: someone else acted on it, or it moved on in HubSpot, so your click was not saved. This is the queue as it stands now.</p>{% endif %}
+{% if stale %}<p class="notice warn" role="status"><b>Not saved.</b> The lead changed after this page loaded (someone else acted, or HubSpot moved it), so your click was not saved. This is the queue now.</p>{% endif %}
 
 <header class="head">
   <p class="kicker">{{ owner.name }}'s queue · {{ waiting_count }} of {{ limit }} slot{{ '' if limit == 1 else 's' }} waiting{{ ld.ref('hit', open) }}</p>
@@ -31,7 +31,7 @@
   {{ ld.marks(open.c, true) }}
   {%- else -%}
   <h1 class="title">Nothing waiting for a first touch</h1>
-  <p class="lede">Routing gives {{ owner.name.split(' ')[0] }} the best lead in the pool as soon as a slot is free{% if scheduler == 'on' %}; it runs every five minutes{% else %}; the scheduler is off, so that happens the next time routing is run{% endif %}.</p>
+  <p class="lede">Routing fills a free slot with the best lead in the pool{% if scheduler == 'on' %}, every five minutes{% else %}; the scheduler is off, so on the next routing run{% endif %}.</p>
   {%- endif %}
 </header>
 
@@ -50,7 +50,7 @@
     <summary class="btn">Skip with a reason</summary>
     <form class="panel" method="post" action="/lead/{{ c.id }}/action">
       <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="action" value="skipped">
-      <p class="small muted">{% if open.first_touch %}The first touch already freed your slot; a skip takes {{ ld.first(c) }} off your list.{% else %}A skip frees your slot, and routing runs at once to fill it.{% endif %} Pick the reason; it is kept with your call.</p>
+      <p class="small muted">{% if open.first_touch %}The first touch already freed your slot; a skip takes {{ ld.first(c) }} off your list.{% else %}A skip frees your slot; routing fills it at once.{% endif %} The reason is kept with your call.</p>
       {% for r in ('wrong fit', 'already a customer', 'no contact details', 'timing', 'other') %}<button class="btn" type="submit" name="note" value="{{ r }}">{{ r|capitalize }}</button>
       {% endfor %}
     </form>
@@ -102,7 +102,7 @@
   <h2 class="kicker" id="q-touched">{{ 'Also yours · ' if open else '' }}touch seen in HubSpot · log your call</h2>
   <ul class="list">
     {% for e in others_touched %}<li><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a>
-      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · {{ (e.seen_type or 'activity')|lower }} seen {{ e.seen_when }}; log your call when you have one.</p>{{ ld.marks(e.c) }}</li>
+      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · {{ (e.seen_type or 'activity')|lower }} seen {{ e.seen_when }}; log your call.</p>{{ ld.marks(e.c) }}</li>
     {% endfor %}
   </ul>
 </section>
@@ -121,7 +121,7 @@
   {%- else -%}
   <p class="muted">Nothing decided yet today.</p>
   {%- endif %}
-  {% if env == 'mock' %}<p class="tiny muted">Today here is the wall-clock day, not the demo clock's.</p>{% endif %}
+  {% if env == 'mock' %}<p class="tiny muted">Today is the wall-clock day, not the demo clock's.</p>{% endif %}
 </section>
 
 {{ ld.footnote(open) }}

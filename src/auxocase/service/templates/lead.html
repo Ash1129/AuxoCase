@@ -53,8 +53,8 @@
     {%- else -%}
     No SDR owns this lead yet.
     {%- endif %}
-    {%- if tier2 %} {% if tier2.arm == 'control' %}Drawn into the control arm of the phase-3 experiment {{ tier2.when }}: left to the ordinary process, the comparison for the automated sequence.{% elif tier2.status == 'sent' %}In the automated sequence since {{ tier2.when }} (phase 3), sent from {{ owners[tier2.owner_id].name if tier2.owner_id in owners else 'an SDR' }}'s inbox; out of the SDRs' pool until a reply or the sequence ends.{% elif tier2.status == 'replied' %}Replied to the automated email {{ tier2.replied_when }} (phase 3), sent {{ tier2.when }}.{% elif tier2.status == 'no_reply' %}The automated sequence sent {{ tier2.when }} ran its course unanswered (phase 3).{% elif tier2.status == 'refused' %}Drawn for the automated sequence {{ tier2.when }}, but HubSpot refused the enrolment (phase 3).{% endif %}{% endif %}
-    {%- if owner and not decision %} Decisions happen in the queue, which checks that nobody else acted on {{ who }} first.{% endif %}
+    {%- if tier2 %} {% if tier2.arm == 'control' %}Control arm of the phase-3 experiment, drawn {{ tier2.when }}: left to the ordinary process.{% elif tier2.status == 'sent' %}In the automated sequence since {{ tier2.when }} (phase 3), from {{ owners[tier2.owner_id].name if tier2.owner_id in owners else 'an SDR' }}'s inbox; out of the pool until a reply or the sequence ends.{% elif tier2.status == 'replied' %}Replied to the automated email {{ tier2.replied_when }} (phase 3), sent {{ tier2.when }}.{% elif tier2.status == 'no_reply' %}The automated sequence sent {{ tier2.when }} ran its course unanswered (phase 3).{% elif tier2.status == 'refused' %}Drawn for the automated sequence {{ tier2.when }}, but HubSpot refused the enrolment (phase 3).{% endif %}{% endif %}
+    {%- if owner and not decision %} Decide in the queue; it checks nobody else acted on {{ who }} first.{% endif %}
     {%- if decision and touched_in %} {{ owners[decision.owner_id].name if decision.owner_id in owners else 'The SDR' }} {{ {'worked': 'marked it worked', 'junk': 'marked it junk', 'skipped': 'skipped it'}[decision.action] }} {{ decision.when }}{% if env == 'mock' %} (wall clock){% endif %}{% if decision.note %}: {{ decision.note }}{% endif %}.{% endif %}
     {%- if slot_next %}{% set toucher = owners[first_touch.owner_id].name.split(' ')[0] if first_touch.owner_id in owners else 'the SDR' %} The touch freed a slot; the next lead assigned to {{ toucher }} was {{ ld.person(slot_next.c) }}, at {{ slot_next.when }}.{% endif %}
   </p>
@@ -86,7 +86,7 @@
       <h2 class="kicker" id="notes-h">Notes on record</h2>
       {% if c.notes -%}
       <p style="max-width: 680px">{{ c.notes }}</p>
-      <p class="small muted">From the HubSpot contact's notes field. {% if score and score.signals.signals %}The quotes under the score breakdown are the reader's, each checked word for word against these notes.{% else %}Nothing is highlighted: the reader at scoring found no quote to verify.{% endif %}</p>
+      <p class="small muted">From HubSpot's notes field. {% if score and score.signals.signals %}The quotes under the score breakdown were checked word for word against these notes.{% else %}The reader found nothing to quote.{% endif %}</p>
       {%- else -%}
       <p class="muted">None: the notes field in HubSpot is blank.</p>
       {%- endif %}
@@ -101,13 +101,13 @@
       <dl>
         <div><dt>Calibration</dt><dd>{% if b %}{% if b.months %}Test months {{ b.months }}: {% endif %}{{ '{:,}'.format(b.n) }} worked leads scored {{ b.lo }} to {{ b.hi }}%{% if b.predicted is not none %}; {{ ld.pct(b.predicted) }} predicted{% endif %}, {{ ld.pct(b.observed) }} booked{% if b.too_few %}, too few to say{% endif %}.{{ ld.ref('sim', d) }}{% else %}No calibration band: the live model has none for this score.{% endif %}</dd></div>
         {% if pace.median_hours is defined and pace.baseline.median_hours is defined -%}
-        <div><dt>Timing</dt><dd>The model learned from the history, where the first touch came a median {{ pace.baseline.median_hours|round|int }} hours after arrival. Leads AuxoCase routed were touched sooner (median {{ pace.median_hours|round|int }} hours), one reason they can book above their score.{{ ld.ref('sim', d) }}</dd></div>
+        <div><dt>Timing</dt><dd>History: first touch a median {{ pace.baseline.median_hours|round|int }} hours after arrival. Leads AuxoCase routed: median {{ pace.median_hours|round|int }} hours, one reason they can book above their score.{{ ld.ref('sim', d) }}</dd></div>
         {%- endif %}
         {% if watch -%}
         <div><dt>{{ c.channel|replace('_', ' ')|capitalize }} channel</dt><dd>{{ watch.month }}: {{ watch.demos }} of {{ watch.n }} booked{% if watch.demo_rate is not none %} ({{ ld.pct(watch.demo_rate) }}){% endif %}{% if watch.predicted_rate is not none %} against {{ ld.pct(watch.predicted_rate) }} predicted{% endif %}; {% if watch.flag == 'held' %}too few leads that month to judge{% elif watch.flag == 'ok' %}within limits ({{ ld.pct(watch.lcl) }} to {{ ld.pct(watch.ucl) }}){% else %}{{ watch.flag }} its limits ({{ ld.pct(watch.lcl) }} to {{ ld.pct(watch.ucl) }}){% endif %}.{{ ld.ref('sim', d) }}</dd></div>
         {%- endif %}
         {% if line is not none -%}
-        <div><dt>Capacity line</dt><dd>{{ ld.pct(line) }} at the last routing pass: the chance at the rank the team can reach in the next week at its monthly capacity.{% if assigned and assigned.reason == 'above the capacity line' %} {{ who|capitalize }} was assigned above it.{% elif assigned and assigned.decision == 'holdout_assigned' %} {{ who|capitalize }} was drawn for the exploration slice, which does not look at the line.{% endif %}</dd></div>
+        <div><dt>Capacity line</dt><dd>{{ ld.pct(line) }} at the last routing pass: the chance at the last rank the team reaches in a week at its capacity.{% if assigned and assigned.reason == 'above the capacity line' %} {{ who|capitalize }} was assigned above it.{% elif assigned and assigned.decision == 'holdout_assigned' %} {{ who|capitalize }} was drawn for the exploration slice, which ignores the line.{% endif %}</dd></div>
         {%- endif %}
       </dl>
     </div>

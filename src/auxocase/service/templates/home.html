@@ -57,30 +57,30 @@
 <section class="ov-figs" aria-label="The pipeline now">
   <div class="ov-fig">
     <span class="big num">{{ '{:,}'.format(pool_size) }}</span>
-    <span>unassigned {{ pool_label }} in the pool{% call note('pool-note', 'What the pool is') %}The pool is every unassigned {{ pool_noun }} from the last {{ pool_days }} days, scored and waiting. {% if not pool_size %}Nothing scored is waiting.{% elif models|length == 1 %}Every one scored by {{ (models|list)[0] }} and ranked.{% else %}Ranked, and scored by {% for v, n in models.most_common() %}{{ v }} ({{ '{:,}'.format(n) }}){{ ', ' if not loop.last }}{% endfor %}.{% endif %}{% endcall %}</span>
+    <span>unassigned {{ pool_label }} in the pool{% call note('pool-note', 'What the pool is') %}<span class="ln">The pool: every unassigned {{ pool_noun }} from the last {{ pool_days }} days, scored and waiting.</span><span class="ln">{% if not pool_size %}Nothing scored is waiting.{% elif models|length == 1 %}All scored by {{ (models|list)[0] }} and ranked.{% else %}Ranked; scored by {% for v, n in models.most_common() %}{{ v }} ({{ '{:,}'.format(n) }}){{ ', ' if not loop.last }}{% endfor %}.{% endif %}</span>{% endcall %}</span>
   </div>
   <div class="ov-fig">
     <span class="big num{{ ' warn' if held }}">{{ '{:,}'.format(held) }}</span>
-    <span>held for the manager{% call note('held-note', 'When a lead is held') %}A lead is held when it has waited {{ hold_after }} above the capacity line with every SDR at their limit. The manager places it from Held &amp; overdue.{% endcall %}</span>
+    <span>held for the manager{% call note('held-note', 'When a lead is held') %}Held: waited {{ hold_after }} above the capacity line with every SDR at their limit. The manager places it from Held &amp; overdue.{% endcall %}</span>
     {% if held %}<a href="/held">Place them in Held &amp; overdue</a>{% endif %}
   </div>
   <div class="ov-fig">
     <span class="big num">{{ team.waiting }} of {{ team.slots }}</span>
-    <span>slots waiting for a first touch{% call note('slots-note', 'What a slot is') %}A slot is room on an SDR's desk for one lead not yet touched; the first touch frees it. {{ team.sdrs }} SDR{{ 's' if team.sdrs != 1 }} active{% if team.sdrs %}, {% if team.limit == 1 %}one slot each{% elif team.limit is not none %}{{ team.limit }} slots each{% else %}each with their own limit{% endif %}{% endif %}.{% endcall %}</span>
+    <span>slots waiting for a first touch{% call note('slots-note', 'What a slot is') %}<span class="ln">A slot: room on an SDR's desk for one untouched lead. The first touch frees it.</span><span class="ln">{{ team.sdrs }} SDR{{ 's' if team.sdrs != 1 }} active{% if team.sdrs %}, {% if team.limit == 1 %}one slot each{% elif team.limit is not none %}{{ team.limit }} slots each{% else %}each with their own limit{% endif %}{% endif %}.</span>{% endcall %}</span>
     {% if team.overdue %}<a href="/held">{{ team.overdue }} first touch{{ 'es' if team.overdue != 1 }} overdue</a>{% endif %}
   </div>
   <div class="ov-fig">
     <span class="big num">{% if cap and cap.value is not none %}{{ (100 * cap.value)|round|int }}%{% else %}[NOT SET]{% endif %}</span>
-    <span>capacity line{% call note('line-note', 'How the capacity line is drawn') %}How far down the pool the team reaches in {{ horizon }}. {% if cap %}The touch-now value at place {{ '{:,}'.format(cap.place) }} of {{ '{:,}'.format(pool_size) }}{% if cap.place < cap.k %}, the end of the pool: the team reaches all of it in {{ horizon }} at its {{ per_month }} leads a month{% else %}: {{ horizon_work }} at the team's {{ per_month }} leads a month{% endif %}.{% if cap.value is none %} Routing sets it on its next run.{% elif cap.set_at %} Set by the {{ cap.set_at }} UTC route run.{% endif %}{% else %}Drawn once the pool holds a scored lead: the value at the place the team reaches in {{ horizon }}.{% endif %}{% endcall %}</span>
+    <span>capacity line{% call note('line-note', 'How the capacity line is drawn') %}<span class="ln">How far down the pool the team reaches in {{ horizon }}.</span><span class="ln">{% if cap %}Touch-now value at place {{ '{:,}'.format(cap.place) }} of {{ '{:,}'.format(pool_size) }}{% if cap.place < cap.k %}, the end of the pool: all of it in {{ horizon }} at {{ per_month }} leads a month{% else %}: {{ horizon_work }} at {{ per_month }} leads a month{% endif %}.{% if cap.value is none %} Routing sets it on its next run.{% elif cap.set_at %} Set by the {{ cap.set_at }} UTC route run.{% endif %}{% else %}Drawn once the pool holds a scored lead.{% endif %}</span>{% endcall %}</span>
   </div>
 </section>
 
 <hr class="rule">
 
 <section class="ov-sec" aria-labelledby="ov-pool">
-  <h2 id="ov-pool" class="kicker">Top of the pool · next to be handed out{% if cap %}{% call note('order-note', 'How this order is made') %}In order of touch-now value: a lead's chance of a demo{% if fresh.discounted %}, {{ fresh.done }} once it is {{ fresh.window }} old{{ ref('sim') }}{% else %}, with no discount for age{% endif %}. Rank is by chance alone, taken at last scoring{% if ranked_at %} (the {{ ranked_at }} UTC score run){% endif %}{% if first_rank and first_rank != 1 %}; the leads ranked above #{{ first_rank }} have since been handed out, held or put in the automated sequence, so it stands first in line{% endif %}. {% if gate_shown == 0 %}None of these is{% elif gate_shown == 1 %}One of these is{% else %}{{ words(gate_shown)|capitalize }} of these are{% endif %} below the old threshold; ranking below HubSpot's MQL gate is {{ 'on' if below_gate_on else 'off' }}.{% endcall %}{% endif %}</h2>
+  <h2 id="ov-pool" class="kicker">Top of the pool · next to be handed out{% if cap %}{% call note('order-note', 'How this order is made') %}<span class="ln">Order: touch-now value, the lead's chance of a demo{% if fresh.discounted %}, {{ fresh.done }} once it is {{ fresh.window }} old{{ ref('sim') }}{% else %}, no discount for age{% endif %}.</span><span class="ln">Rank: by chance alone at last scoring{% if ranked_at %} ({{ ranked_at }} UTC score run){% endif %}{% if first_rank and first_rank != 1 %}; leads ranked above #{{ first_rank }} have since been handed out, held or put in the sequence{% endif %}.</span><span class="ln">{% if gate_shown == 0 %}None of these is{% elif gate_shown == 1 %}One of these is{% else %}{{ words(gate_shown)|capitalize }} of these are{% endif %} below the old threshold; ranking below HubSpot's MQL gate is {{ 'on' if below_gate_on else 'off' }}.</span>{% endcall %}{% endif %}</h2>
   {% if not cap %}
-  <p class="ov-text">The pool is empty: no unassigned, scored {{ pool_noun }} from the last {{ pool_days }} days is waiting.</p>
+  <p class="ov-text">Pool empty: no scored, unassigned {{ pool_noun }} from the last {{ pool_days }} days.</p>
   {% else %}
   <div class="scroll">
     <table class="ov-pool">
@@ -91,9 +91,9 @@
           <th scope="col" class="w-lead">Lead</th>
           <th scope="col" class="w-chan">Channel</th>
           <th scope="col" class="r w-pct">Chance{% if top %}{% set unbanded = top|length - bands|sum(attribute='count') %}{% call note('bands-note', 'How these chances have held up') %}
-            {%- if bands|length == 1 %}{% set b = bands[0] %}{{ ('All ' ~ words(b.count)) if b.count == top|length and b.count > 1 else words(b.count)|capitalize }} {{ 'sits' if b.count == 1 else 'sit' }} in {{ band_model }}'s {{ b.lo }} to {{ b.hi }}% band: {% if b.too_few %}too few to say ({{ b.n }} worked lead{{ 's' if b.n != 1 }}){% else %}of 100 leads scored there, about {{ b.observed_pct }} booked when an SDR worked them ({{ '{:,}'.format(b.n) }} leads){% endif %}.
-            {%- elif bands %}Of these {{ words(top|length) }}, {% for b in bands %}{{ words(b.count) }} {{ 'sits' if b.count == 1 else 'sit' }} in {{ (band_model ~ "'s") if loop.first else 'its' }} {{ b.lo }} to {{ b.hi }}% band, {% if b.too_few %}too few to say ({{ b.n }} worked lead{{ 's' if b.n != 1 }}){% else %}where about {{ b.observed_pct }} in 100 booked when an SDR worked them ({{ '{:,}'.format(b.n) }} leads){% endif %}{{ '; ' if not loop.last else '.' }}{% endfor %}
-            {%- elif not band_model %}No model is live, so there is no calibration band to read these chances against.
+            {%- if bands|length == 1 %}{% set b = bands[0] %}{{ ('All ' ~ words(b.count)) if b.count == top|length and b.count > 1 else words(b.count)|capitalize }} {{ 'sits' if b.count == 1 else 'sit' }} in {{ band_model }}'s {{ b.lo }} to {{ b.hi }}% band: {% if b.too_few %}too few to say ({{ b.n }} worked lead{{ 's' if b.n != 1 }}){% else %}of 100 leads scored there, about {{ b.observed_pct }} booked when worked ({{ '{:,}'.format(b.n) }} leads){% endif %}.
+            {%- elif bands %}Of these {{ words(top|length) }}, {% for b in bands %}{{ words(b.count) }} {{ 'sits' if b.count == 1 else 'sit' }} in {{ (band_model ~ "'s") if loop.first else 'its' }} {{ b.lo }} to {{ b.hi }}% band, {% if b.too_few %}too few to say ({{ b.n }} worked lead{{ 's' if b.n != 1 }}){% else %}where about {{ b.observed_pct }} in 100 booked when worked ({{ '{:,}'.format(b.n) }} leads){% endif %}{{ '; ' if not loop.last else '.' }}{% endfor %}
+            {%- elif not band_model %}No model is live: no band to read these chances against.
             {%- endif %}{% if band_model and unbanded %} {{ words(unbanded)|capitalize }} {{ 'falls' if unbanded == 1 else 'fall' }} outside every band {{ band_model }} was tested on.{% endif %}{% endcall %}{% endif %}</th>
           <th scope="col">Why it ranks here</th>
         </tr>
@@ -124,9 +124,9 @@
 <hr class="rule">
 
 <section class="ov-sec" aria-labelledby="ov-desks">
-  <h2 id="ov-desks" class="kicker">SDR desks · {{ team.sdrs }} active · oldest arrival first{% if desks %}{% call note('desks-note', 'How the desks are filled') %}{% if team.limit is not none %}Each SDR has a limit of {{ words(team.limit) }} lead{{ 's' if team.limit != 1 }} waiting for a first touch{% else %}Each SDR has their own limit of leads waiting for a first touch{% endif %}, and {% if team.at_limit == team.sdrs %}{% if team.sdrs == 1 %}theirs is reached{% elif team.sdrs == 2 %}both are at it{% else %}all {{ team.sdrs }} are at it{% endif %}{% elif team.at_limit == 0 %}none is at it{% else %}{{ team.at_limit }} of {{ team.sdrs }} {{ 'is' if team.at_limit == 1 else 'are' }} at it{% endif %}. A touch frees the slot, and routing fills it from the top of the pool.{% if speed.words %} Leads touched {{ fresh.first }} booked {{ speed.words }}{{ ref('sim') }}.{% endif %}{% endcall %}{% endif %}</h2>
+  <h2 id="ov-desks" class="kicker">SDR desks · {{ team.sdrs }} active · oldest arrival first{% if desks %}{% call note('desks-note', 'How the desks are filled') %}<span class="ln">Limit: {% if team.limit is not none %}{{ words(team.limit) }} lead{{ 's' if team.limit != 1 }} waiting for a first touch per SDR{% else %}each SDR's own count of leads waiting for a first touch{% endif %}; {% if team.at_limit == team.sdrs %}{% if team.sdrs == 1 %}reached{% elif team.sdrs == 2 %}both at it{% else %}all {{ team.sdrs }} at it{% endif %}{% elif team.at_limit == 0 %}none at it{% else %}{{ team.at_limit }} of {{ team.sdrs }} at it{% endif %}.</span><span class="ln">A touch frees the slot; routing refills it from the top of the pool.</span><span class="ln">{% if speed.words %}Leads touched {{ fresh.first }} booked {{ speed.words }}{{ ref('sim') }}.{% endif %}</span>{% endcall %}{% endif %}</h2>
   {% if not desks %}
-  <p class="ov-text">No SDR is active, so routing has nobody to hand a lead to.</p>
+  <p class="ov-text">No SDR is active: nobody to hand leads to.</p>
   {% else %}
   <div class="ov-desks">
     {% for d in desks %}
@@ -179,8 +179,8 @@
 {% if sim_note or clocks_note %}
 <footer class="footnote">
   <ol class="fnotes">
-    {% if sim_note %}<li id="fn-sim">Simulated · synthetic data. On the mock the first-day effect is the generator's built-in factor of {{ gen_factor }}{% if speed.get('factor') is not none %} (outcomes show {{ speed.factor }}){% else %} (too few worked leads yet to measure it from outcomes){% endif %}, and {% if fresh.discounted %}routing uses {{ 'the same ' if fresh.factor == gen_factor }}{{ fresh.factor }} to {{ fresh.do }} after {{ fresh.window }}{% else %}routing does not discount a lead for its age{% endif %}; on a real portal the effect is measured from outcomes and the factor kept close to it.</li>{% endif %}
-    {% if clocks_note %}<li id="fn-clocks">{% if runs %}Run times are the server's wall clock in UTC{% if run_day %}, on {{ run_day }} unless dated{% endif %}.{% endif %}{% if frozen %} Lead times on this page use the {{ 'demo clock' if mock else 'service clock' }}, frozen at {{ now_text }}.{% endif %}</li>{% endif %}
+    {% if sim_note %}<li id="fn-sim">Simulated · synthetic data. First-day effect on the mock: the generator's factor of {{ gen_factor }}{% if speed.get('factor') is not none %} (outcomes show {{ speed.factor }}){% else %} (too few worked leads to measure yet){% endif %}; {% if fresh.discounted %}routing uses {{ 'the same ' if fresh.factor == gen_factor }}{{ fresh.factor }} to {{ fresh.do }} after {{ fresh.window }}{% else %}routing does not discount for age{% endif %}. On a real portal the effect is measured from outcomes.</li>{% endif %}
+    {% if clocks_note %}<li id="fn-clocks">{% if runs %}Run times: server wall clock, UTC{% if run_day %}, on {{ run_day }} unless dated{% endif %}.{% endif %}{% if frozen %} Lead times: the {{ 'demo clock' if mock else 'service clock' }}, frozen at {{ now_text }}.{% endif %}</li>{% endif %}
   </ol>
 </footer>
 {% endif %}

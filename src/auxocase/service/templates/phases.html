@@ -38,15 +38,15 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {% macro when(ts) %}{% if ts and ts|length >= 16 and (ts[5:7]|int) in range(1, 13) %}<time class="num" datetime="{{ ts[:16] }}">{{ ts[8:10]|int }} {{ ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(ts[5:7]|int) - 1] }} {{ ts[:4] }} {{ ts[11:16] }}</time>{% elif ts %}{{ ts }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}{% endmacro %}
 {% macro notices(phase, next) %}
 {% if notice.phase == phase %}
-{% if notice.refused %}<p class="notice warn" role="status"><b>Not set.</b> {{ notice.refused[:1]|upper }}{{ notice.refused[1:] }} Your choices are still in the form above.</p>
-{% elif notice.set == '0' %}<p class="notice" role="status"><b>Nothing changed.</b> Both switches were left as they are. Pick a share, or on or off, and set them again.</p>
-{% elif notice.set %}<p class="notice" role="status"><b>Set.</b> {{ next }}{% if mock %} On the demo's frozen clock nothing matures, so the labels here move only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
+{% if notice.refused %}<p class="notice warn" role="status"><b>Not set.</b> {{ notice.refused[:1]|upper }}{{ notice.refused[1:] }} Your choices are still in the form.</p>
+{% elif notice.set == '0' %}<p class="notice" role="status"><b>Nothing changed.</b> Both switches were left as they are.</p>
+{% elif notice.set %}<p class="notice" role="status"><b>Set.</b> {{ next }}{% if mock %} On the demo's frozen clock the labels move only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
 {% endif %}
 {% endmacro %}
 {% macro log(rows) %}
 {% if rows %}<ul class="log" aria-label="Switches thrown">
   {% for d in rows %}<li>{{ d.label }}<span class="by">{{ d.who }} · {{ when(d.created_at) }} log time{% if d.note %} · <span class="quote">“{{ d.note }}”</span>{% endif %}</span></li>{% endfor %}
-</ul>{% else %}<p class="empty">No switch has been thrown from this page yet.</p>{% endif %}
+</ul>{% else %}<p class="empty">No switch thrown from this page yet.</p>{% endif %}
 {% endmacro %}
 {% macro switches(phase, p, second, second_help) %}
 {% set k = notice.keep if notice.phase == phase and notice.refused else {} %}
@@ -86,7 +86,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 <header class="ph-head">
   <p class="kicker">Next phases · phase 2 {{ gate.state }} · phase 3 {{ seq.state }}{{ ref() }}{% call note('phases-note', 'What the phases are') %}<span class="ln">Routing works the top of the MQL pool.</span><span class="ln">Phase 2: the leads HubSpot's gate keeps out of it.</span><span class="ln">Phase 3: the MQLs below the capacity line that no SDR reaches.</span><span class="ln">Each runs as an experiment: explore buys outcomes, a bar counts them, the second switch waits for enough.</span>{% endcall %}</p>
   <h1 class="title">Below the gate, below the line</h1>
-  <p class="lede">Two switches each, thrown here and recorded with a name. The second waits for the labels the first one buys.</p>
+  <p class="lede">Two switches each, recorded with a name. The second waits for the labels the first buys.</p>
 </header>
 
 <hr class="rule">
@@ -125,7 +125,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
           </tbody>
         </table>
       </div>
-      {% else %}<p class="empty">No stored evaluation at <code>{{ report_path }}</code>. Run <code>python run.py eval</code> to write it.</p>{% endif %}
+      {% else %}<p class="empty">No evaluation at <code>{{ report_path }}</code>. Run <code>python run.py eval</code> to write it.</p>{% endif %}
     </div>
     <div class="ph-sub">
       <h3 class="kicker">The switches{% call note('gate-switch-note', 'What each switch does') %}<span class="ln">Share: how much of the exploration slice goes below the gate. The ranked pool is untouched.</span><span class="ln">Ranking on: plain leads join the pool, the rescore job scores the waiting ones best first, and the capacity line is drawn over the bigger pool.</span><span class="ln">Before {{ gate.needed }} matured labels, ranking on is refused unless forced.</span>{% endcall %}</h3>
@@ -135,7 +135,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 
   <div class="ph-sub">
     <h3 id="ph-gate-log" class="kicker">Thrown so far</h3>
-    {{ notices('gate', "Routing draws from below the gate on its next pass, every few minutes with the scheduler on; the counts here move as those leads are handed out, worked and their labels mature.") }}
+    {{ notices('gate', "Routing draws from below the gate on its next pass.") }}
     {{ log(gate.decisions) }}
   </div>
 </section>
@@ -174,7 +174,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
           </tbody>
         </table>
       </div>
-      {% else %}<p class="empty">Off, and no lead has been drawn yet. Set a share below to put part of the leads below the line in the sequence and keep the rest as the comparison.</p>{% endif %}
+      {% else %}<p class="empty">Off; no lead drawn yet. Set a share below to start the sequence.</p>{% endif %}
     </div>
     <div class="ph-sub">
       <h3 class="kicker">The switches{% call note('line-switch-note', 'What each switch does') %}<span class="ln">Share: how many eligible leads are emailed while the band is off; the rest are the control arm.</span><span class="ln">Band on: every eligible lead but the holdback. Before {{ seq.needed }} matured emailed leads it is refused unless forced.</span><span class="ln">Band off: sequences already running finish.</span>{% endcall %}</h3>
@@ -184,10 +184,10 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 
   <div class="ph-sub">
     <h3 id="ph-line-log" class="kicker">Thrown so far</h3>
-    {{ notices('line', "The sequence draws its arms on routing's next pass, every few minutes with the scheduler on; the counts here move as leads are emailed, reply and their labels mature.") }}
+    {{ notices('line', "The sequence draws its arms on routing's next pass.") }}
     {{ log(seq.decisions) }}
   </div>
 </section>
 
-{% if mock %}<footer><ol class="fnotes"><li id="fn-sim">Simulated · synthetic data. The counts come from the mock portal: leads handed out, emailed and booked by the generator or a replayed month, not a real HubSpot portal. The service clock is frozen at {{ clock_text }}, so nothing matures here until a month is replayed (<code>python run.py simulate</code>); on a real portal the labels mature on their own. The gain estimate and the gate's loss by channel are read from <code>{{ report_path }}</code>{% if report_written %} ({{ report_written }}){% endif %}.</li></ol></footer>{% endif %}
+{% if mock %}<footer><ol class="fnotes"><li id="fn-sim">Simulated · synthetic data. Counts come from the mock portal, not real leads. The clock is frozen at {{ clock_text }}: labels mature only when a month is replayed (<code>python run.py simulate</code>). The estimate and the gate's loss come from <code>{{ report_path }}</code>{% if report_written %} ({{ report_written }}){% endif %}.</li></ol></footer>{% endif %}
 {% endblock %}

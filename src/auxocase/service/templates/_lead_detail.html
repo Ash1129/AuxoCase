@@ -90,13 +90,13 @@
 {%- if below %}<span class="badge gate">below old threshold</span>{% endif %}
 {%- if c.auxo_holdout %}<span class="badge holdout">calibration lead</span>{% endif %}
 {%- if c.auxo_review_flag %}<span class="badge flag">{{ c.auxo_review_flag }}</span>{% endif %}
-{%- if full %}<span class="small muted">{% if below %}HubSpot's points ({{ c.hubspot_score }}) did not make this lead an MQL{% if c.auxo_holdout %}; it was drawn at random for the exploration slice, so its outcome shows how well the model ranks leads the gate keeps out{% endif %}.{% elif c.auxo_holdout %}Drawn at random for the exploration slice, so next month's model learns from a lead the ranking did not choose.{% endif %}</span>{% endif -%}
+{%- if full %}<span class="small muted">{% if below %}HubSpot's points ({{ c.hubspot_score }}) did not make it an MQL{% if c.auxo_holdout %}; drawn at random for the exploration slice, to test ranking below the gate{% endif %}.{% elif c.auxo_holdout %}Drawn at random for the exploration slice: next month's model learns from a lead the ranking did not choose.{% endif %}</span>{% endif -%}
 </p>{% endif %}
 {%- endmacro %}
 
 {#- An "i" after a label: hover or focus it and `caller()`'s text opens in a box under the column. -#}
 
-{% macro speed_line(d) %}{% if d.speed.rate_fast is defined %}Leads touched in their first day booked {{ pct(d.speed.rate_fast) }}, against {{ pct(d.speed.rate_slow) }} when touched later.{{ ref('speed', d) }}{% endif %}{% endmacro %}
+{% macro speed_line(d) %}{% if d.speed.rate_fast is defined %}Touched in the first day: {{ pct(d.speed.rate_fast) }} booked, against {{ pct(d.speed.rate_slow) }} later.{{ ref('speed', d) }}{% endif %}{% endmacro %}
 
 {#- The score, the first-day clock and the rank, each with what it means and when it was taken. -#}
 {% macro score(d, where) -%}
@@ -105,7 +105,7 @@
   <div>
     {% if c.auxo_probability is not none -%}
     <span class="big num">{{ pct(c.auxo_probability) }}</span>
-    <span>chance {{ first(c) }} books a demo if {{ 'you work this lead' if where == 'queue' else 'worked' }}{% call note('band-note-' ~ c.id, 'How this score has held up') %}{% if not live %}No live model yet, so no calibration band to check this score against.{% elif not b %}No calibration band for this score: the live model has none to check it against.{% elif b.too_few %}Leads scored {{ b.lo }} to {{ b.hi }}%: too few to say how often they book ({{ b.n }} worked leads, {{ live.version }}).{{ ref('sim', d) }}{% else %}Of 100 leads scored {{ b.lo }} to {{ b.hi }}%, about {{ (100 * b.observed)|round|int }} booked when an SDR worked them ({{ '{:,}'.format(b.n) }} worked leads{% if live %}, {{ live.version }}{% endif %}).{{ ref('sim', d) }}{% endif %}{% endcall %}</span>
+    <span>chance {{ first(c) }} books a demo if {{ 'you work this lead' if where == 'queue' else 'worked' }}{% call note('band-note-' ~ c.id, 'How this score has held up') %}{% if not live %}No live model yet, so no calibration band.{% elif not b %}No calibration band for this score.{% elif b.too_few %}Leads scored {{ b.lo }} to {{ b.hi }}%: too few to say ({{ b.n }} worked leads, {{ live.version }}).{{ ref('sim', d) }}{% else %}Of 100 leads scored {{ b.lo }} to {{ b.hi }}%, about {{ (100 * b.observed)|round|int }} booked when an SDR worked them ({{ '{:,}'.format(b.n) }} worked leads{% if live %}, {{ live.version }}{% endif %}).{{ ref('sim', d) }}{% endif %}{% endcall %}</span>
     {%- else -%}
     <span class="big muted">[NOT SCORED]</span>
     <span>no demo likelihood yet</span>
@@ -118,7 +118,7 @@
     {%- elif d.decision -%}
     {%- set who = d.owners[d.decision.owner_id].name if d.decision.owner_id in d.owners else 'The SDR' -%}
     <span class="mid">{{ {'worked': 'Worked', 'junk': 'Junk', 'skipped': 'Skipped'}[d.decision.action] }}</span>
-    <span>{{ who }} decided {{ d.decision.when }}{% if d.decision.note %}: {{ d.decision.note }}{% endif %}{% call note('clock-note-' ~ c.id, 'About the first touch') %}No first touch was seen in HubSpot before the call.{% endcall %}</span>
+    <span>{{ who }} decided {{ d.decision.when }}{% if d.decision.note %}: {{ d.decision.note }}{% endif %}{% call note('clock-note-' ~ c.id, 'About the first touch') %}No first touch seen in HubSpot before the call.{% endcall %}</span>
     {%- else -%}
     {%- set k = d.clock -%}{%- set sl = speed_line(d)|trim -%}
     {% if k.state == 'late' -%}
@@ -156,7 +156,7 @@
   {%- set g = s.signals if s else {} -%}{%- set found = g.signals or [] if s else [] -%}
   {% if d.drivers -%}
   <div class="drivers" role="table" aria-label="What moved {{ first(c) }}'s score">
-    <div role="row" style="display: contents"><span class="hd" role="columnheader">What moved {{ first(c) }}'s score</span><span class="hd" role="columnheader">Effect on the odds{% if s %}{% call note('why-note-' ~ c.id, 'Where these numbers come from') %}Effect on the odds, from {{ s.model_version }} when it scored {{ first(c) }} ({{ s.when }}). The notes reader was {{ 'the offline stand-in (keyword rules, no model)' if g.llm == 'offline' else ('Claude' if g.llm else 'not recorded') }}: {% if found %}it found {{ found|length }} signal{{ 's' if found|length != 1 else '' }} in the notes, worth {{ '%+d'|format(g.adjustment or 0) }} points (capped at ±10){% elif not c.notes %}it found nothing to quote, as there are no notes on record{% else %}it found nothing to quote, so no adjustment{% endif %}.{% if g.dropped %} {{ g.dropped|length }} claimed signal{{ 's were' if g.dropped|length != 1 else ' was' }} dropped because the words were not in the notes.{% endif %}{% endcall %}{% endif %}</span><span class="hd barcell" role="columnheader"><span class="vh">Size</span></span></div>
+    <div role="row" style="display: contents"><span class="hd" role="columnheader">What moved {{ first(c) }}'s score</span><span class="hd" role="columnheader">Effect on the odds{% if s %}{% call note('why-note-' ~ c.id, 'Where these numbers come from') %}<span class="ln">Effect on the odds: from {{ s.model_version }}, scored {{ s.when }}.</span><span class="ln">Notes reader: {{ 'the offline stand-in (keyword rules, no model)' if g.llm == 'offline' else ('Claude' if g.llm else 'not recorded') }}. {% if found %}{{ found|length }} signal{{ 's' if found|length != 1 else '' }} found, worth {{ '%+d'|format(g.adjustment or 0) }} points (capped at ±10).{% elif not c.notes %}No notes on record, nothing to quote.{% else %}Nothing to quote, no adjustment.{% endif %}</span>{% if g.dropped %}<span class="ln">{{ g.dropped|length }} claimed signal{{ 's' if g.dropped|length != 1 else '' }} dropped: the words were not in the notes.</span>{% endif %}{% endcall %}{% endif %}</span><span class="hd barcell" role="columnheader"><span class="vh">Size</span></span></div>
     {% for x in d.drivers %}<div role="row" style="display: contents"><span role="cell">{{ x.label }}</span><span class="num {{ 'good' if x.better else 'muted' }}" role="cell">{{ x.word }} {{ x.effect }}</span><span class="barcell" role="cell"><svg width="136" height="6" aria-hidden="true"><rect class="bar-{{ 'good' if x.better else 'worse' }}" x="0" y="0" width="{{ x.bar }}" height="6" rx="1"></rect></svg></span></div>
     {% endfor %}
   </div>
@@ -169,7 +169,7 @@
   </table></div>
   {%- endif %}
   {%- else -%}
-  <p class="muted">Not scored yet, so there is no breakdown.</p>
+  <p class="muted">Not scored yet: no breakdown.</p>
   {%- endif %}
 </section>
 {%- endmacro %}
@@ -193,7 +193,7 @@
   <p class="muted">No email address on record.</p>
   {%- else -%}
   <div class="block">
-    <h3>Emails · {{ d.emails|selectattr('state', 'equalto', 'sent')|list|length }} of {{ d.emails|length }} sent{% if d.stored or d.enrollments %}{% call note('seq-note-' ~ c.id, 'Where the first email stands in HubSpot') %}{% if d.stored %}{% set o = d.stored %}The first email was drafted on assignment, {{ o.when }}{% if o.status == 'enrolled' %}, and the lead enrolled in sequence {{ o.sequence_id }}: step one waits in {{ tasks }} HubSpot tasks to approve and send{% elif o.status == 'refused' %}, but HubSpot refused the sequence enrolment (already in a sequence, unsubscribed, or the SDR's inbox isn't connected){% else %}; no sequence is set (AUXO_SEQUENCE_ID), so it waits here{% endif %}.{% endif %}{% for en in d.enrollments %}<br><br>In HubSpot: sequence {{ en.sequence_id }} from {{ en.sender_email }}, enrolled {{ en.enrolled_at.strftime('%d %b %Y %H:%M') }} · {{ en.status|lower }}.{% endfor %}{% endcall %}{% endif %}</h3>
+    <h3>Emails · {{ d.emails|selectattr('state', 'equalto', 'sent')|list|length }} of {{ d.emails|length }} sent{% if d.stored or d.enrollments %}{% call note('seq-note-' ~ c.id, 'Where the first email stands in HubSpot') %}{% if d.stored %}{% set o = d.stored %}<span class="ln">Drafted on assignment, {{ o.when }}.</span><span class="ln">{% if o.status == 'enrolled' %}Enrolled in sequence {{ o.sequence_id }}: step one waits in {{ tasks }} HubSpot tasks to approve and send.{% elif o.status == 'refused' %}HubSpot refused the enrolment: already in a sequence, unsubscribed, or the SDR's inbox not connected.{% else %}No sequence set (AUXO_SEQUENCE_ID), so it waits here.{% endif %}</span>{% endif %}{% for en in d.enrollments %}<span class="ln">In HubSpot: sequence {{ en.sequence_id }} from {{ en.sender_email }}, enrolled {{ en.enrolled_at.strftime('%d %b %Y %H:%M') }} · {{ en.status|lower }}.</span>{% endfor %}{% endcall %}{% endif %}</h3>
     <ol class="steps">
       {% for x in d.emails %}<li><span class="dot {{ x.state }}" aria-hidden="true"></span><span><b>{{ x.label }}</b> <span class="muted">· {{ x.note }}</span></span></li>
       {% endfor %}
@@ -209,10 +209,10 @@
       {% endfor %}
     </ol>
     {%- endif %}
-    <p class="small muted">{% if calls and not spoke %}Nobody has picked up yet. {% endif %}{{ 'The' if d.get('call') else 'A' }} call brief{{ '' if d.get('call') else ', prepared on request,' }} gives you an opener, what to ask, the objection to expect and a voicemail. Log each call in HubSpot with its outcome{{ "; here the mock's demo panel stands in for that" if d.mock }}.</p>
+    <p class="small muted">{% if calls and not spoke %}Nobody has picked up yet. {% endif %}{{ 'The' if d.get('call') else 'A' }} call brief{{ '' if d.get('call') else ', prepared on request,' }}: an opener, questions, the objection to expect, a voicemail. Log each call in HubSpot with its outcome{{ '; on the mock, in the demo panel' if d.mock }}.</p>
   </div>
   </div>
-  {% if below and d.touch %}<p class="small muted" style="margin: 0"><a class="muted" href="#draft-{{ c.id }}">The {{ labels[d.touch] }}{{ "'s draft" if d.email else '' }} and the call brief are further down this page.</a></p>{% endif %}
+  {% if below and d.touch %}<p class="small muted" style="margin: 0"><a class="muted" href="#draft-{{ c.id }}">The {{ labels[d.touch] }}{{ "'s draft" if d.email else '' }} and the call brief are below.</a></p>{% endif %}
 </section>
 {%- endmacro %}
 
@@ -223,7 +223,7 @@
   <div class="duo">
   {% if c.email -%}
   {% if not d.touch -%}
-  <p class="muted">{% if d.no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif d.no_draft == 'finished' %}All three emails have gone; nothing more to send.{% else %}{{ d.no_draft }}{% endif %}</p>
+  <p class="muted">{% if d.no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif d.no_draft == 'finished' %}All three emails sent.{% else %}{{ d.no_draft }}{% endif %}</p>
   {%- elif d.email -%}
   {%- set e = d.email -%}
   <div class="block">
@@ -237,7 +237,7 @@
     <h3>Next: the {{ labels[d.touch] }}, email {{ d.touch }} of {{ d.emails|length }}</h3>
     <div class="placeholder">
       <span class="muted"><b>[{{ labels[d.touch]|upper }} DRAFTED ON REQUEST]</b></span>
-      <span class="small muted">Not stored. With Claude on, each draft is a model call of a few seconds, so it is drafted only when asked.</span>
+      <span class="small muted">Not stored. With Claude on it is a model call of a few seconds, so drafted on request.</span>
       <div class="actions"><a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">Draft the {{ labels[d.touch] }}</a><span class="small muted">Edit it before you send. Nothing is sent from here.</span></div>
     </div>
   </div>
@@ -257,10 +257,10 @@
     </div>
     <div class="actions"><a class="btn" href="{{ call_href }}" data-busy="Preparing… this takes a few seconds">Prepare it again</a></div>
     {%- else -%}
-    <h3>Calling instead? The call brief is prepared on request</h3>
+    <h3>Calling instead? A call brief, on request</h3>
     <div class="placeholder">
       <span class="muted"><b>[CALL BRIEF PREPARED ON REQUEST]</b></span>
-      <span class="small muted">An opener, two or three questions from what moved the score, the objection to expect, the ask and a voicemail. Not stored; with Claude on it is a model call of a few seconds.</span>
+      <span class="small muted">An opener, two or three questions from what moved the score, the objection to expect, the ask, a voicemail. Not stored; with Claude on, a model call of a few seconds.</span>
       <div class="actions"><a class="btn" href="{{ call_href }}" data-busy="Preparing… this takes a few seconds">Prepare the call brief</a></div>
     </div>
     {%- endif %}
@@ -273,13 +273,13 @@
   <section class="demo" aria-labelledby="demo-{{ c.id }}">
     <h3 class="kicker" id="demo-{{ c.id }}">Demo only · mock portal</h3>
     {% if automated -%}
-    <p class="small muted"><b>Demo: the lead answers.</b> This lead is in the automated sequence (phase 3). On a real portal a reply lands in the sender's HubSpot inbox and AuxoCase sees it within a minute, handing the lead to that SDR.</p>
+    <p class="small muted"><b>Demo: the lead answers.</b> In the automated sequence (phase 3). On a real portal the reply lands in the sender's HubSpot inbox; AuxoCase sees it within a minute and hands the lead to that SDR.</p>
     <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
       <input type="hidden" name="subject" value="{{ d.get('tier2').subject or '' }}">
       <button class="btn" type="submit" name="kind" value="reply">The lead replies</button>
     </form>
     {%- else -%}
-    <p class="small muted"><b>Demo: act in HubSpot.</b> These buttons stand in for HubSpot. On a real portal {{ d.owner.name if d.owner else 'the SDR' }} sends the email or logs the call in HubSpot, and AuxoCase sees it within a minute.{% if where == 'queue' %} Each one opens the lead page afterwards.{% endif %}</p>
+    <p class="small muted"><b>Demo: act in HubSpot.</b> On a real portal {{ d.owner.name if d.owner else 'the SDR' }} sends the email or logs the call there; AuxoCase sees it within a minute.{% if where == 'queue' %} Each button then opens the lead page.{% endif %}</p>
     <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
       <input type="hidden" name="subject" value="{{ d.email.subject if d.email else '' }}">
       <button class="btn" type="submit" name="kind" value="email">Send {{ 'this ' ~ labels[d.email.touch] if d.email else 'an email' }}</button>
@@ -294,7 +294,7 @@
 
 {#- The team's hit rate, from the queue page's context. -#}
 {% macro hit_text() -%}
-Across the team, of the leads handed out in the last {{ hit.days }} days and worked since, the ranked ones booked {% if hit.ranked.n %}{{ pct(hit.ranked.rate) }} ({{ hit.ranked.booked }} of {{ hit.ranked.n }}){% else %}nothing yet (none worked){% endif %}; the exploration slice, drawn at random, {% if hit.exploration.n %}booked {{ pct(hit.exploration.rate) }} ({{ hit.exploration.booked }} of {{ hit.exploration.n }}){% else %}has no worked leads yet{% endif %}.
+Team hit rate, leads handed out in the last {{ hit.days }} days and worked since: ranked {% if hit.ranked.n %}{{ pct(hit.ranked.rate) }} booked ({{ hit.ranked.booked }} of {{ hit.ranked.n }}){% else %}none worked yet{% endif %}; exploration slice, drawn at random, {% if hit.exploration.n %}{{ pct(hit.exploration.rate) }} ({{ hit.exploration.booked }} of {{ hit.exploration.n }}){% else %}none worked yet{% endif %}.
 {%- endmacro %}
 
 {#- The footnotes, as a numbered list in fn_index's order, so the numbers in the text land on the right note. -#}
@@ -302,12 +302,12 @@ Across the team, of the leads handed out in the last {{ hit.days }} days and wor
 {% if env == 'mock' or (hit is defined and hit) or (d is not none and (d.email or d.get('call'))) -%}
 <footer class="footnote">
   <ol class="fnotes">
-    {% if env == 'mock' %}<li id="fn-sim">Simulated · synthetic data. Booked counts come from the mock portal's generator, not from real leads; on a real portal they come from HubSpot's meetings and deals.</li>{% endif %}
-    {% if env == 'mock' and d is not none and d.late_factor and d.speed.factor is defined %}<li id="fn-speed">On the mock the first-day effect is the generator's built-in factor of {{ d.late_factor }} (outcomes show {{ d.speed.factor }}: {{ pct(d.speed.rate_fast) }} of {{ '{:,}'.format(d.speed.n_fast) }} leads touched within a day booked, against {{ pct(d.speed.rate_slow) }} of {{ '{:,}'.format(d.speed.n_slow) }} touched later); on a real portal it is measured.</li>{% endif %}
+    {% if env == 'mock' %}<li id="fn-sim">Simulated · synthetic data. Booked counts come from the mock generator; on a real portal, from HubSpot's meetings and deals.</li>{% endif %}
+    {% if env == 'mock' and d is not none and d.late_factor and d.speed.factor is defined %}<li id="fn-speed">Mock first-day effect: the generator's factor of {{ d.late_factor }}; outcomes show {{ d.speed.factor }} ({{ pct(d.speed.rate_fast) }} of {{ '{:,}'.format(d.speed.n_fast) }} touched within a day booked, against {{ pct(d.speed.rate_slow) }} of {{ '{:,}'.format(d.speed.n_slow) }} later). On a real portal it is measured.</li>{% endif %}
     {% if hit is defined and hit %}<li id="fn-hit">{{ hit_text() }}</li>{% endif %}
     {% if d is not none and d.touch and d.email %}{% set e = d.email %}<li id="fn-draft">Drafted by {{ 'Claude' if e.source == 'llm' else 'the template' }}{% if e.rejected %} · Claude's draft was set aside: {{ e.rejected }}{% endif %}. {% if e.touch == 1 and d.stored and d.stored.status == 'enrolled' %}Edit it in HubSpot before you send{% else %}Edit it before you send{% endif %}; nothing is sent from here.</li>{% endif %}
-    {% if d is not none and d.get('call') %}{% set b = d.get('call') %}<li id="fn-brief">Prepared by {{ 'Claude' if b.source == 'llm' else 'the template' }}{% if b.rejected %} · Claude's brief was set aside: {{ b.rejected }}{% endif %}. The questions come from what moved the score, the objection from why deals with companies of this size were lost. Read it; don't recite it.</li>{% endif %}
-    {% if env == 'mock' and timeline is defined %}<li id="fn-clocks">Mock portal clocks: HubSpot activity and routing run on the demo clock, frozen at {{ clock_text }}. AuxoCase's own logs (scoring, drafting, enrolment, SDR decisions) keep wall time, so their dates differ. History is in the order things happened.</li>{% endif %}
+    {% if d is not none and d.get('call') %}{% set b = d.get('call') %}<li id="fn-brief">Prepared by {{ 'Claude' if b.source == 'llm' else 'the template' }}{% if b.rejected %} · Claude's brief was set aside: {{ b.rejected }}{% endif %}. Questions from what moved the score; the objection from deals lost at this company size. Read it, don't recite it.</li>{% endif %}
+    {% if env == 'mock' and timeline is defined %}<li id="fn-clocks">Mock clocks: HubSpot activity and routing run on the demo clock, frozen at {{ clock_text }}; AuxoCase's own logs keep wall time. History is in the order things happened.</li>{% endif %}
   </ol>
 </footer>
 {%- endif %}

@@ -261,12 +261,12 @@ def _tested_where(side: list[dict]) -> Optional[str]:
         return None
     tested = rated[0]["tested"]
     if len(rated) == 1:
-        on = f", on {tested}," if tested else ","
-        return f"{rated[0]['version']} was measured once{on} where {round(100 * rated[0]['metrics']['base_rate'])}% of worked leads booked."
+        on = f" on {tested}," if tested else ","
+        return f"{rated[0]['version']}: tested{on.rstrip(',')} where {round(100 * rated[0]['metrics']['base_rate'])}% of worked leads booked."
     if len({r["tested_key"] for r in rated}) == 1:
         rates = {round(100 * r["metrics"]["base_rate"]) for r in rated}
         months = f" ({tested})" if tested else ""
-        return f"Every version was measured once, on the same months{months}, where {min(rates)}% of worked leads booked."
+        return f"All tested on the same months{months}, where {min(rates)}% of worked leads booked."
     groups: list[list[dict]] = [[rated[0]]]
     for r in rated[1:]:
         if groups[-1][-1]["metrics"]["base_rate"] - r["metrics"]["base_rate"] <= SAME_BASE:
@@ -278,8 +278,8 @@ def _tested_where(side: list[dict]) -> Optional[str]:
         rates = sorted(round(100 * r["metrics"]["base_rate"]) for r in g)
         span = f"{rates[0]}%" if rates[0] == rates[-1] else f"{rates[0]} to {rates[-1]}%"
         names = _and([r["version"] for r in sorted(g, key=lambda r: r["trained_at"] or "")])
-        parts.append(f"{names} {'was' if len(g) == 1 else 'were'} tested where {span} of worked leads booked" if i == 0 else f"{names} where {span} did")
-    return "Each version was measured once, on its own newest months, and the months differ: " + ", ".join(parts) + "."
+        parts.append(f"{names} where {span} of worked leads booked" if i == 0 else f"{names} where {span}")
+    return "Tested on different months: " + ", ".join(parts) + "."
 
 
 def _month_summary(period: str, rows: list[dict]) -> str:
