@@ -1,0 +1,5 @@
+{#- An explanation behind an "i": `{% call note('id', 'label') %}the sentence{% endcall %}`. The box opens on hover or
+    focus under the nearest positioned ancestor (styles in base.html), so a page carries its context without the text. -#}
+{% macro note(id, label) -%}
+<span class="info-wrap"><button type="button" class="info" aria-label="{{ label }}" aria-describedby="{{ id }}">i</button><span class="info-box" role="tooltip" id="{{ id }}">{{ caller() }}</span></span>
+{%- endmacro %}
