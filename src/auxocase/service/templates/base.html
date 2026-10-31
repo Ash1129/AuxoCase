@@ -62,13 +62,6 @@ h1,h2,h3{margin:0}
 .fn{font-size:11px;line-height:0;vertical-align:super;margin-left:1px}
 .fn a{color:var(--muted);text-decoration:none}.fn a:hover{color:var(--ink)}
 .fnotes{margin:0;padding-left:1.6em}.fnotes li{padding-left:4px}.fnotes li+li{margin-top:6px}.fnotes li::marker{color:var(--muted)}.fnotes li:target{color:var(--ink)}
-/* a section whose heading folds what is under it */
-.fold>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:10px;color:var(--accentInk)}
-.fold>summary::-webkit-details-marker{display:none}
-.fold>summary::after{content:"";border:5px solid transparent;border-top-color:currentColor;transform:translateY(3px)}
-.fold[open]>summary::after{border-top-color:transparent;border-bottom-color:currentColor;transform:translateY(-2px)}
-.fold>summary:focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:2px}
-.fold-body{display:flex;flex-direction:column;gap:12px;margin-top:12px}
 .footnote{border-top:1px dashed var(--line);padding-top:12px;font-size:13px;line-height:20px;color:var(--muted);max-width:760px}
 @media (max-width:640px){.title{font-size:38px;line-height:42px}.big{font-size:66px;line-height:68px}.mid{font-size:32px;line-height:36px}.lede{font-size:17px;line-height:28px}}
 

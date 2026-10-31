@@ -9,7 +9,7 @@
 .cols>.main{flex:999 1 520px;min-width:0;display:flex;flex-direction:column;gap:32px}
 .cols>aside{flex:1 1 320px;min-width:0;display:flex;flex-direction:column;gap:32px}
 .means{border-top:1px solid var(--line)}
-.means summary{padding:13px 0;cursor:pointer;color:var(--muted)}
+.means>h2{padding:13px 0}
 .means dl{margin:0;display:flex;flex-direction:column;gap:12px;font-size:14px;line-height:20px}
 .means dt{font-weight:600}.means dd{margin:0}
 .facts{margin:0;display:flex;flex-direction:column}
@@ -96,8 +96,8 @@
   <aside aria-label="About this lead">
     {% if c.auxo_probability is not none -%}
     {%- set b = band -%}
-    <details class="means" open>
-      <summary><h2 class="kicker" style="display: inline">What {{ ld.pct(c.auxo_probability) }} means</h2></summary>
+    <div class="means">
+      <h2 class="kicker">What {{ ld.pct(c.auxo_probability) }} means</h2>
       <dl>
         <div><dt>Calibration</dt><dd>{% if b %}{% if b.months %}Test months {{ b.months }}: {% endif %}{{ '{:,}'.format(b.n) }} worked leads scored {{ b.lo }} to {{ b.hi }}%{% if b.predicted is not none %}; {{ ld.pct(b.predicted) }} predicted{% endif %}, {{ ld.pct(b.observed) }} booked{% if b.too_few %}, too few to say{% endif %}.{{ ld.ref('sim', d) }}{% else %}No calibration band: the live model has none for this score.{% endif %}</dd></div>
         {% if pace.median_hours is defined and pace.baseline.median_hours is defined -%}
@@ -110,7 +110,7 @@
         <div><dt>Capacity line</dt><dd>{{ ld.pct(line) }} at the last routing pass: the chance at the rank the team can reach in the next week at its monthly capacity.{% if assigned and assigned.reason == 'above the capacity line' %} {{ who|capitalize }} was assigned above it.{% elif assigned and assigned.decision == 'holdout_assigned' %} {{ who|capitalize }} was drawn for the exploration slice, which does not look at the line.{% endif %}</dd></div>
         {%- endif %}
       </dl>
-    </details>
+    </div>
     {%- endif %}
 
     <section class="part" aria-labelledby="facts-h">

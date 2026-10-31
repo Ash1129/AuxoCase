@@ -14,6 +14,7 @@
 .drivers .info-box{left:auto;right:0;width:360px;max-width:70vw;font-weight:400}
 .part{display:flex;flex-direction:column;gap:12px}
 .part p{margin:0}
+.part>.lede{text-align:justify;hyphens:auto}
 .part h3{font-size:15px;line-height:22px;font-weight:600}
 .block{display:flex;flex-direction:column;gap:8px;max-width:680px}
 .block p{margin:0}
@@ -149,9 +150,7 @@
 {% macro why(d) -%}
 {%- set c = d.c -%}{%- set s = d.score -%}
 <section class="part" aria-labelledby="why-{{ c.id }}">
-  <details class="fold">
-  <summary><h2 class="kicker" id="why-{{ c.id }}">{% if s %}Why {{ first(c) }} is ranked here{% else %}Why {{ first(c) }} has no rank yet{% endif %}</h2></summary>
-  <div class="fold-body">
+  <h2 class="kicker" id="why-{{ c.id }}">{% if s %}Why {{ first(c) }} is ranked here{% else %}Why {{ first(c) }} has no rank yet{% endif %}</h2>
   {% if c.auxo_reason %}<p class="lede">{{ c.auxo_reason }}</p>{% endif %}
   {%- set g = s.signals if s else {} -%}{%- set found = g.signals or [] if s else [] -%}
   {% if d.drivers -%}
@@ -171,8 +170,6 @@
   {%- else -%}
   <p class="muted">Not scored yet, so there is no breakdown.</p>
   {%- endif %}
-  </div>
-  </details>
 </section>
 {%- endmacro %}
 

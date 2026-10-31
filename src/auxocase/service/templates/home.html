@@ -11,8 +11,8 @@
 .ov-fig .info-box{right:auto;width:320px;max-width:calc(100vw - 32px)}
 .ov-fig:last-child .info-box{left:auto;right:0}
 .ov-sec{display:flex;flex-direction:column;gap:12px}
-.ov-sec>h2,.ov-sec summary{position:relative}
-.ov-sec>h2 .info-box,.ov-sec summary .info-box{right:auto;width:560px;max-width:calc(100vw - 32px)}
+.ov-sec>h2{position:relative}
+.ov-sec>h2 .info-box{right:auto;width:560px;max-width:calc(100vw - 32px)}
 .ov-pool th{position:relative}.ov-pool th.w-pct{white-space:nowrap}
 .ov-pool th .info-box{left:auto;right:0;width:360px;max-width:70vw}
 .ov-pool{min-width:860px}.ov-runs{min-width:560px}
@@ -151,9 +151,7 @@
 {% set failed = runs|selectattr('status', 'equalto', 'failed')|list|length %}
 {% set skipped = runs|selectattr('status', 'equalto', 'skipped')|list|length %}
 <section class="ov-sec" aria-labelledby="ov-runs">
-  <details class="fold"{% if failed %} open{% endif %}>
-  <summary><h2 id="ov-runs" class="kicker">Recent scheduled runs · {% if not runs %}none yet{% else %}the latest of each job, {% if failed or skipped %}{{ (failed ~ ' failed') if failed }}{{ ', ' if failed and skipped }}{{ (skipped ~ ' skipped') if skipped }}{% else %}all ok{% endif %}{% endif %}</h2></summary>
-  <div class="fold-body">
+  <h2 id="ov-runs" class="kicker">Recent scheduled runs · {% if not runs %}none yet{% else %}the latest of each job, {% if failed or skipped %}{{ (failed ~ ' failed') if failed }}{{ ', ' if failed and skipped }}{{ (skipped ~ ' skipped') if skipped }}{% else %}all ok{% endif %}{% endif %}</h2>
   {% if runs %}
   <div class="scroll">
     <table class="ov-runs">
@@ -175,8 +173,6 @@
   {% else %}
   <p class="ov-text">No scheduled run is logged yet; the scheduler is {{ scheduler }}.</p>
   {% endif %}
-  </div>
-  </details>
 </section>
 
 {% if sim_note or clocks_note %}
