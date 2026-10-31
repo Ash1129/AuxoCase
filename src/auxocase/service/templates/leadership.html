@@ -104,7 +104,7 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
     </div>
   </div>
   <p class="lede">{% if mock %}In the simulation the same {{ sdrs }} SDRs book{% else %}The same {{ sdrs }} SDRs booked{% endif %}
-    {% if shared.more_a_month < 0 %}{{ -shared.more_a_month }} fewer demos a month.{% elif months.projected and shared.routed %}{{ shared.more_a_month }} more demos a month. Better picks, touched on their first day, took it from {{ b.demos_a_month }} to {{ shared.routed.demos_a_month }} over {{ months.routed_span }}; the time the AI steps save ({{ shared.routed.worked_a_month }} to {{ a.worked_a_month }} leads worked a month) takes it to {{ a.demos_a_month }} in {{ months.ahead[0][:3] }} to {{ months.ahead[-1] }}.{% else %}{{ shared.more_a_month }} more demos a month: better picks, touched on their first day.{% endif %}</p>
+    {% if shared.more_a_month < 0 %}{{ -shared.more_a_month }} fewer demos a month.{% elif months.projected %}{{ shared.more_a_month }} more demos a month: better picks, touched on their first day, and the time the AI steps save spent on more leads.{% else %}{{ shared.more_a_month }} more demos a month: better picks, touched on their first day.{% endif %}</p>
   {% endif %}
 </section>
 
@@ -112,12 +112,11 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
 
 {# ---- month by month ---- #}
 <section class="ld-sec" aria-labelledby="ld-months">
-  <h2 id="ld-months" class="kicker">Month by month{% if mock %} · simulated{% endif %}{% if report and months %}{% call note('months-how', 'How the months are counted') %}<span class="ln">{% if shared %}Average a month: {{ shared.before.demos_a_month }} demos from {{ shared.before.worked_a_month }} leads worked before, {{ shared.after.demos_a_month }} from {{ shared.after.worked_a_month }} after.{% endif %}</span><span class="ln">{% if months.left_out|length == 1 %}{{ months.left_out[0] }} is left out: too few first touches to count as a whole month.{% elif months.left_out %}{{ months.left_out[:-1]|join(', ') }} and {{ months.left_out[-1] }} are left out: too few first touches to count as whole months.{% endif %}</span><span class="ln">{% if months.projected %}{{ months.ahead|join(', ') }}: simulated ahead of the clock ({{ clock_day }}) with the AI steps on, the leads ranked by the model and the SDRs' saved time spent on more of them. A projection, not a record.{% endif %}</span><span class="ln">Source: <code>{{ report_path }}</code> (<code>python run.py eval</code>{% if report_written %}, {{ report_written }}{% endif %}).</span>{% endcall %}{% endif %}</h2>
+  <h2 id="ld-months" class="kicker">Month by month{% if mock %} · simulated{% endif %}{% if report and months %}{% call note('months-how', 'How the months are counted') %}<span class="ln">{% if shared %}Average a month: {{ shared.before.demos_a_month }} demos from {{ shared.before.worked_a_month }} leads worked before, {{ shared.after.demos_a_month }} from {{ shared.after.worked_a_month }} after.{% endif %}</span><span class="ln">{% if months.left_out|length == 1 %}{{ months.left_out[0] }} is left out: too few first touches to count as a whole month.{% elif months.left_out %}{{ months.left_out[:-1]|join(', ') }} and {{ months.left_out[-1] }} are left out: too few first touches to count as whole months.{% endif %}</span><span class="ln">{% if months.projected %}{{ months.ahead|join(', ') }}: simulated ahead of the clock ({{ clock_day }}) with the AI steps on, the leads ranked by the model and the SDRs' saved time spent on more of them. A projection, not a record.{% if months.routed_span %} {{ months.routed_span }}, routed with the SDR hours as before, {{ 'is' if months.routed|length == 1 else 'are' }} left out.{% endif %}{% endif %}</span><span class="ln">Source: <code>{{ report_path }}</code> (<code>python run.py eval</code>{% if report_written %}, {{ report_written }}{% endif %}).</span>{% endcall %}{% endif %}</h2>
   {% if not report %}{{ no_report() }}
   {% elif not months %}<p class="empty">No whole month of first touches in <code>{{ report_path }}</code> yet.</p>
   {% else %}
-  {% if shared and shared.all_beat and months.projected %}<p class="lede">Every routed month beat every month before it; the months simulated ahead, with the AI steps on, beat those.</p>
-  {% elif shared and shared.all_beat %}<p class="lede">Every routed month beat every month before it{% if shared.same_capacity %}, at the same capacity{% endif %}.</p>
+  {% if shared and shared.all_beat %}<p class="lede">Every routed month beat every month before it{% if shared.same_capacity %}, at the same capacity{% endif %}.</p>
   {% elif shared %}<p class="lede">Routed months averaged {{ shared.after.demos_a_month }} demos against {{ shared.before.demos_a_month }} before.</p>{% endif %}
   <div class="scroll" role="region" aria-labelledby="ld-months" tabindex="0">
     <table class="ld-table" aria-labelledby="ld-months">
@@ -131,7 +130,7 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
           <th scope="col" class="r">Touched within 24 h</th>
         </tr>
       </thead>
-      {% for group, rows, label in [('before', months.before_rows, "Before · SDRs chose by gut feel and HubSpot's score"), ('routed', months.routed_rows, "Routed · ranked and routed by AuxoCase, the SDR hours as before"), ('after', months.after_rows, 'After · ranked and routed by AuxoCase' + (', the AI steps saving the SDRs time' if months.projected else ''))] if rows %}
+      {% for group, rows, label in [('before', months.before_rows, "Before · SDRs chose by gut feel and HubSpot's score"), ('after', months.after_rows, 'After · ranked and routed by AuxoCase' + (', the AI steps saving the SDRs time' if months.projected else ''))] if rows %}
       <tbody class="{{ group }}">
         <tr class="grp"><th scope="rowgroup" colspan="6">{{ label }}</th></tr>
         {% for r in rows %}

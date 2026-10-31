@@ -107,9 +107,10 @@ def test_months_simulated_ahead_of_the_clock_are_the_after(client, tmp_path, mon
     monkeypatch.setattr(leadership, "REPORT", p)
     t = client.get("/leadership").text
     assert "After · two months simulated ahead, the AI steps on" in t and "600 from 12,000 over the two routed months" in t
-    assert "Routed · ranked and routed by AuxoCase, the SDR hours as before" in t and "the AI steps saving the SDRs time" in t
-    assert "took it from 150 to 240 over Aug to Oct 2028; the time the AI steps save (480 to 530 leads worked a month) takes it to 300 in Nov to Dec 2028" in t
+    assert "the AI steps saving the SDRs time" in t and "Routed ·" not in t and "Aug 2028" not in t.split("How the months are counted")[0]
+    assert "150 more demos a month: better picks, touched on their first day, and the time the AI steps save" in t
     assert "Nov 2028, Dec 2028: simulated ahead of the clock (31 Oct 2028) with the AI steps on" in t
+    assert "Aug to Oct 2028, routed with the SDR hours as before, are left out." in t
 
 
 def test_each_panel_says_what_to_run_when_its_file_is_missing(client, tmp_path, monkeypatch):
