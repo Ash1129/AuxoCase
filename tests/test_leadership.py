@@ -9,7 +9,7 @@ from auxocase.hubspot.mock import MockHubSpot
 from auxocase.hubspot.models import Owner
 from auxocase.service.app import create_app
 from auxocase.service.views import leadership
-from auxocase.storage.db import connect, set_setting
+from auxocase.storage.db import connect, freeze_clock, set_setting
 
 
 def _month(m, worked, demos, routed, hours=70.0, within=0.2):
@@ -54,6 +54,7 @@ def client(tmp_path, monkeypatch):
     for i in range(3):
         hs.add_owner(Owner(id=f"90{i}", name=f"SDR {i}", email=f"sdr{i}@brightpath.example", capacity_limit=1))
     set_setting(conn, "stale_lead_factor", "0.5")
+    freeze_clock(conn, "2028-10-31T00:00:00")           # the report's last routed month is the clock's
     monkeypatch.setattr(leadership, "REPORT", tmp_path / "missing-evaluation.json")
     monkeypatch.setattr(leadership, "QUEUE_LIMITS", tmp_path / "missing-queue_limits.json")
     return TestClient(create_app(path, scheduler=False))
@@ -95,6 +96,20 @@ def test_headline_numbers_come_from_the_stored_files(client, tmp_path, monkeypat
     assert 'id="fn-sim"' in t and "Simulated · synthetic data" in t
     assert "Run <code>python run.py eval</code>" not in t and "Run <code>python run.py queue-limits</code>" not in t
     assert "<script>" not in t and "onclick=" not in t
+
+
+def test_months_simulated_ahead_of_the_clock_are_the_after(client, tmp_path, monkeypatch):
+    # The simulator ran two months past the clock (31 Oct 2028) with the AI steps on, 530 leads worked from the time
+    # saved: they are the After; the routed months up to the clock are the middle group.
+    report = dict(REPORT, success_by_month=REPORT["success_by_month"] + [_month(m, 530, 300, 1.0, 12.0, 0.7) for m in ("2028-11", "2028-12")])
+    p = tmp_path / "evaluation.json"
+    p.write_text(json.dumps(report))
+    monkeypatch.setattr(leadership, "REPORT", p)
+    t = client.get("/leadership").text
+    assert "After · two months simulated ahead, the AI steps on" in t and "600 from 12,000 over the two routed months" in t
+    assert "Routed · ranked and routed by AuxoCase, the SDR hours as before" in t and "the AI steps saving the SDRs time" in t
+    assert "took it from 150 to 240 over Aug to Oct 2028; the time the AI steps save (480 to 530 leads worked a month) takes it to 300 in Nov to Dec 2028" in t
+    assert "Nov 2028, Dec 2028: simulated ahead of the clock (31 Oct 2028) with the AI steps on" in t
 
 
 def test_each_panel_says_what_to_run_when_its_file_is_missing(client, tmp_path, monkeypatch):

@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-29T21:49:36",
+ "generated_at": "2026-10-31T21:07:33",
  "live": "demo-v1",
  "metrics": {
   "rows": 5404,
@@ -113,14 +113,19 @@
  "positives": 0,
  "slices": {
   "assigned": {
-   "assigned": 2901,
-   "worked": 2862,
-   "booked": 1760
+   "assigned": 3266,
+   "worked": 3247,
+   "booked": 2044
   },
   "holdout_assigned": {
-   "assigned": 230,
-   "worked": 229,
-   "booked": 50
+   "assigned": 273,
+   "worked": 273,
+   "booked": 68
+  },
+  "holdout_assigned (below HubSpot's gate)": {
+   "assigned": 173,
+   "worked": 173,
+   "booked": 38
   }
  },
  "overrides": {
@@ -128,39 +133,35 @@
    "n": 1,
    "booked": 1
   },
+  "junk": {
+   "n": 7,
+   "booked": 0
+  },
   "promote": {
    "n": 4,
    "booked": 4
   },
   "skipped": {
-   "n": 33,
+   "n": 21,
    "booked": 1
   },
   "worked": {
-   "n": 6,
+   "n": 30,
    "booked": 2
   }
  },
  "capacity_head_to_head": null,
  "speed_to_lead": {
-  "n": 3083,
-  "median_hours": 20.0,
-  "within_24h": 0.579,
+  "n": 3688,
+  "median_hours": 9.6,
+  "within_24h": 0.757,
   "baseline": {
-   "n": 6044,
-   "median_hours": 70.8,
+   "n": 6043,
+   "median_hours": 70.4,
    "within_24h": 0.212
   }
  },
  "success_by_month": [
-  {
-   "month": "2024-10",
-   "worked": 8,
-   "demos": 2,
-   "routed_share": 1.0,
-   "median_hours": null,
-   "within_24h": null
-  },
   {
    "month": "2025-06",
    "worked": 14,
@@ -230,16 +231,16 @@
    "worked": 496,
    "demos": 185,
    "routed_share": 0.0,
-   "median_hours": 67.0,
-   "within_24h": 0.222
+   "median_hours": 66.3,
+   "within_24h": 0.228
   },
   {
    "month": "2026-03",
    "worked": 491,
    "demos": 164,
    "routed_share": 0.0,
-   "median_hours": 67.5,
-   "within_24h": 0.222
+   "median_hours": 62.2,
+   "within_24h": 0.224
   },
   {
    "month": "2026-04",
@@ -283,221 +284,323 @@
   },
   {
    "month": "2026-09",
-   "worked": 490,
-   "demos": 303,
+   "worked": 491,
+   "demos": 304,
    "routed_share": 1.0,
    "median_hours": 16.6,
    "within_24h": 0.688
   },
   {
    "month": "2026-10",
-   "worked": 502,
-   "demos": 280,
+   "worked": 512,
+   "demos": 265,
    "routed_share": 1.0,
-   "median_hours": 17.6,
-   "within_24h": 0.647
+   "median_hours": 18.9,
+   "within_24h": 0.615
   },
   {
    "month": "2026-11",
-   "worked": 551,
-   "demos": 321,
+   "worked": 724,
+   "demos": 425,
    "routed_share": 1.0,
-   "median_hours": 23.8,
-   "within_24h": 0.503
+   "median_hours": 7.6,
+   "within_24h": 0.815
   },
   {
    "month": "2026-12",
-   "worked": 551,
-   "demos": 317,
+   "worked": 742,
+   "demos": 432,
    "routed_share": 1.0,
-   "median_hours": 22.9,
-   "within_24h": 0.515
+   "median_hours": 7.2,
+   "within_24h": 0.84
   },
   {
    "month": "2027-01",
-   "worked": 491,
-   "demos": 281,
+   "worked": 726,
+   "demos": 418,
    "routed_share": 1.0,
-   "median_hours": 24.5,
-   "within_24h": 0.497
+   "median_hours": 7.4,
+   "within_24h": 0.84
   }
  ],
  "speed_effect": {
-  "n_fast": 3074,
-  "n_slow": 6061,
-  "rate_fast": 0.66,
-  "rate_slow": 0.308,
-  "factor": 0.47
+  "n_fast": 4082,
+  "n_slow": 5655,
+  "rate_fast": 0.641,
+  "rate_slow": 0.287,
+  "factor": 0.45
  },
  "stale_lead_factor": "0.5",
  "mql_gate": [
   {
    "channel": "website",
-   "leads": 6449,
-   "mqls": 3140,
-   "mql_share": 0.487,
-   "no_title": 0.118,
-   "no_size": 0.143
+   "leads": 6383,
+   "mqls": 3103,
+   "mql_share": 0.486,
+   "no_title": 0.114,
+   "no_size": 0.154
   },
   {
    "channel": "paid_ads",
-   "leads": 3770,
-   "mqls": 899,
-   "mql_share": 0.238,
-   "no_title": 0.157,
-   "no_size": 0.171
+   "leads": 3624,
+   "mqls": 872,
+   "mql_share": 0.241,
+   "no_title": 0.156,
+   "no_size": 0.178
   },
   {
    "channel": "webinar",
-   "leads": 2812,
-   "mqls": 212,
-   "mql_share": 0.075,
-   "no_title": 0.448,
-   "no_size": 0.472
-  },
-  {
-   "channel": "referral",
-   "leads": 1904,
-   "mqls": 185,
-   "mql_share": 0.097,
-   "no_title": 0.492,
-   "no_size": 0.484
-  },
-  {
-   "channel": "events",
-   "leads": 1867,
-   "mqls": 263,
-   "mql_share": 0.141,
-   "no_title": 0.196,
-   "no_size": 0.257
+   "leads": 2729,
+   "mqls": 211,
+   "mql_share": 0.077,
+   "no_title": 0.468,
+   "no_size": 0.477
   },
   {
    "channel": "email",
-   "leads": 1798,
-   "mqls": 412,
-   "mql_share": 0.229,
-   "no_title": 0.122,
-   "no_size": 0.157
+   "leads": 1835,
+   "mqls": 441,
+   "mql_share": 0.24,
+   "no_title": 0.104,
+   "no_size": 0.155
+  },
+  {
+   "channel": "events",
+   "leads": 1822,
+   "mqls": 305,
+   "mql_share": 0.167,
+   "no_title": 0.202,
+   "no_size": 0.223
+  },
+  {
+   "channel": "referral",
+   "leads": 1807,
+   "mqls": 184,
+   "mql_share": 0.102,
+   "no_title": 0.49,
+   "no_size": 0.475
   }
  ],
  "below_gate": {
-  "explore_below_gate_share": 0.0,
+  "explore_below_gate_share": 0.5,
   "ranks_below_gate": false,
-  "assigned": 0,
-  "worked": 0,
-  "matured": 0,
-  "booked": 0,
-  "observed_rate": null,
-  "predicted_rate": null,
+  "assigned": 173,
+  "worked": 173,
+  "matured": 147,
+  "booked": 34,
+  "observed_rate": 0.231,
+  "predicted_rate": 0.281,
   "assigned_by_rank": 0,
   "needed": 100,
-  "ready": false
+  "ready": true
  },
  "tier2": {
-  "explore_share": 0.5,
+  "explore_share": 0.0,
   "band": false,
   "holdback": 0.1,
-  "send_share": 0.5,
+  "send_share": 0.0,
   "sequence": null,
   "daily_limit": 60,
   "arms": {
    "emailed": {
-    "leads": 1867,
-    "replied": 322,
-    "worked_by_sdr": 343,
-    "matured": 1249,
-    "booked": 136,
-    "observed_rate": 0.109,
-    "predicted_rate": 0.296
+    "leads": 0,
+    "replied": 0,
+    "worked_by_sdr": 0,
+    "matured": 0,
+    "booked": 0,
+    "observed_rate": null,
+    "predicted_rate": null
    },
    "control": {
-    "leads": 1865,
+    "leads": 0,
     "replied": 0,
-    "worked_by_sdr": 70,
-    "matured": 1284,
-    "booked": 10,
-    "observed_rate": 0.008,
-    "predicted_rate": 0.296
+    "worked_by_sdr": 0,
+    "matured": 0,
+    "booked": 0,
+    "observed_rate": null,
+    "predicted_rate": null
    }
   },
   "refused": 0,
-  "lift": 0.101,
+  "lift": null,
   "needed": 200,
-  "ready": true
+  "ready": false
  },
  "costs": {
   "units": {
    "cost_sdr_hour": 45.0,
    "sdr_minutes_touch": 20.0,
-   "sdr_minutes_reply": 10.0,
+   "sdr_minutes_reply": 4.0,
    "cost_draft": 0.02,
    "acv": 24000.0,
    "close_rate": 0.2
   },
-  "since": "2026-10-30T06:00:00",
+  "since": null,
   "value_per_demo": 4800,
   "measured_close_rate": 0.232,
-  "closed_demos": 3211,
+  "closed_demos": 3287,
   "ai": {
-   "calls": 6,
-   "cost_usd": 0.1344,
-   "priced": 6,
-   "input_tokens": 12,
-   "output_tokens": 2277,
+   "calls": 31,
+   "cost_usd": 0.491,
+   "priced": 31,
+   "input_tokens": 705,
+   "output_tokens": 17450,
    "by_task": [
     {
+     "task": "call_brief",
+     "calls": 17,
+     "input_tokens": 34,
+     "output_tokens": 13001,
+     "cost_usd": 0.3236,
+     "priced": 17,
+     "first": "2026-10-31T00:31:51",
+     "last": "2026-10-31T14:04:55"
+    },
+    {
      "task": "outreach_email",
-     "calls": 6,
-     "input_tokens": 12,
-     "output_tokens": 2277,
-     "cost_usd": 0.1344,
-     "priced": 6,
-     "first": "2026-10-29T21:48:37",
-     "last": "2026-10-29T21:49:15"
+     "calls": 11,
+     "input_tokens": 22,
+     "output_tokens": 4118,
+     "cost_usd": 0.1498,
+     "priced": 11,
+     "first": "2026-10-30T02:11:22",
+     "last": "2026-10-31T18:56:25"
+    },
+    {
+     "task": "reply_triage",
+     "calls": 2,
+     "input_tokens": 4,
+     "output_tokens": 291,
+     "cost_usd": 0.0149,
+     "priced": 2,
+     "first": "2026-10-31T20:04:20",
+     "last": "2026-10-31T20:04:44"
+    },
+    {
+     "task": "reason",
+     "calls": 1,
+     "input_tokens": 645,
+     "output_tokens": 40,
+     "cost_usd": 0.0027,
+     "priced": 1,
+     "first": "2026-10-31T16:35:27",
+     "last": "2026-10-31T16:35:27"
     }
    ],
-   "first": "2026-10-29T21:48:37",
-   "last": "2026-10-29T21:49:15",
-   "draft_mean_cost": 0.02239,
-   "drafts_priced": 6,
+   "first": "2026-10-30T02:11:22",
+   "last": "2026-10-31T20:04:44",
+   "draft_mean_cost": 0.01362,
+   "drafts_priced": 11,
    "source": "metered per call by the Claude CLI, the same figure it reports to Revenium"
   },
   "sdr": {
-   "worked": 1268,
-   "demos": 734,
-   "demo_rate": 0.579,
-   "sdr_hours": 422.7,
-   "cost": 19020,
+   "worked": 3693,
+   "demos": 2150,
+   "demo_rate": 0.582,
+   "sdr_hours": 1231.0,
+   "cost": 55395,
    "cost_per_demo": 26.0,
-   "demos_per_sdr_hour": 1.74,
-   "value": 3523200
+   "demos_per_sdr_hour": 1.75,
+   "value": 10320000
   },
   "automated": {
-   "emailed": 1867,
+   "emailed": 0,
    "llm_drafts": 0,
-   "replied": 322,
-   "reply_rate": 0.172,
-   "demos": 197,
-   "demo_rate": 0.106,
-   "sdr_hours": 53.7,
-   "draft_cost": 41.8,
-   "draft_unit_cost": 0.02239,
-   "drafts_metered": 6,
-   "draft_pricing": "metered mean",
+   "replied": 0,
+   "reply_rate": null,
+   "demos": 0,
+   "demo_rate": null,
+   "sdr_hours": 0.0,
+   "draft_cost": 0.0,
+   "draft_unit_cost": 0.01362,
+   "drafts_metered": 0,
+   "draft_pricing": "metered",
    "draft_cost_metered": true,
-   "cost": 2457,
-   "cost_per_demo": 12.0,
-   "demos_per_sdr_hour": 3.67,
-   "demos_per_100_emails": 10.6,
-   "value": 945600,
-   "demos_added": 183.0,
-   "value_added": 878400,
-   "demos_forgone": 93.2,
-   "demos_net": 89.8,
-   "value_net": 431040,
-   "break_even_reply_minutes": 19.6
+   "cost": 0,
+   "cost_per_demo": null,
+   "demos_per_sdr_hour": null,
+   "demos_per_100_emails": null,
+   "value": 0,
+   "demos_added": null,
+   "value_added": null,
+   "demos_forgone": 0.0,
+   "demos_net": null,
+   "value_net": null,
+   "break_even_reply_minutes": null
   },
   "months": [
+   {
+    "month": "2025-07",
+    "demos": 91,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2025-08",
+    "demos": 170,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2025-09",
+    "demos": 172,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2025-10",
+    "demos": 175,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2025-11",
+    "demos": 164,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2025-12",
+    "demos": 164,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2026-01",
+    "demos": 189,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2026-02",
+    "demos": 164,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2026-03",
+    "demos": 188,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2026-04",
+    "demos": 173,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2026-05",
+    "demos": 168,
+    "via_sequence": 0,
+    "period": "before"
+   },
+   {
+    "month": "2026-06",
+    "demos": 188,
+    "via_sequence": 0,
+    "period": "before"
+   },
    {
     "month": "2026-07",
     "demos": 82,
@@ -520,412 +623,399 @@
     "month": "2026-10",
     "demos": 298,
     "via_sequence": 0,
-    "period": "first"
+    "period": "before"
    },
    {
     "month": "2026-11",
-    "demos": 313,
-    "via_sequence": 65,
-    "period": "with"
+    "demos": 368,
+    "via_sequence": 0,
+    "period": "before"
    },
    {
     "month": "2026-12",
-    "demos": 322,
-    "via_sequence": 61,
-    "period": "with"
+    "demos": 442,
+    "via_sequence": 0,
+    "period": "before"
    },
    {
     "month": "2027-01",
-    "demos": 320,
-    "via_sequence": 68,
-    "period": "with"
+    "demos": 434,
+    "via_sequence": 0,
+    "period": "before"
    }
   ],
   "control": {
-   "leads": 1865,
-   "worked_by_sdr": 70,
-   "demos": 14,
-   "demo_rate": 0.0075
+   "leads": 0,
+   "worked_by_sdr": 0,
+   "demos": 0,
+   "demo_rate": null
   }
  },
  "losses": {
   "poor_fit": {
-   "50_149": 162,
-   "300_500": 61,
-   "150_299": 94,
-   "unknown": 14,
-   "over_500": 12,
-   "under_50": 37
+   "50_149": 176,
+   "300_500": 70,
+   "150_299": 93,
+   "unknown": 15,
+   "over_500": 11,
+   "under_50": 31
   },
   "competitor": {
-   "50_149": 503,
-   "unknown": 27,
-   "150_299": 354,
-   "300_500": 199,
-   "under_50": 50,
+   "50_149": 535,
+   "unknown": 29,
+   "150_299": 369,
+   "300_500": 225,
+   "under_50": 46,
    "over_500": 33
   },
   "no_decision": {
-   "300_500": 175,
-   "150_299": 272,
-   "50_149": 455,
-   "under_50": 31,
-   "unknown": 28,
+   "300_500": 173,
+   "150_299": 294,
+   "50_149": 453,
+   "under_50": 32,
+   "unknown": 33,
    "over_500": 29
   },
   "other": {
-   "50_149": 199,
-   "300_500": 70,
-   "150_299": 137,
-   "under_50": 26,
+   "50_149": 212,
+   "300_500": 80,
+   "150_299": 132,
+   "under_50": 25,
    "unknown": 12,
-   "over_500": 9
+   "over_500": 11
   },
   "missing_feature": {
-   "150_299": 207,
+   "150_299": 223,
    "under_50": 21,
-   "300_500": 121,
-   "50_149": 320,
-   "over_500": 56,
-   "unknown": 15
+   "300_500": 122,
+   "50_149": 344,
+   "over_500": 51,
+   "unknown": 17
   },
   "timing": {
-   "50_149": 429,
-   "under_50": 38,
-   "150_299": 278,
-   "300_500": 151,
+   "50_149": 456,
+   "under_50": 37,
+   "150_299": 289,
+   "300_500": 162,
    "over_500": 27,
-   "unknown": 20
+   "unknown": 19
   },
   "price": {
-   "150_299": 386,
-   "50_149": 549,
-   "unknown": 30,
-   "300_500": 228,
+   "150_299": 389,
+   "50_149": 595,
+   "unknown": 29,
+   "300_500": 238,
    "over_500": 17,
-   "under_50": 74
+   "under_50": 69
   }
  },
  "enrichment": {
-  "asked": 670,
-  "filled": 486,
-  "asked_title": 62,
-  "got_title": 40,
-  "asked_size": 608,
-  "got_size": 446
+  "asked": 773,
+  "filled": 546,
+  "asked_title": 112,
+  "got_title": 61,
+  "asked_size": 678,
+  "got_size": 494
  },
  "monitor": [
   {
-   "id": 135,
-   "period": "2026-10",
-   "channel": "email",
-   "n": 8,
-   "demos": 4,
-   "demo_rate": 0.5,
-   "predicted_rate": 0.33985,
-   "lcl": null,
-   "ucl": null,
-   "flag": "held",
-   "created_at": "2026-10-29T21:40:38"
-  },
-  {
-   "id": 136,
+   "id": 179,
    "period": "2026-10",
    "channel": "events",
-   "n": 12,
-   "demos": 6,
+   "n": 2,
+   "demos": 1,
    "demo_rate": 0.5,
-   "predicted_rate": 0.45097499999999996,
+   "predicted_rate": 0.39395,
    "lcl": null,
    "ucl": null,
    "flag": "held",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 137,
+   "id": 180,
    "period": "2026-10",
    "channel": "paid_ads",
-   "n": 11,
-   "demos": 4,
-   "demo_rate": 0.36363636363636365,
-   "predicted_rate": 0.3452363636363637,
+   "n": 5,
+   "demos": 1,
+   "demo_rate": 0.2,
+   "predicted_rate": 0.37452,
    "lcl": null,
    "ucl": null,
    "flag": "held",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 138,
+   "id": 181,
    "period": "2026-10",
    "channel": "referral",
-   "n": 6,
-   "demos": 6,
+   "n": 1,
+   "demos": 0,
+   "demo_rate": 0.0,
+   "predicted_rate": 0.3575,
+   "lcl": null,
+   "ucl": null,
+   "flag": "held",
+   "created_at": "2026-10-31T21:07:27"
+  },
+  {
+   "id": 182,
+   "period": "2026-10",
+   "channel": "webinar",
+   "n": 4,
+   "demos": 4,
    "demo_rate": 1.0,
-   "predicted_rate": 0.50815,
+   "predicted_rate": 0.51745,
    "lcl": null,
    "ucl": null,
    "flag": "held",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 139,
-   "period": "2026-10",
-   "channel": "webinar",
-   "n": 14,
-   "demos": 7,
-   "demo_rate": 0.5,
-   "predicted_rate": 0.48318571428571433,
-   "lcl": null,
-   "ucl": null,
-   "flag": "held",
-   "created_at": "2026-10-29T21:40:38"
-  },
-  {
-   "id": 140,
+   "id": 183,
    "period": "2026-10",
    "channel": "website",
-   "n": 55,
-   "demos": 26,
-   "demo_rate": 0.4727272727272727,
-   "predicted_rate": 0.39650909090909103,
-   "lcl": 0.19862911417296972,
-   "ucl": 0.5943890676452124,
-   "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
+   "n": 18,
+   "demos": 5,
+   "demo_rate": 0.2777777777777778,
+   "predicted_rate": 0.4091777777777777,
+   "lcl": null,
+   "ucl": null,
+   "flag": "held",
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 141,
+   "id": 184,
    "period": "2026-11",
    "channel": "email",
-   "n": 44,
-   "demos": 27,
-   "demo_rate": 0.6136363636363636,
-   "predicted_rate": 0.37215909090909083,
-   "lcl": 0.1535420368840794,
-   "ucl": 0.5907761449341022,
-   "flag": "above",
-   "created_at": "2026-10-29T21:40:38"
-  },
-  {
-   "id": 142,
-   "period": "2026-11",
-   "channel": "events",
-   "n": 37,
-   "demos": 18,
-   "demo_rate": 0.4864864864864865,
-   "predicted_rate": 0.42434864864864863,
-   "lcl": 0.18058913837826995,
-   "ucl": 0.6681081589190273,
-   "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
-  },
-  {
-   "id": 143,
-   "period": "2026-11",
-   "channel": "paid_ads",
-   "n": 46,
-   "demos": 18,
-   "demo_rate": 0.391304347826087,
-   "predicted_rate": 0.3380456521739131,
-   "lcl": 0.12880597771140867,
-   "ucl": 0.5472853266364175,
-   "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
-  },
-  {
-   "id": 144,
-   "period": "2026-11",
-   "channel": "referral",
-   "n": 60,
-   "demos": 51,
-   "demo_rate": 0.85,
-   "predicted_rate": 0.5255133333333333,
-   "lcl": 0.33211643451297124,
-   "ucl": 0.7189102321536953,
-   "flag": "above",
-   "created_at": "2026-10-29T21:40:38"
-  },
-  {
-   "id": 145,
-   "period": "2026-11",
-   "channel": "webinar",
-   "n": 52,
+   "n": 74,
    "demos": 32,
-   "demo_rate": 0.6153846153846154,
-   "predicted_rate": 0.484123076923077,
-   "lcl": 0.27621540002784817,
-   "ucl": 0.6920307538183058,
+   "demo_rate": 0.43243243243243246,
+   "predicted_rate": 0.35497162162162166,
+   "lcl": 0.18809648926275357,
+   "ucl": 0.5218467539804897,
    "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 146,
+   "id": 185,
+   "period": "2026-11",
+   "channel": "events",
+   "n": 72,
+   "demos": 48,
+   "demo_rate": 0.6666666666666666,
+   "predicted_rate": 0.41175833333333345,
+   "lcl": 0.23775639072065421,
+   "ucl": 0.5857602759460127,
+   "flag": "above",
+   "created_at": "2026-10-31T21:07:27"
+  },
+  {
+   "id": 186,
+   "period": "2026-11",
+   "channel": "paid_ads",
+   "n": 87,
+   "demos": 46,
+   "demo_rate": 0.5287356321839081,
+   "predicted_rate": 0.3358218390804597,
+   "lcl": 0.18392162291852496,
+   "ucl": 0.4877220552423944,
+   "flag": "above",
+   "created_at": "2026-10-31T21:07:27"
+  },
+  {
+   "id": 187,
+   "period": "2026-11",
+   "channel": "referral",
+   "n": 47,
+   "demos": 37,
+   "demo_rate": 0.7872340425531915,
+   "predicted_rate": 0.4974531914893618,
+   "lcl": 0.2786585426041527,
+   "ucl": 0.7162478403745709,
+   "flag": "above",
+   "created_at": "2026-10-31T21:07:27"
+  },
+  {
+   "id": 188,
+   "period": "2026-11",
+   "channel": "webinar",
+   "n": 72,
+   "demos": 51,
+   "demo_rate": 0.7083333333333334,
+   "predicted_rate": 0.46065416666666675,
+   "lcl": 0.2844256554236979,
+   "ucl": 0.6368826779096356,
+   "flag": "above",
+   "created_at": "2026-10-31T21:07:27"
+  },
+  {
+   "id": 189,
    "period": "2026-11",
    "channel": "website",
-   "n": 294,
-   "demos": 160,
-   "demo_rate": 0.54421768707483,
-   "predicted_rate": 0.40086496598639454,
-   "lcl": 0.3151199277475242,
-   "ucl": 0.4866100042252649,
+   "n": 369,
+   "demos": 211,
+   "demo_rate": 0.5718157181571816,
+   "predicted_rate": 0.37914932249322536,
+   "lcl": 0.3033776639544877,
+   "ucl": 0.45492098103196305,
    "flag": "above",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 147,
+   "id": 190,
    "period": "2026-12",
    "channel": "email",
-   "n": 42,
-   "demos": 18,
-   "demo_rate": 0.42857142857142855,
-   "predicted_rate": 0.3790714285714285,
-   "lcl": 0.1544878708097134,
-   "ucl": 0.6036549863331436,
+   "n": 66,
+   "demos": 35,
+   "demo_rate": 0.5303030303030303,
+   "predicted_rate": 0.3682590909090908,
+   "lcl": 0.1901461289725584,
+   "ucl": 0.5463720528456233,
    "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 148,
+   "id": 191,
    "period": "2026-12",
    "channel": "events",
-   "n": 40,
-   "demos": 26,
-   "demo_rate": 0.65,
-   "predicted_rate": 0.4228725,
-   "lcl": 0.18854035652125367,
-   "ucl": 0.6572046434787463,
-   "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
+   "n": 68,
+   "demos": 45,
+   "demo_rate": 0.6617647058823529,
+   "predicted_rate": 0.4009338235294117,
+   "lcl": 0.22263825621146713,
+   "ucl": 0.5792293908473563,
+   "flag": "above",
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 149,
+   "id": 192,
    "period": "2026-12",
    "channel": "paid_ads",
-   "n": 58,
-   "demos": 33,
-   "demo_rate": 0.5689655172413793,
-   "predicted_rate": 0.3316482758620689,
-   "lcl": 0.14618895451052916,
-   "ucl": 0.5171075972136087,
-   "flag": "above",
-   "created_at": "2026-10-29T21:40:38"
+   "n": 90,
+   "demos": 43,
+   "demo_rate": 0.4777777777777778,
+   "predicted_rate": 0.3327477777777779,
+   "lcl": 0.18374217581539248,
+   "ucl": 0.48175337974016336,
+   "flag": "ok",
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 150,
+   "id": 193,
    "period": "2026-12",
    "channel": "referral",
-   "n": 60,
-   "demos": 42,
-   "demo_rate": 0.7,
-   "predicted_rate": 0.4975900000000001,
-   "lcl": 0.3039430821701518,
-   "ucl": 0.6912369178298483,
-   "flag": "above",
-   "created_at": "2026-10-29T21:40:38"
-  },
-  {
-   "id": 151,
-   "period": "2026-12",
-   "channel": "webinar",
    "n": 69,
-   "demos": 50,
-   "demo_rate": 0.7246376811594203,
-   "predicted_rate": 0.48999855072463766,
-   "lcl": 0.30945590093539604,
-   "ucl": 0.6705412005138793,
+   "demos": 61,
+   "demo_rate": 0.8840579710144928,
+   "predicted_rate": 0.4918666666666668,
+   "lcl": 0.3113117795924676,
+   "ucl": 0.672421553740866,
    "flag": "above",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 152,
+   "id": 194,
+   "period": "2026-12",
+   "channel": "webinar",
+   "n": 61,
+   "demos": 39,
+   "demo_rate": 0.639344262295082,
+   "predicted_rate": 0.4379557377049181,
+   "lcl": 0.2473847842799952,
+   "ucl": 0.6285266911298409,
+   "flag": "above",
+   "created_at": "2026-10-31T21:07:27"
+  },
+  {
+   "id": 195,
    "period": "2026-12",
    "channel": "website",
-   "n": 285,
-   "demos": 152,
-   "demo_rate": 0.5333333333333333,
-   "predicted_rate": 0.3883950877192981,
-   "lcl": 0.301784462950834,
-   "ucl": 0.4750057124877622,
+   "n": 391,
+   "demos": 210,
+   "demo_rate": 0.5370843989769821,
+   "predicted_rate": 0.3782501278772381,
+   "lcl": 0.3046751279925089,
+   "ucl": 0.4518251277619673,
    "flag": "above",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 153,
+   "id": 196,
    "period": "2027-01",
    "channel": "email",
-   "n": 22,
-   "demos": 7,
-   "demo_rate": 0.3181818181818182,
-   "predicted_rate": 0.38025000000000003,
-   "lcl": null,
-   "ucl": null,
-   "flag": "held",
-   "created_at": "2026-10-29T21:40:38"
+   "n": 45,
+   "demos": 22,
+   "demo_rate": 0.4888888888888889,
+   "predicted_rate": 0.36031333333333343,
+   "lcl": 0.14560998675692088,
+   "ucl": 0.575016679909746,
+   "flag": "ok",
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 154,
+   "id": 197,
    "period": "2027-01",
    "channel": "events",
-   "n": 52,
+   "n": 58,
    "demos": 29,
-   "demo_rate": 0.5576923076923077,
-   "predicted_rate": 0.42338461538461536,
-   "lcl": 0.21782858027860713,
-   "ucl": 0.6289406504906236,
+   "demo_rate": 0.5,
+   "predicted_rate": 0.413696551724138,
+   "lcl": 0.21969311088452825,
+   "ucl": 0.6076999925637477,
    "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 155,
+   "id": 198,
    "period": "2027-01",
    "channel": "paid_ads",
-   "n": 39,
-   "demos": 22,
-   "demo_rate": 0.5641025641025641,
-   "predicted_rate": 0.3436897435897436,
-   "lcl": 0.11553640257290776,
-   "ucl": 0.5718430846065794,
+   "n": 86,
+   "demos": 40,
+   "demo_rate": 0.46511627906976744,
+   "predicted_rate": 0.34471627906976743,
+   "lcl": 0.19096539727511117,
+   "ucl": 0.49846716086442366,
    "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 156,
+   "id": 199,
    "period": "2027-01",
    "channel": "referral",
-   "n": 41,
-   "demos": 28,
-   "demo_rate": 0.6829268292682927,
-   "predicted_rate": 0.5160024390243901,
-   "lcl": 0.28186180495039687,
-   "ucl": 0.7501430730983834,
-   "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
+   "n": 42,
+   "demos": 34,
+   "demo_rate": 0.8095238095238095,
+   "predicted_rate": 0.4807214285714286,
+   "lcl": 0.24943851430360864,
+   "ucl": 0.7120043428392485,
+   "flag": "above",
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 157,
+   "id": 200,
    "period": "2027-01",
    "channel": "webinar",
-   "n": 49,
-   "demos": 33,
-   "demo_rate": 0.673469387755102,
-   "predicted_rate": 0.5061428571428572,
-   "lcl": 0.29187331547909673,
-   "ucl": 0.7204123988066178,
-   "flag": "ok",
-   "created_at": "2026-10-29T21:40:38"
+   "n": 61,
+   "demos": 44,
+   "demo_rate": 0.7213114754098361,
+   "predicted_rate": 0.47546065573770496,
+   "lcl": 0.2836367788136536,
+   "ucl": 0.6672845326617562,
+   "flag": "above",
+   "created_at": "2026-10-31T21:07:27"
   },
   {
-   "id": 158,
+   "id": 201,
    "period": "2027-01",
    "channel": "website",
-   "n": 234,
-   "demos": 142,
-   "demo_rate": 0.6068376068376068,
-   "predicted_rate": 0.3998294871794872,
-   "lcl": 0.3037594269347175,
-   "ucl": 0.49589954742425685,
+   "n": 364,
+   "demos": 227,
+   "demo_rate": 0.6236263736263736,
+   "predicted_rate": 0.38940219780219765,
+   "lcl": 0.31272832845971443,
+   "ucl": 0.46607606714468086,
    "flag": "above",
-   "created_at": "2026-10-29T21:40:38"
+   "created_at": "2026-10-31T21:07:27"
   }
  ]
 }

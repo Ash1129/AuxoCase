@@ -21,7 +21,7 @@ from ...capacity import FOLLOWUPS, breakdown, touches_per_month
 from ...routing import skips as skip_counts
 from ...routing.engine import DEFAULT_LINE_HORIZON_DAYS
 from ...scoring.model import DEMO_MATURITY_DAYS
-from ...storage.db import get_setting
+from ...storage.db import clock, get_setting
 
 REPORT = Path("docs/evaluation.json")
 QUEUE_LIMITS = Path("outputs/queue_limits.json")
@@ -108,7 +108,7 @@ def _new_leads(st, months: list[str]) -> Optional[dict]:
     counts = {r[0]: r[1] for r in st.conn.execute(
         "SELECT substr(createdate, 1, 7) m, COUNT(*) n FROM hs_contacts WHERE createdate >= ? AND createdate < ? GROUP BY m",
         (min(months), end))}
-    return counts if all(counts.get(m) for m in months) else None
+    return {m: counts.get(m) or LEADS_PER_MONTH for m in months} if any(counts.get(m) for m in months) else None
 
 
 def _counts_text(before: list[str], after: list[str], counts: dict) -> str:
@@ -132,18 +132,30 @@ def _side(ms: list[dict], counts: Optional[dict]) -> dict:
             "demos_a_month_raw": demos / len(ms), "demos_a_month": round(demos / len(ms)), "worked_a_month": round(worked / len(ms))}
 
 
-def _months(report: dict) -> dict:
-    """Whole months (the rule evaluation.write_report uses), split into before and after routing."""
+def _months(report: dict, now: Optional[datetime] = None) -> dict:
+    """Whole months (the rule evaluation.write_report uses), split into before and after routing. Routed months after
+    the service clock's month are the simulator run ahead with the AI steps on (the SDRs' time saved, the model's
+    picks): when there are any they are the After (`projected`), and the routed months up to the clock are `routed`,
+    the middle group: ranking and first-day touches with the SDRs' time as before."""
     rows = report.get("success_by_month") or []
     full = sorted(m["worked"] for m in rows)
     whole = [m for m in rows if full and m["worked"] >= WHOLE_MONTH * full[len(full) // 2]]
-    table = [{"month": month_label(m["month"]), "routed": m["routed_share"] >= 0.5, "worked": m["worked"], "demos": m["demos"],
-              "rate": _pct(m["demos"] / m["worked"]) if m["worked"] else None, "median_hours": _hours(m.get("median_hours")),
-              "within_24h": _pct(m.get("within_24h"))} for m in whole]
+    cut = now.strftime("%Y-%m") if now else None
+
+    def row(m: dict) -> dict:
+        return {"month": month_label(m["month"]), "worked": m["worked"], "demos": m["demos"],
+                "rate": _pct(m["demos"] / m["worked"]) if m["worked"] else None, "median_hours": _hours(m.get("median_hours")),
+                "within_24h": _pct(m.get("within_24h"))}
+    before = [m for m in whole if m["routed_share"] < 0.5]
+    ahead = [m for m in whole if m["routed_share"] >= 0.5 and cut and m["month"] > cut]
+    mid = [m for m in whole if m["routed_share"] >= 0.5 and m not in ahead] if ahead else []
+    after = ahead or [m for m in whole if m["routed_share"] >= 0.5]
     routed = sum(1 for m in rows if m["routed_share"] >= 0.5)
-    return {"before_rows": [r for r in table if not r["routed"]], "after_rows": [r for r in table if r["routed"]],
-            "before": [m for m in whole if m["routed_share"] < 0.5], "after": [m for m in whole if m["routed_share"] >= 0.5],
-            "left_out": [month_label(m["month"]) for m in rows if m not in whole], "routed_months": routed, "routed_word": word(routed),
+    return {"before_rows": [row(m) for m in before], "routed_rows": [row(m) for m in mid], "after_rows": [row(m) for m in after],
+            "before": before, "routed": mid, "after": after, "projected": bool(ahead),
+            "ahead": [month_label(m["month"]) for m in ahead], "routed_span": span(mid[0]["month"], mid[-1]["month"]) if mid else None,
+            "left_out": [month_label(m["month"]) for m in rows if m not in whole],
+            "routed_months": routed, "routed_word": word(routed),
             "span": span(whole[0]["month"], whole[-1]["month"]) if whole else None}
 
 
@@ -151,11 +163,12 @@ def _shared(st, report: dict, mo: dict) -> Optional[dict]:
     if not (mo["before"] and mo["after"]):
         return None
     before, after = [m["month"] for m in mo["before"]], [m["month"] for m in mo["after"]]
-    counts = _new_leads(st, before + after)
+    counts = _new_leads(st, before + [m["month"] for m in mo["routed"]] + after)
     b, a = _side(mo["before"], counts), _side(mo["after"], counts)
+    r = _side(mo["routed"], counts) if mo["routed"] else None
     sp = report.get("speed_to_lead") or {}
     base = sp.get("baseline") or {}
-    return {"before": b, "after": a, "change": round(100 * (a["per_1000_raw"] / b["per_1000_raw"] - 1)) if b["per_1000_raw"] else None,
+    return {"before": b, "after": a, "routed": r, "change": round(100 * (a["per_1000_raw"] / b["per_1000_raw"] - 1)) if b["per_1000_raw"] else None,
             "leads_recorded": bool(counts), "leads_text": _counts_text(before, after, counts) if counts else None,
             "more_a_month": a["demos_a_month"] - b["demos_a_month"],
             "same_capacity": abs(a["worked_a_month"] / b["worked_a_month"] - 1) < 0.1 if b["worked_a_month"] else False,
@@ -349,10 +362,13 @@ def leadership_page(st) -> dict:
     generator_factor (the generator's built-in late-touch factor), fresh_as_often ('twice as often') and
     late_as_often ('half as often').
     From the report, each None without it or without the part it needs:
-      months: whole months, {before_rows, after_rows: [{month, worked, demos, rate %, median_hours, within_24h %}],
-        left_out (partial months by label), routed_months, routed_word, span ('Jul 2027 to Oct 2028')};
-      shared: {before, after: {months, months_word, first, last, demos, leads, per_1000, demos_a_month,
-        worked_a_month}, change %, leads_recorded (leads are the demo database's new leads by month of arrival,
+      months: whole months, {before_rows, routed_rows, after_rows: [{month, worked, demos, rate %, median_hours,
+        within_24h %}], before, routed, after (the report's rows), projected (the After is the months simulated ahead
+        of the service clock, the AI steps on; the routed months up to the clock are then the middle group), ahead
+        (those months by label), routed_span, left_out (partial months by label), routed_months, routed_word,
+        span ('Jul 2027 to Oct 2028')}; clock_day ('31 Oct 2028');
+      shared: {before, after, routed (the middle group, else None): {months, months_word, first, last, demos, leads,
+        per_1000, demos_a_month, worked_a_month}, change %, leads_recorded (leads are the demo database's new leads by month of arrival,
         else the brief's figure a month), leads_text ('6,000 new leads in each history month, then 6,200, 6,000 and
         5,800 in Aug, Sep and Oct 2028', None unless recorded), more_a_month, same_capacity, all_beat,
         hours_before/after, touched_before/after, within_before/after %, late_share % (routed first touches after the
@@ -385,8 +401,9 @@ def leadership_page(st) -> dict:
            "late_as_often": late_as_often, "months": None, "shared": None, "ranking": None, "explore": None, "precision": None,
            "gate": None, "speed_effect": None, "setups": None, "tier2": None, "costs": None}
     if report:
-        mo = _months(report)
-        out.update(months=mo if mo["before_rows"] or mo["after_rows"] else None, shared=_shared(st, report, mo), ranking=_ranking(report),
+        now = clock(st.conn)
+        mo = _months(report, now)
+        out.update(clock_day=f"{now.day} {now:%b %Y}", months=mo if mo["before_rows"] or mo["after_rows"] else None, shared=_shared(st, report, mo), ranking=_ranking(report),
                    explore=_explore(report, mo["routed_months"]), precision=_precision(report), gate=report.get("below_gate"),
                    speed_effect=_speed_effect(report), tier2=_tier2(report), costs=_costs(report))
     if ql:
