@@ -99,12 +99,12 @@
     <details class="means" open>
       <summary><h2 class="kicker" style="display: inline">What {{ ld.pct(c.auxo_probability) }} means</h2></summary>
       <dl>
-        <div><dt>Calibration</dt><dd>{% if b %}{% if b.months %}Test months {{ b.months }}: {% endif %}{{ '{:,}'.format(b.n) }} worked leads scored {{ b.lo }} to {{ b.hi }}%{% if b.predicted is not none %}; {{ ld.pct(b.predicted) }} predicted{% endif %}, {{ ld.pct(b.observed) }} booked{% if b.too_few %}, too few to say{% endif %}.{{ ld.dag() }}{% else %}No calibration band: the live model has none for this score.{% endif %}</dd></div>
+        <div><dt>Calibration</dt><dd>{% if b %}{% if b.months %}Test months {{ b.months }}: {% endif %}{{ '{:,}'.format(b.n) }} worked leads scored {{ b.lo }} to {{ b.hi }}%{% if b.predicted is not none %}; {{ ld.pct(b.predicted) }} predicted{% endif %}, {{ ld.pct(b.observed) }} booked{% if b.too_few %}, too few to say{% endif %}.{{ ld.ref('sim', d) }}{% else %}No calibration band: the live model has none for this score.{% endif %}</dd></div>
         {% if pace.median_hours is defined and pace.baseline.median_hours is defined -%}
-        <div><dt>Timing</dt><dd>The model learned from the history, where the first touch came a median {{ pace.baseline.median_hours|round|int }} hours after arrival. Leads AuxoCase routed were touched sooner (median {{ pace.median_hours|round|int }} hours), one reason they can book above their score.{{ ld.dag() }}</dd></div>
+        <div><dt>Timing</dt><dd>The model learned from the history, where the first touch came a median {{ pace.baseline.median_hours|round|int }} hours after arrival. Leads AuxoCase routed were touched sooner (median {{ pace.median_hours|round|int }} hours), one reason they can book above their score.{{ ld.ref('sim', d) }}</dd></div>
         {%- endif %}
         {% if watch -%}
-        <div><dt>{{ c.channel|replace('_', ' ')|capitalize }} channel</dt><dd>{{ watch.month }}: {{ watch.demos }} of {{ watch.n }} booked{% if watch.demo_rate is not none %} ({{ ld.pct(watch.demo_rate) }}){% endif %}{% if watch.predicted_rate is not none %} against {{ ld.pct(watch.predicted_rate) }} predicted{% endif %}; {% if watch.flag == 'held' %}too few leads that month to judge{% elif watch.flag == 'ok' %}within limits ({{ ld.pct(watch.lcl) }} to {{ ld.pct(watch.ucl) }}){% else %}{{ watch.flag }} its limits ({{ ld.pct(watch.lcl) }} to {{ ld.pct(watch.ucl) }}){% endif %}.{{ ld.dag() }}</dd></div>
+        <div><dt>{{ c.channel|replace('_', ' ')|capitalize }} channel</dt><dd>{{ watch.month }}: {{ watch.demos }} of {{ watch.n }} booked{% if watch.demo_rate is not none %} ({{ ld.pct(watch.demo_rate) }}){% endif %}{% if watch.predicted_rate is not none %} against {{ ld.pct(watch.predicted_rate) }} predicted{% endif %}; {% if watch.flag == 'held' %}too few leads that month to judge{% elif watch.flag == 'ok' %}within limits ({{ ld.pct(watch.lcl) }} to {{ ld.pct(watch.ucl) }}){% else %}{{ watch.flag }} its limits ({{ ld.pct(watch.lcl) }} to {{ ld.pct(watch.ucl) }}){% endif %}.{{ ld.ref('sim', d) }}</dd></div>
         {%- endif %}
         {% if line is not none -%}
         <div><dt>Capacity line</dt><dd>{{ ld.pct(line) }} at the last routing pass: the chance at the rank the team can reach in the next week at its monthly capacity.{% if assigned and assigned.reason == 'above the capacity line' %} {{ who|capitalize }} was assigned above it.{% elif assigned and assigned.decision == 'holdout_assigned' %} {{ who|capitalize }} was drawn for the exploration slice, which does not look at the line.{% endif %}</dd></div>
@@ -132,7 +132,7 @@
     </section>
 
     <section class="part" aria-labelledby="hist-h">
-      <h2 class="kicker" id="hist-h">History</h2>
+      <h2 class="kicker" id="hist-h">History{{ ld.ref('clocks', d) }}</h2>
       <ol class="list events">
         {% for t in timeline %}<li><span class="small muted num">{{ t.when }}{% if env == 'mock' %} · {{ t.clock }} clock{% endif %}</span><span>{{ t.what }}</span></li>
         {% endfor %}
@@ -143,5 +143,5 @@
   </aside>
 </div>
 
-{{ ld.footnote(d, true) }}
+{{ ld.footnote(d) }}
 {% endblock %}

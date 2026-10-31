@@ -7,7 +7,17 @@
 .head p{margin:0}
 .marks{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
 .score{display:flex;flex-wrap:wrap;gap:24px 48px}
-.score>div{display:flex;flex-direction:column;gap:4px;max-width:320px}
+.score>div{position:relative;display:flex;flex-direction:column;gap:4px;max-width:320px}
+/* the calibration note sits behind an "i": hover or focus it and the sentence opens in a box, so the page stays light */
+.info-wrap{display:inline}
+.info{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;margin-left:6px;vertical-align:2px;border-radius:50%;border:1px solid var(--muted);background:transparent;color:var(--muted);font:600 11px/1 var(--body);font-style:italic;padding:0;cursor:help}
+.info:hover,.info:focus-visible,.info-wrap:hover .info{border-color:var(--ink);color:var(--ink)}
+.info-box{position:absolute;left:0;right:0;top:calc(100% + 8px);z-index:5;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);box-shadow:0 6px 20px rgba(0,0,0,.14);font-size:14px;line-height:20px;text-align:left;font-style:normal;visibility:hidden;opacity:0;transition:opacity .12s}
+.info-wrap:hover .info-box,.info-wrap:focus-within .info-box{visibility:visible;opacity:1}
+/* footnotes are numbered: a small superscript number in the text, the notes as a numbered list at the foot */
+.fn{font-size:11px;line-height:0;vertical-align:super;margin-left:1px}
+.fn a{color:var(--muted);text-decoration:none}.fn a:hover{color:var(--ink)}
+.fnotes{margin:0;padding-left:1.6em}.fnotes li{padding-left:4px}.fnotes li+li{margin-top:6px}.fnotes li::marker{color:var(--muted)}.fnotes li:target{color:var(--ink)}
 .part{display:flex;flex-direction:column;gap:12px}
 .part p{margin:0}
 .part h3{font-size:15px;line-height:22px;font-weight:600}
@@ -32,7 +42,20 @@
 @media (max-width:640px){.score{flex-direction:column;gap:20px}.score>div{max-width:none}.score>div+div{border-top:1px solid var(--line);padding-top:20px}.draft-body{font-size:16px;line-height:26px}}
 {%- endmacro %}
 
-{% macro dag() %}{% if env == 'mock' %}<span class="dagger">†</span>{% endif %}{% endmacro %}
+{#- Footnotes, numbered in the order the foot lists them: 1 simulated data (mock), 2 the first-day effect (mock, once
+    measured), 3 the team's hit rate (the queue page: `hit` in its context), 4 the mock clocks (the lead page: `timeline`
+    in its context). fn_index gives a note's number, 0 when the page has no such note; ref prints the reference. -#}
+{% macro fn_index(key, d) -%}
+{%- set ns = namespace(n=0, out=0) -%}
+{%- for k, on in [('sim', env == 'mock'), ('speed', env == 'mock' and d is not none and d.late_factor and d.speed.factor is defined),
+                  ('hit', hit is defined and hit), ('clocks', env == 'mock' and timeline is defined)] -%}
+{%- if on -%}{%- set ns.n = ns.n + 1 -%}{%- if k == key -%}{%- set ns.out = ns.n -%}{%- endif -%}{%- endif -%}
+{%- endfor -%}
+{{ ns.out }}
+{%- endmacro %}
+{% macro ref(key, d) -%}
+{%- set n = fn_index(key, d)|trim -%}{%- if n != '0' %}<sup class="fn"><a href="#fn-{{ key }}" aria-label="footnote {{ n }}">{{ n }}</a></sup>{% endif -%}
+{%- endmacro %}
 
 {% macro pct(p) %}{{ (100 * (p or 0))|round|int }}%{% endmacro %}
 
@@ -67,7 +90,12 @@
 </p>{% endif %}
 {%- endmacro %}
 
-{% macro speed_line(d) %}{% if d.speed.rate_fast is defined %}Leads touched in their first day booked {{ pct(d.speed.rate_fast) }}, against {{ pct(d.speed.rate_slow) }} when touched later.{{ dag() }}{% endif %}{% endmacro %}
+{#- An "i" after a label: hover or focus it and `caller()`'s text opens in a box under the column. -#}
+{% macro note(id, label) -%}
+<span class="info-wrap"><button type="button" class="info" aria-label="{{ label }}" aria-describedby="{{ id }}">i</button><span class="info-box" role="tooltip" id="{{ id }}">{{ caller() }}</span></span>
+{%- endmacro %}
+
+{% macro speed_line(d) %}{% if d.speed.rate_fast is defined %}Leads touched in their first day booked {{ pct(d.speed.rate_fast) }}, against {{ pct(d.speed.rate_slow) }} when touched later.{{ ref('speed', d) }}{% endif %}{% endmacro %}
 
 {#- The score, the first-day clock and the rank, each with what it means and when it was taken. -#}
 {% macro score(d, where) -%}
@@ -76,8 +104,7 @@
   <div>
     {% if c.auxo_probability is not none -%}
     <span class="big num">{{ pct(c.auxo_probability) }}</span>
-    <span>chance {{ first(c) }} books a demo if {{ 'you work this lead' if where == 'queue' else 'worked' }}</span>
-    <span class="small muted">{% if not live %}No live model yet, so no calibration band to check this score against.{% elif not b %}No calibration band for this score: the live model has none to check it against.{% elif b.too_few %}Leads scored {{ b.lo }} to {{ b.hi }}%: too few to say how often they book ({{ b.n }} worked leads, {{ live.version }}).{{ dag() }}{% else %}Of 100 leads scored {{ b.lo }} to {{ b.hi }}%, about {{ (100 * b.observed)|round|int }} booked when an SDR worked them ({{ '{:,}'.format(b.n) }} worked leads{% if live %}, {{ live.version }}{% endif %}).{{ dag() }}{% endif %}</span>
+    <span>chance {{ first(c) }} books a demo if {{ 'you work this lead' if where == 'queue' else 'worked' }}{% call note('band-note-' ~ c.id, 'How this score has held up') %}{% if not live %}No live model yet, so no calibration band to check this score against.{% elif not b %}No calibration band for this score: the live model has none to check it against.{% elif b.too_few %}Leads scored {{ b.lo }} to {{ b.hi }}%: too few to say how often they book ({{ b.n }} worked leads, {{ live.version }}).{{ ref('sim', d) }}{% else %}Of 100 leads scored {{ b.lo }} to {{ b.hi }}%, about {{ (100 * b.observed)|round|int }} booked when an SDR worked them ({{ '{:,}'.format(b.n) }} worked leads{% if live %}, {{ live.version }}{% endif %}).{{ ref('sim', d) }}{% endif %}{% endcall %}</span>
     {%- else -%}
     <span class="big muted">[NOT SCORED]</span>
     <span>no demo likelihood yet</span>
@@ -86,23 +113,20 @@
   <div>
     {% if d.touched_in -%}
     <span class="mid {{ 'good' if d.touched_in.inside else 'warn' }}">Touched in {{ d.touched_in.span }}</span>
-    <span>{{ (d.first_touch.type or 'activity')|lower }} seen in HubSpot {{ d.touched_in.at }}</span>
-    <span class="small muted">{{ 'Inside' if d.touched_in.inside else 'After' }} the first day. {{ speed_line(d) }}</span>
+    <span>{{ (d.first_touch.type or 'activity')|lower }} seen in HubSpot {{ d.touched_in.at }}{% call note('clock-note-' ~ c.id, 'What the first day is worth') %}{{ 'Inside' if d.touched_in.inside else 'After' }} the first day. {{ speed_line(d) }}{% endcall %}</span>
     {%- elif d.decision -%}
     {%- set who = d.owners[d.decision.owner_id].name if d.decision.owner_id in d.owners else 'The SDR' -%}
     <span class="mid">{{ {'worked': 'Worked', 'junk': 'Junk', 'skipped': 'Skipped'}[d.decision.action] }}</span>
-    <span>{{ who }} decided {{ d.decision.when }}{% if d.decision.note %}: {{ d.decision.note }}{% endif %}</span>
-    <span class="small muted">No first touch was seen in HubSpot before the call.</span>
+    <span>{{ who }} decided {{ d.decision.when }}{% if d.decision.note %}: {{ d.decision.note }}{% endif %}{% call note('clock-note-' ~ c.id, 'About the first touch') %}No first touch was seen in HubSpot before the call.{% endcall %}</span>
     {%- else -%}
-    {%- set k = d.clock -%}
+    {%- set k = d.clock -%}{%- set sl = speed_line(d)|trim -%}
     {% if k.state == 'late' -%}
     <span class="mid bad">First day over</span>
-    <span>{{ k.age }} since {{ first(c) }} arrived; the day ran out {{ k.touch_by }}</span>
+    <span>{{ k.age }} since {{ first(c) }} arrived; the day ran out {{ k.touch_by }}{% if sl %}{% call note('clock-note-' ~ c.id, 'What the first day is worth') %}{{ sl }}{% endcall %}{% endif %}</span>
     {%- else -%}
     <span class="mid {{ 'warn' if k.state == 'warn' else '' }}">Touch by {{ k.touch_by }}</span>
-    <span>{{ k.age }} since {{ first(c) }} arrived</span>
+    <span>{{ k.age }} since {{ first(c) }} arrived{% if sl %}{% call note('clock-note-' ~ c.id, 'What the first day is worth') %}{{ sl }}{% endcall %}{% endif %}</span>
     {%- endif %}
-    <span class="small muted">{{ speed_line(d) }}</span>
     {%- endif %}
   </div>
   <div>
@@ -110,11 +134,9 @@
     {% if rank -%}
     <span class="mid num">#{{ rank }}</span>
     {% if s and s.rank == rank and s.pool_size -%}
-    <span>of {{ '{:,}'.format(s.pool_size) }} in the pool, at last scoring</span>
-    <span class="small muted">{{ s.when }} · {{ s.model_version }}</span>
+    <span>of {{ '{:,}'.format(s.pool_size) }} in the pool, at last scoring{% call note('rank-note-' ~ c.id, 'When it was scored') %}Scored {{ s.when }} by {{ s.model_version }}.{% endcall %}</span>
     {%- else -%}
-    <span>in the pool at the last ranking pass</span>
-    {% if s and s.rank %}<span class="small muted">#{{ s.rank }}{% if s.pool_size %} of {{ '{:,}'.format(s.pool_size) }}{% endif %} when scored, {{ s.when }} · {{ s.model_version }}</span>{% endif %}
+    <span>in the pool at the last ranking pass{% if s and s.rank %}{% call note('rank-note-' ~ c.id, 'When it was scored') %}#{{ s.rank }}{% if s.pool_size %} of {{ '{:,}'.format(s.pool_size) }}{% endif %} when scored, {{ s.when }} · {{ s.model_version }}.{% endcall %}{% endif %}</span>
     {%- endif %}
     {%- else -%}
     <span class="mid muted">[NOT RANKED]</span>
@@ -221,12 +243,21 @@
 </section>
 {%- endmacro %}
 
-{#- The mock's footnote: what the daggers mean, and on the lead page which clock stamped what. -#}
-{% macro footnote(d, clocks=false) -%}
-{% if env == 'mock' -%}
+{#- The team's hit rate, from the queue page's context. -#}
+{% macro hit_text() -%}
+Across the team, of the leads handed out in the last {{ hit.days }} days and worked since, the ranked ones booked {% if hit.ranked.n %}{{ pct(hit.ranked.rate) }} ({{ hit.ranked.booked }} of {{ hit.ranked.n }}){% else %}nothing yet (none worked){% endif %}; the exploration slice, drawn at random, {% if hit.exploration.n %}booked {{ pct(hit.exploration.rate) }} ({{ hit.exploration.booked }} of {{ hit.exploration.n }}){% else %}has no worked leads yet{% endif %}.
+{%- endmacro %}
+
+{#- The footnotes, as a numbered list in fn_index's order, so the numbers in the text land on the right note. -#}
+{% macro footnote(d) -%}
+{% if env == 'mock' or (hit is defined and hit) -%}
 <footer class="footnote">
-  <p style="margin: 0"><span class="dagger">†</span> Simulated · synthetic data. Booked counts come from the mock portal's generator, not from real leads; on a real portal they come from HubSpot's meetings and deals.{% if d and d.late_factor and d.speed.factor is defined %} On the mock the first-day effect is the generator's built-in factor of {{ d.late_factor }} (outcomes show {{ d.speed.factor }}: {{ pct(d.speed.rate_fast) }} of {{ '{:,}'.format(d.speed.n_fast) }} leads touched within a day booked, against {{ pct(d.speed.rate_slow) }} of {{ '{:,}'.format(d.speed.n_slow) }} touched later); on a real portal it is measured.{% endif %}</p>
-  {% if clocks %}<p style="margin: 6px 0 0">Mock portal clocks: HubSpot activity and routing run on the demo clock, frozen at {{ clock_text }}. AuxoCase's own logs (scoring, drafting, enrolment, SDR decisions) keep wall time, so their dates differ. History is in the order things happened.</p>{% endif %}
+  <ol class="fnotes">
+    {% if env == 'mock' %}<li id="fn-sim">Simulated · synthetic data. Booked counts come from the mock portal's generator, not from real leads; on a real portal they come from HubSpot's meetings and deals.</li>{% endif %}
+    {% if env == 'mock' and d is not none and d.late_factor and d.speed.factor is defined %}<li id="fn-speed">On the mock the first-day effect is the generator's built-in factor of {{ d.late_factor }} (outcomes show {{ d.speed.factor }}: {{ pct(d.speed.rate_fast) }} of {{ '{:,}'.format(d.speed.n_fast) }} leads touched within a day booked, against {{ pct(d.speed.rate_slow) }} of {{ '{:,}'.format(d.speed.n_slow) }} touched later); on a real portal it is measured.</li>{% endif %}
+    {% if hit is defined and hit %}<li id="fn-hit">{{ hit_text() }}</li>{% endif %}
+    {% if env == 'mock' and timeline is defined %}<li id="fn-clocks">Mock portal clocks: HubSpot activity and routing run on the demo clock, frozen at {{ clock_text }}. AuxoCase's own logs (scoring, drafting, enrolment, SDR decisions) keep wall time, so their dates differ. History is in the order things happened.</li>{% endif %}
+  </ol>
 </footer>
 {%- endif %}
 {%- endmacro %}

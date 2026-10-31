@@ -20,7 +20,7 @@
 {% if stale %}<p class="notice warn" role="status"><b>Not saved.</b> That lead changed after this page loaded: someone else acted on it, or it moved on in HubSpot, so your click was not saved. This is the queue as it stands now.</p>{% endif %}
 
 <header class="head">
-  <p class="kicker">{{ owner.name }}'s queue · {{ waiting_count }} of {{ limit }} slot{{ '' if limit == 1 else 's' }} waiting</p>
+  <p class="kicker">{{ owner.name }}'s queue · {{ waiting_count }} of {{ limit }} slot{{ '' if limit == 1 else 's' }} waiting{{ ld.ref('hit', open) }}</p>
   {% if open -%}
   <h1 class="title">{{ ld.name(open.c, open.co) }}</h1>
   <p class="muted">{{ ld.facts_line(open.c, open.co) }}</p>
@@ -31,17 +31,11 @@
   {%- endif %}
 </header>
 
-{% macro hit_line() -%}
-{% if hit -%}
-<p class="small muted" style="margin: 0; max-width: 760px">Across the team, of the leads handed out in the last {{ hit.days }} days and worked since, the ranked ones booked {% if hit.ranked.n %}{{ ld.pct(hit.ranked.rate) }} ({{ hit.ranked.booked }} of {{ hit.ranked.n }}){% else %}nothing yet (none worked){% endif %}; the exploration slice, drawn at random, {% if hit.exploration.n %}booked {{ ld.pct(hit.exploration.rate) }} ({{ hit.exploration.booked }} of {{ hit.exploration.n }}){% else %}has no worked leads yet{% endif %}.{{ ld.dag() }}</p>
-{%- endif %}
-{%- endmacro %}
 
 {% if open -%}
 {%- set c = open.c -%}
 <hr class="rule">
 {{ ld.score(open, 'queue') }}
-{{ hit_line() }}
 
 <div class="decide" role="group" aria-label="Your call on {{ ld.first(c) }}">
   <form method="post" action="/lead/{{ c.id }}/action">
@@ -79,8 +73,6 @@
 <hr class="rule">
 {{ ld.reach(open, '/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&draft=1', 'queue') }}
 <p class="small" style="margin: 0"><a class="tap" href="/lead/{{ c.id }}">Everything on {{ ld.first(c) }}: activity, notes and history</a></p>
-{%- else -%}
-{{ hit_line() }}
 {%- endif %}
 
 {% if others_waiting -%}
