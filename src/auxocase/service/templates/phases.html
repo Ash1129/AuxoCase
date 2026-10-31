@@ -20,6 +20,8 @@ h3.kicker{color:var(--muted)}
 form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
 .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px 24px}
 .fields input,.fields select{width:100%}
+.ph-sec .notice{margin:4px 0 8px;padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:4px;background:var(--surface)}
+.ph-sec .notice.warn{border-left-color:var(--warn)}
 .force{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-size:14px;color:var(--muted)}
 .log{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
 .log li{padding:10px 0;border-top:1px solid var(--line)}
@@ -36,9 +38,9 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {% macro when(ts) %}{% if ts and ts|length >= 16 and (ts[5:7]|int) in range(1, 13) %}<time class="num" datetime="{{ ts[:16] }}">{{ ts[8:10]|int }} {{ ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(ts[5:7]|int) - 1] }} {{ ts[:4] }} {{ ts[11:16] }}</time>{% elif ts %}{{ ts }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}{% endmacro %}
 {% macro notices(phase, next) %}
 {% if notice.phase == phase %}
-{% if notice.refused %}<p class="notice warn"><b>Not set.</b> {{ notice.refused|capitalize }}</p>
-{% elif notice.set == '0' %}<p class="notice"><b>Nothing changed.</b> Both switches were left as they are. Pick a share, or on or off, and set them again.</p>
-{% elif notice.set %}<p class="notice"><b>Set.</b> {{ next }}{% if mock %} On the demo's frozen clock nothing matures, so the labels here move only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
+{% if notice.refused %}<p class="notice warn" role="status"><b>Not set.</b> {{ notice.refused[:1]|upper }}{{ notice.refused[1:] }} Your choices are still in the form below.</p>
+{% elif notice.set == '0' %}<p class="notice" role="status"><b>Nothing changed.</b> Both switches were left as they are. Pick a share, or on or off, and set them again.</p>
+{% elif notice.set %}<p class="notice" role="status"><b>Set.</b> {{ next }}{% if mock %} On the demo's frozen clock nothing matures, so the labels here move only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
 {% endif %}
 {% endmacro %}
 {% macro log(rows) %}
@@ -47,35 +49,36 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 </ul>{% else %}<p class="empty">No switch has been thrown from this page yet.</p>{% endif %}
 {% endmacro %}
 {% macro switches(phase, p, second, second_help) %}
+{% set k = notice.keep if notice.phase == phase and notice.refused else {} %}
 <form class="switches" method="post" action="/phases/{{ phase }}">
   <div class="fields">
     <div class="field">
       <label for="{{ phase }}-explore">{% if phase == 'gate' %}Share of the exploration slice sent below the gate{% else %}Share of the leads below the line put in the sequence{% endif %}</label>
       <select id="{{ phase }}-explore" name="explore">
         <option value="">Leave as is ({{ p.share }}%)</option>
-        {% for s in p.shares %}<option value="{{ s.value }}">{{ s.label|capitalize }}{% if s.current %} · now{% endif %}</option>{% endfor %}
+        {% for s in p.shares %}<option value="{{ s.value }}"{% if k.explore == s.value %} selected{% endif %}>{{ s.label|capitalize }}{% if s.current %} · now{% endif %}</option>{% endfor %}
       </select>
     </div>
     <div class="field">
       <label for="{{ phase }}-switch">{{ second }}</label>
       <select id="{{ phase }}-switch" name="switch">
         <option value="">Leave as is ({{ 'on' if p.on else 'off' }})</option>
-        <option value="on">On</option>
-        <option value="off">Off</option>
+        <option value="on"{% if k.switch == 'on' %} selected{% endif %}>On</option>
+        <option value="off"{% if k.switch == 'off' %} selected{% endif %}>Off</option>
       </select>
     </div>
     <div class="field">
       <label for="{{ phase }}-who">Your name</label>
-      <input id="{{ phase }}-who" name="who" type="text" required autocomplete="name">
+      <input id="{{ phase }}-who" name="who" type="text" required autocomplete="name" value="{{ k.who or '' }}">
     </div>
     <div class="field">
       <label for="{{ phase }}-note">Note, optional</label>
-      <input id="{{ phase }}-note" name="note" type="text">
+      <input id="{{ phase }}-note" name="note" type="text" value="{{ k.note or '' }}">
     </div>
   </div>
   <div class="actions">
     <button class="btn primary" type="submit">Set the switches</button>
-    {% if not p.ready %}<label class="force"><input type="checkbox" name="force" value="1"> {{ second_help }}</label>{% endif %}
+    {% if not p.ready %}<label class="force"><input type="checkbox" name="force" value="1"{% if k.force %} checked{% endif %}> {{ second_help }}</label>{% endif %}
   </div>
 </form>
 {% endmacro %}

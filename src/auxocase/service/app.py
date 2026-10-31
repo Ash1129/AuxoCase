@@ -208,10 +208,13 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "leadership.html", ctx(request, nav="leadership", **leadership_page(st)))
 
     @app.get("/phases", response_class=HTMLResponse)
-    def phases(request: Request, phase: str = "", refused: str = "", set: str = ""):
+    def phases(request: Request, phase: str = "", refused: str = "", set: str = "", explore: str = "", switch: str = "",
+               force: str = "", who: str = "", note: str = ""):
         """Phase 2 and phase 3: their switches, readiness and results in one place. After a post, `phase` names the
-        section the notice belongs in: `refused` a switch's refusal, `set` how many switches changed (0: none)."""
-        notice = {"phase": phase if phase in ("gate", "line") else "", "refused": refused[:300], "set": set[:3]}
+        section the notice belongs in: `refused` a switch's refusal, `set` how many switches changed (0: none). After a
+        refusal the rest carry the choices back into that phase's form, so a refused submit is not a blank form."""
+        notice = {"phase": phase if phase in ("gate", "line") else "", "refused": refused[:300], "set": set[:3],
+                  "keep": {"explore": explore[:8], "switch": switch[:3], "force": force[:1], "who": who[:80], "note": note[:200]}}
         return TEMPLATES.TemplateResponse(request, "phases.html", ctx(request, nav="phases", **phases_page(st), notice=notice))
 
     @app.post("/phases/{phase}")
@@ -226,7 +229,9 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             on = {"on": True, "off": False}.get(switch.strip().lower()) if switch.strip() else None
             changed = throw_switches(st.conn, phase, share, on, bool(force), who.strip(), note.strip())
         except ValueError as e:
-            return RedirectResponse(f"/phases?phase={phase}&refused={quote(str(e))}#ph-{phase}", status_code=303)
+            keep = "".join(f"&{k}={quote(v.strip()[:200])}" for k, v in
+                           (("explore", explore), ("switch", switch), ("force", force), ("who", who), ("note", note)) if v.strip())
+            return RedirectResponse(f"/phases?phase={phase}&refused={quote(str(e))}{keep}#ph-{phase}", status_code=303)
         if phase == "gate" and any(c["switch"] == "on" and c["value"] == "on" for c in changed) and not (runner and runner.running):
             # Plain leads already waiting were never scored. With the scheduler on, its rescore job scores them within
             # a minute; without it, score them in the background here, as a model going live does.

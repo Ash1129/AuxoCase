@@ -87,6 +87,8 @@ def test_switches_thrown_from_the_page_are_set_recorded_and_refused_when_not_rea
     t = client.get(r.headers["location"]).text
     assert "Not set." in t and "0 of 100 worked leads from below the gate have matured labels" in t
     assert t.index("Not set.") > t.index('id="ph-gate"')                                  # in the phase's own section
+    assert '<option value="on" selected>On</option>' in t and 'value="Dana from sales"' in t   # the choices kept in the form
+    assert t.count(" selected") == 1 and 'name="force" value="1" checked' not in t
     # Forced on: recorded as such, and the waiting plain leads are marked for scoring.
     r = client.post("/phases/gate", data={"who": "Dana from sales", "switch": "on", "force": "1"}, follow_redirects=False)
     assert r.status_code == 303 and ranks_below_gate(conn)
