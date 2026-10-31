@@ -147,7 +147,7 @@ def log_demo_activity(hs, conn: sqlite3.Connection, contact_id: str, kind: str, 
         disposition = {"call_no_answer": "no_answer", "call_connected": "connected"}.get(kind, disposition)
         if disposition not in CALL_DISPOSITIONS:
             raise ValueError(disposition)
-        hs.log_engagement(contact_id, "CALL", "OUTGOING", at, c.hubspot_owner_id, disposition=disposition)
+        hs.log_engagement(contact_id, "CALL", "OUTGOING", at, c.hubspot_owner_id, disposition=disposition, body=body)
     elif kind == "reply":
         hs.log_engagement(contact_id, "EMAIL", "INCOMING", at, None, subject=f"Re: {subject}" if subject else "", body=body)
     else:

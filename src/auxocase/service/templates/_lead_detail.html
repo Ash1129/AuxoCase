@@ -272,6 +272,20 @@
   {%- endif %}
   {%- endif %}
   {%- set b = d.get('call') %}
+  {% if d.get('writeup') -%}
+  {%- set w = d.writeup -%}
+  <div class="block" id="writeup-{{ c.id }}">
+    <h3 class="kicker">Call {{ w.when }} · written up</h3>
+    <p><b>{{ w.summary }}</b></p>
+    {% if w.facts %}<p class="small">Learned: {% for k, v in w.facts.items() %}{{ k.replace('_', ' ') }} {{ v }}{{ '; ' if not loop.last }}{% endfor %}.</p>{% endif %}
+    <p class="small muted">Next: {{ w.next_word }}{% if w.next_when %} on {{ w.next_when }}{% endif %}. Written to HubSpot: {{ w.acted }}. {{ 'Claude' if w.source == 'llm' else 'The template' }} wrote it up{% if w.rejected %}; Claude's was set aside: {{ w.rejected }}{% endif %}.{% if w.notes %} From: “{{ w.notes[:200] }}{{ '…' if w.notes|length > 200 }}”{% endif %}</p>
+    {% if w.body -%}
+    <p><span class="vh">Subject: </span><b>{{ w.subject }}</b></p>
+    <p class="draft-body">{{ w.body }}</p>
+    <div class="actions"><a class="btn primary" href="mailto:{{ c.email }}?subject={{ w.subject|urlencode }}&body={{ w.body|urlencode }}">Open the follow-up in your email app</a><span class="small muted">Drafted from the call. Edit it before you send.</span></div>
+    {%- endif %}
+  </div>
+  {%- endif %}
   {% if call_href -%}
   <div class="block" id="call-{{ c.id }}">
     {% if b -%}
@@ -311,7 +325,7 @@
     <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
       <input type="hidden" name="subject" value="{{ d.email.subject if d.email else '' }}">
       <button class="btn" type="submit" name="kind" value="email">Send {{ 'this ' ~ labels[d.email.touch] if d.email else 'an email' }}</button>
-      <span class="outcome"><label class="vh" for="outcome-{{ c.id }}">Call outcome</label><select id="outcome-{{ c.id }}" name="disposition">{% for k, v in d.dispositions.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="call">Log a call</button></span>
+      <span class="outcome"><label class="vh" for="outcome-{{ c.id }}">Call outcome</label><select id="outcome-{{ c.id }}" name="disposition">{% for k, v in d.dispositions.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><input type="text" name="notes" placeholder="Rough notes, as you'd type them in HubSpot" aria-label="Rough call notes" maxlength="2000"><button class="btn" type="submit" name="kind" value="call">Log a call</button></span>
       <span class="outcome"><label class="vh" for="reply-kind-{{ c.id }}">What the lead says</label><select id="reply-kind-{{ c.id }}" name="reply">{% for k, v in d.demo_replies %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="reply">The lead replies</button></span>
     </form>
     {%- endif %}

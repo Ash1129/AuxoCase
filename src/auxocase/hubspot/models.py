@@ -180,7 +180,7 @@ class Engagement:
     subject: str = ""
     connected: bool = False        # calls only: the SDR reached the lead
     disposition: str = ""          # calls only: HubSpot's call outcome, a CALL_DISPOSITIONS key when known
-    body: str = ""                 # emails: the text, which a reply is read from
+    body: str = ""                 # emails: the text, which a reply is read from; calls: the SDR's notes in HubSpot's log
     logged_at: datetime = field(default_factory=datetime.utcnow)
 
 

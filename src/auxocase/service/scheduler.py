@@ -8,7 +8,7 @@ decides when to run them:
 | score   | 5 min     | score leads that are new or changed, then refresh pool ranks      |
 | rescore | 1 min     | after a model goes live, rescore the pool on it, best leads first |
 | route   | 5 min     | fill free SDR slots, hold strong leads that waited, create tasks  |
-| touches | 1 min     | first email or call logged in HubSpot -> lead worked, slot refilled; new replies read and acted on (off by default) |
+| touches | 1 min     | first email or call logged in HubSpot -> lead worked, slot refilled; new replies read and acted on, call notes written up (both off by default) |
 | outreach| 1 min     | draft the first email for new assignments, enrol in the sequence  |
 | followups| 5 min    | send the follow-up and the last email for the SDR, on their day (off by default) |
 | remind  | 60 min    | reminder task for assigned leads untouched past the SLA           |
@@ -58,7 +58,7 @@ from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
 from ..llm.client import make_llm
 from ..routing.engine import Router
-from ..routing import followups, replies
+from ..routing import callnotes, followups, replies
 from ..routing.outreach import DEFAULT_LIMIT as DEFAULT_OUTREACH_BATCH, prepare_outreach
 from ..routing.touches import detect_first_touches
 from ..routing.tier2 import detect_replies, run_tier2
@@ -163,6 +163,9 @@ class Scheduler:
         read = replies.triage_new(self.hs, self.conn, self.llm, limit=self.outreach_batch)   # a no-op while the switch is off
         if read.get("triaged"):
             out["triaged"] = read
+        written = callnotes.write_up_new(self.hs, self.conn, self.llm, limit=self.outreach_batch)   # a no-op while the switch is off
+        if written.get("written"):
+            out["call_notes"] = written
         return out
 
     def _outreach(self) -> dict:

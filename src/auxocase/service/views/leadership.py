@@ -323,7 +323,9 @@ def _capacity(st, sdrs: int) -> dict:
     b["hours_text"] = f"{b['hours']:.1f}".rstrip("0").rstrip(".")
     later = 0.0 if b["auto"] else FOLLOWUPS * b["minutes_followup"]
     b["at"] = [{"minutes": m, "per_month": round(sdrs * b["hours"] * 60 / (m + later))} for m in (20, 15, 12, 10) if abs(m - b["minutes_touch"]) > 0.5]
-    b["switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_touch"] + (FOLLOWUPS * b["minutes_followup"] if b["auto"] else 0.0)))
+    b["switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_touch"] - b["call_log_saving"] + (FOLLOWUPS * b["minutes_followup"] if b["auto"] else 0.0)))
+    saving = b["call_share"] * max(0.0, b["minutes_call_log"] - b["minutes_call_log_auto"])
+    b["notes_switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_touch"] + (saving if b["call_notes_auto"] else -saving) - b["call_log_saving"] + later))
     return b
 
 

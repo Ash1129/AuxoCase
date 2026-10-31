@@ -12,6 +12,8 @@ from ...llm.emails import LAST_TOUCH, Draft, next_touch
 from ...llm import usage
 from ...capacity import followups_auto
 from ...llm.replies import DEMO_REPLIES, WORDS as REPLY_WORDS
+from ...llm.callnotes import NEXT_WORDS
+from ...routing.callnotes import latest as latest_call_note
 from ...routing.followups import rows_for as followup_rows
 from ...routing.replies import latest as latest_reply, without_auto_replies
 from ...routing.outreach import call_brief_for, draft_for, stored_draft
@@ -197,6 +199,11 @@ def lead_detail(st, contact_id: str, draft: bool = False, call: bool = False) ->
     activity = st.hs.engagements_for_contact(contact_id)
     touch, no_draft = next_touch(without_auto_replies(st.conn, activity)) if c.email else (None, "no email address")
     reply = latest_reply(st.conn, contact_id)
+    writeup = latest_call_note(st.conn, contact_id)
+    if writeup:
+        writeup["when"] = when(writeup["called_at"])
+        writeup["next_word"] = NEXT_WORDS.get(writeup["next_step"], writeup["next_step"])
+        writeup["notes"] = next((e.body for e in activity if e.id == writeup["engagement_id"]), "")
     if reply:
         reply["when"] = when(reply["replied_at"])
         reply["word"] = REPLY_WORDS.get(reply["kind"], reply["kind"])
@@ -255,7 +262,7 @@ def lead_detail(st, contact_id: str, draft: bool = False, call: bool = False) ->
             "emails": _email_steps(activity, touch, no_draft, email, by_step), "calls": _call_steps(activity, first_touch),
             "followups": {"auto": followups_auto(st.conn), "rows": fups, "due": [f for f in fups if f["status"] == "due"],
                           "next": next((f for f in fups if f["status"] == "due"), None)},
-            "reply": reply, "demo_replies": [(k, v[0]) for k, v in DEMO_REPLIES.items()],
+            "reply": reply, "demo_replies": [(k, v[0]) for k, v in DEMO_REPLIES.items()], "writeup": writeup,
             "speed": speed_effect(st.conn),
             "late_factor": LATE_TOUCH_FACTOR if mock else None, "pace": speed_to_lead(st.conn), "watch": watch,
             "enrichment": enrichment, "timeline": _timeline(c, score, routing, stored, first_touch, history, owners, fups),

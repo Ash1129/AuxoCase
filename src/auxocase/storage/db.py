@@ -148,6 +148,13 @@ CREATE TABLE IF NOT EXISTS replies (
   subject TEXT, body TEXT, source TEXT, rejected TEXT, acted TEXT, replied_at TEXT, created_at TEXT
 );
 CREATE INDEX IF NOT EXISTS replies_contact ON replies(contact_id);
+-- An SDR's rough call notes written up (routing/callnotes.py): the summary, outcome, facts learned (JSON), the next
+-- step with its day, the follow-up drafted from the call, and what was written to HubSpot.
+CREATE TABLE IF NOT EXISTS call_notes (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, contact_id TEXT, engagement_id TEXT UNIQUE, owner_id TEXT, summary TEXT, outcome TEXT, facts TEXT,
+  next_step TEXT, next_when TEXT, subject TEXT, body TEXT, source TEXT, rejected TEXT, acted TEXT, called_at TEXT, created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS call_notes_contact ON call_notes(contact_id);
 -- Phase 3: leads below the capacity line put in an automated sequence (arm 'emailed') or left to the ordinary
 -- process as the comparison (arm 'control'). One row per lead, written when the lead became eligible.
 CREATE TABLE IF NOT EXISTS tier2 (

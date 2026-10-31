@@ -51,7 +51,7 @@ from .views.overview import overview_page
 from .views.phases import phases_page, throw_switches
 from ..capacity import set_assumptions
 from ..llm.replies import DEMO_REPLIES
-from ..routing import followups, replies
+from ..routing import callnotes, followups, replies
 from .views.queue import queue_page
 from .views.stats import hit_rate
 
@@ -142,13 +142,15 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, nav="queues", **detail))
 
     @app.post("/lead/{contact_id}/hubspot")
-    def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form(""), reply: str = Form("")):
+    def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form(""), reply: str = Form(""),
+                     notes: str = Form("")):
         """Demo only: stand in for HubSpot, where the SDR sends the email or logs the call, then run the first-touch
         check at once (on a real portal the `touches` job polls HubSpot every minute)."""
         if not isinstance(st.hs, MockHubSpot):
             raise HTTPException(404)
         try:
-            log_demo_activity(st.hs, st.conn, contact_id, kind, subject, disposition, body=DEMO_REPLIES[reply][1] if reply in DEMO_REPLIES else "")
+            log_demo_activity(st.hs, st.conn, contact_id, kind, subject, disposition,
+                              body=DEMO_REPLIES[reply][1] if kind == "reply" and reply in DEMO_REPLIES else notes[:2000].strip())
         except KeyError:
             raise HTTPException(404)
         except ValueError:
@@ -156,6 +158,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         detect_first_touches(st.hs, st.conn)
         detect_replies(st.hs, st.conn)
         replies.triage_new(st.hs, st.conn, st.llm)
+        callnotes.write_up_new(st.hs, st.conn, st.llm)
         return RedirectResponse(f"/lead/{contact_id}", status_code=303)
 
     @app.post("/lead/{contact_id}/followups")
@@ -232,15 +235,18 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
 
     @app.post("/leadership/capacity")
     def capacity_set(minutes_touch: str = Form(""), minutes_followup: str = Form(""), minutes_reply: str = Form(""), hours: str = Form(""),
-                     followups: str = Form(""), minutes_reply_triaged: str = Form(""), replies: str = Form("")):
+                     followups: str = Form(""), minutes_reply_triaged: str = Form(""), replies: str = Form(""),
+                     minutes_call_log: str = Form(""), minutes_call_log_auto: str = Form(""), call_notes: str = Form("")):
         """The capacity inputs: minutes a cold touch, a follow-up and a reply, hours an SDR gives leads a month, and who
         sends the follow-ups ('auto' or 'sdr'). Blank leaves one as it is; a value out of range is refused and nothing
         is set."""
         try:
             given = {k: (float(v) if v.strip() else None) for k, v in (("minutes_touch", minutes_touch), ("minutes_followup", minutes_followup),
                                                                       ("minutes_reply", minutes_reply), ("minutes_reply_triaged", minutes_reply_triaged),
+                                                                      ("minutes_call_log", minutes_call_log), ("minutes_call_log_auto", minutes_call_log_auto),
                                                                       ("hours", hours))}
-            changed = set_assumptions(st.conn, auto={"auto": True, "sdr": False}.get(followups), replies={"auto": True, "sdr": False}.get(replies), **given)
+            flags = {"auto": True, "sdr": False}
+            changed = set_assumptions(st.conn, auto=flags.get(followups), replies=flags.get(replies), call_notes=flags.get(call_notes), **given)
         except ValueError as e:
             return RedirectResponse(f"/leadership?refused={quote(str(e))}#ld-capacity", status_code=303)
         return RedirectResponse(f"/leadership?set={len(changed)}#ld-capacity", status_code=303)
