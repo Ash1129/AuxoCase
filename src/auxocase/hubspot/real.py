@@ -120,6 +120,15 @@ TASK_PROPERTIES = ["hs_task_subject", "hs_task_body", "hs_task_status", "hubspot
 EMAIL_PROPERTIES = ["hs_timestamp", "hs_email_direction", "hs_email_subject", "hubspot_owner_id", "hs_createdate"]
 CALL_PROPERTIES = ["hs_timestamp", "hs_call_direction", "hs_call_disposition", "hubspot_owner_id", "hs_createdate"]
 CALL_CONNECTED_DISPOSITION = "f240bbac-87c9-4f6e-bf70-924b57d47db7"   # HubSpot's default "Connected" call outcome
+# HubSpot's default call outcomes by id (Calls API docs); a portal with its own outcomes maps them here.
+CALL_DISPOSITION_IDS = {
+    CALL_CONNECTED_DISPOSITION: "connected",
+    "73a0d17f-1163-4015-bdd5-ec830791da20": "no_answer",
+    "b2cf5968-551e-4856-9783-52b3da59a7d0": "left_voicemail",
+    "a4c4c377-d246-4b32-a13b-75a56a4cd0ff": "left_live_message",
+    "9d9162e7-6cf3-4944-bf63-4dff82258764": "busy",
+    "17b47fee-58de-441e-a44c-c6300d46f273": "wrong_number",
+}
 
 # Association type IDs (H06, H07).
 ASSOC_TASK_TO_CONTACT = 204
@@ -310,9 +319,10 @@ class RealHubSpot:
             direction = "INCOMING" if p.get("hs_call_direction") == "INBOUND" else "OUTGOING"
             kind, subject, connected = "CALL", "", p.get("hs_call_disposition") == CALL_CONNECTED_DISPOSITION
         logged = _parse_dt(p.get("hs_createdate")) or datetime.utcnow()
+        disposition = CALL_DISPOSITION_IDS.get(p.get("hs_call_disposition") or "", "") if kind == "CALL" else ""
         return Engagement(id=f"{object_type}-{obj['id']}", contact_id=contact_id, type=kind, direction=direction,
                           timestamp=_parse_dt(p.get("hs_timestamp")) or logged, owner_id=p.get("hubspot_owner_id") or None,
-                          subject=subject, connected=connected, logged_at=logged)
+                          subject=subject, connected=connected, disposition=disposition, logged_at=logged)
 
     @staticmethod
     def _task_from_json(obj: dict, contact_id: str) -> Task:

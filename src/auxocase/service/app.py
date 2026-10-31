@@ -120,27 +120,27 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "home.html", ctx(request, nav="overview", **overview_page(st)))
 
     @app.get("/queue/{owner_id}", response_class=HTMLResponse)
-    def queue(request: Request, owner_id: str, stale: str = "", lead: str = "", draft: int = 0):
-        page = queue_page(st, owner_id, lead or None, bool(draft))
+    def queue(request: Request, owner_id: str, stale: str = "", lead: str = "", draft: int = 0, call: int = 0):
+        page = queue_page(st, owner_id, lead or None, bool(draft), bool(call))
         if page is None:
             raise HTTPException(404)
         return TEMPLATES.TemplateResponse(request, "queue.html", ctx(request, nav="queues", **page, hit=_hit_rate(st.conn), stale=stale))
 
     @app.get("/lead/{contact_id}", response_class=HTMLResponse)
-    def lead(request: Request, contact_id: str, draft: int = 0):
-        detail = lead_detail(st, contact_id, bool(draft))
+    def lead(request: Request, contact_id: str, draft: int = 0, call: int = 0):
+        detail = lead_detail(st, contact_id, bool(draft), bool(call))
         if detail is None:
             raise HTTPException(404)
         return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, nav="queues", **detail))
 
     @app.post("/lead/{contact_id}/hubspot")
-    def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form("")):
+    def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form("")):
         """Demo only: stand in for HubSpot, where the SDR sends the email or logs the call, then run the first-touch
         check at once (on a real portal the `touches` job polls HubSpot every minute)."""
         if not isinstance(st.hs, MockHubSpot):
             raise HTTPException(404)
         try:
-            log_demo_activity(st.hs, st.conn, contact_id, kind, subject)
+            log_demo_activity(st.hs, st.conn, contact_id, kind, subject, disposition)
         except KeyError:
             raise HTTPException(404)
         except ValueError:

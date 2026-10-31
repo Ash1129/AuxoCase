@@ -82,7 +82,7 @@
 </div>
 
 <hr class="rule">
-{{ ld.reach_rest(open, '/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&draft=1', 'queue', wide=true) }}
+{{ ld.reach_rest(open, '/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&draft=1', 'queue', wide=true, call_href='/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&call=1') }}
 {%- endif %}
 
 {% if others_waiting -%}

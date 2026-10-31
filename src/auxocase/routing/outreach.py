@@ -19,6 +19,9 @@ SDR's, is passed over. Drafting with Claude takes seconds a lead, so at most
 
 `draft_for` is the one way a draft is made for a lead, here and on the lead
 page: it reads the lead's HubSpot activity to pick the next email.
+`call_brief_for` is its counterpart for the phone: the brief the SDR reads
+before dialling, from the same record plus the score's drivers and the
+team's loss reasons for companies of this size.
 """
 from __future__ import annotations
 
@@ -28,8 +31,9 @@ from datetime import datetime
 from typing import Optional
 
 from ..hubspot.client import HubSpotClient
-from ..hubspot.models import WAITING_LEAD_STATUSES, Contact, Engagement
+from ..hubspot.models import CALL_DISPOSITIONS, WAITING_LEAD_STATUSES, Contact, Engagement
 from ..llm import usage
+from ..llm.calls import CallBrief, draft_call
 from ..llm.client import LLM
 from ..llm.emails import Draft, draft_email, next_touch, sender_first_name
 from ..storage.db import clock, get_setting, loads, now_iso, set_setting
@@ -63,6 +67,24 @@ def draft_for(hs: HubSpotClient, conn: sqlite3.Connection, llm: LLM, c: Contact,
                        referral_partner=c.referral_partner, reason=c.auxo_reason or "", signals=latest_signals(conn, c.id),
                        notes=c.notes, sender=sender_first_name(owner.name if owner else None), touch=touch, history=history,
                        booking_link=owner.meetings_link if owner else "", now=clock(conn)), ""
+
+
+def call_brief_for(hs: HubSpotClient, conn: sqlite3.Connection, llm: LLM, c: Contact,
+                   history: Optional[list[Engagement]] = None) -> CallBrief:
+    """The call brief for this lead: opener, questions from the score's drivers, the likely objection, the ask with
+    the SDR's booking link, and a voicemail."""
+    from ..feedback.loop import loss_report
+    from ..scoring.features import size_band
+    history = hs.engagements_for_contact(c.id) if history is None else history
+    co = hs.get_company(c.company_id) if c.company_id else None
+    owner = next((o for o in hs.list_owners(active_only=False) if o.id == c.hubspot_owner_id), None)
+    r = conn.execute("SELECT contributions FROM scores WHERE contact_id=? ORDER BY id DESC LIMIT 1", (c.id,)).fetchone()
+    drivers = [(str(k), float(v)) for k, v in (loads(r["contributions"]) or [])] if r else []
+    return draft_call(llm, first_name=c.first_name, job_title=c.job_title, company=co.name if co else "", channel=c.channel,
+                      referral_partner=c.referral_partner, reason=c.auxo_reason or "", signals=latest_signals(conn, c.id),
+                      notes=c.notes, sender=sender_first_name(owner.name if owner else None), drivers=drivers,
+                      size_band=size_band(co.num_employees if co else None), loss_mix=loss_report(hs, conn), history=history,
+                      booking_link=owner.meetings_link if owner else "", now=clock(conn))
 
 
 def prepare_outreach(hs: HubSpotClient, conn: sqlite3.Connection, llm: LLM, limit: int = DEFAULT_LIMIT,
@@ -112,16 +134,20 @@ def stored_draft(conn: sqlite3.Connection, contact_id: str) -> Optional[dict]:
     return dict(r) if r else None
 
 
-def log_demo_activity(hs, conn: sqlite3.Connection, contact_id: str, kind: str, subject: str = "") -> None:
-    """Mock only: stand in for the SDR (or the lead) acting in HubSpot, at the service clock's time."""
+def log_demo_activity(hs, conn: sqlite3.Connection, contact_id: str, kind: str, subject: str = "", disposition: str = "") -> None:
+    """Mock only: stand in for the SDR (or the lead) acting in HubSpot, at the service clock's time. A call carries
+    HubSpot's outcome (`disposition`, a CALL_DISPOSITIONS key); the older kinds name the two common ones."""
     c = hs.get_contact(contact_id)
     if c is None:
         raise KeyError(contact_id)
     at: datetime = clock(conn)
     if kind == "email":
         hs.log_engagement(contact_id, "EMAIL", "OUTGOING", at, c.hubspot_owner_id, subject=subject)
-    elif kind in ("call_no_answer", "call_connected"):
-        hs.log_engagement(contact_id, "CALL", "OUTGOING", at, c.hubspot_owner_id, connected=kind == "call_connected")
+    elif kind in ("call", "call_no_answer", "call_connected"):
+        disposition = {"call_no_answer": "no_answer", "call_connected": "connected"}.get(kind, disposition)
+        if disposition not in CALL_DISPOSITIONS:
+            raise ValueError(disposition)
+        hs.log_engagement(contact_id, "CALL", "OUTGOING", at, c.hubspot_owner_id, disposition=disposition)
     elif kind == "reply":
         hs.log_engagement(contact_id, "EMAIL", "INCOMING", at, None, subject=f"Re: {subject}" if subject else "")
     else:

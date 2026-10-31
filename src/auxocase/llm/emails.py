@@ -117,7 +117,9 @@ def history_lines(history: Sequence[Engagement], now: datetime) -> list[str]:
         if e.type == "EMAIL":
             out.append(f"Email {'sent' if e.direction == 'OUTGOING' else 'from the lead'} {when}" + (f': "{e.subject}"' if e.subject else ""))
         else:
-            out.append(f"Call {when}: " + ("connected, they spoke with the rep" if e.connected else "no answer"))
+            left = {"left_voicemail": "no answer, the rep left a voicemail", "left_live_message": "the rep left a message with someone else",
+                    "busy": "the line was busy", "wrong_number": "wrong number"}
+            out.append(f"Call {when}: " + ("connected, they spoke with the rep" if e.connected else left.get(e.disposition, "no answer")))
     return out
 
 

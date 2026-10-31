@@ -26,7 +26,7 @@
                  mock=mock, enrollments=enrollments, seen=seen, owner=owner, owners=owners, assigned=assigned, tier2=tier2,
                  decision=decision, activity_rows=activity_rows, touched_in=touched_in, slot_next=slot_next,
                  emails=emails, speed=speed, late_factor=late_factor, pace=pace, watch=watch, enrichment=enrichment,
-                 timeline=timeline, last_read=last_read) -%}
+                 timeline=timeline, last_read=last_read, call=call, dispositions=dispositions) -%}
 {%- set who = ld.first(c) -%}
 {%- set below = c.auxo_below_gate or c.lifecycle_stage == 'lead' -%}
 <header class="head">
@@ -63,13 +63,13 @@
 <hr class="rule">
 <div class="cols">
   <div class="main">
-    {% call ld.reach(d, '/lead/' ~ c.id ~ '?draft=1', 'lead') %}
+    {% call ld.reach(d, '/lead/' ~ c.id ~ '?draft=1', 'lead', '/lead/' ~ c.id ~ '?call=1') %}
     <div class="block" style="max-width: 760px">
       <h3 id="activity-h">Seen in HubSpot{% if last_read %} <span class="muted" style="font-weight: 400">· {{ 'read every minute, ' if scheduler == 'on' else '' }}last read {{ last_read }}{% if env == 'mock' %}, wall clock{% endif %}</span>{% endif %}</h3>
       {% if activity_rows -%}
       <div class="scroll" role="region" aria-labelledby="activity-h" tabindex="0"><table style="min-width: 520px">
         <thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col">Detail</th></tr></thead>
-        <tbody>{% for a in activity_rows %}{% set e = a.e %}<tr><td class="num" style="white-space: nowrap">{{ a.when }}</td><td>{{ 'Email' if e.type == 'EMAIL' else 'Call' }} {{ 'from the SDR' if e.direction == 'OUTGOING' else 'from the lead' }}{% if e.direction == 'OUTGOING' and e.owner_id in owners %} ({{ owners[e.owner_id].name }}){% endif %}{% if a.first %} <span class="good" style="font-weight: 600">· first touch</span>{% endif %}{% if a.after %}, {{ a.after }} after assignment{% endif %}</td><td class="muted">{{ e.subject if e.type == 'EMAIL' else ('connected' if e.connected else 'no answer') }}</td></tr>
+        <tbody>{% for a in activity_rows %}{% set e = a.e %}<tr><td class="num" style="white-space: nowrap">{{ a.when }}</td><td>{{ 'Email' if e.type == 'EMAIL' else 'Call' }} {{ 'from the SDR' if e.direction == 'OUTGOING' else 'from the lead' }}{% if e.direction == 'OUTGOING' and e.owner_id in owners %} ({{ owners[e.owner_id].name }}){% endif %}{% if a.first %} <span class="good" style="font-weight: 600">· first touch</span>{% endif %}{% if a.after %}, {{ a.after }} after assignment{% endif %}</td><td class="muted">{{ e.subject if e.type == 'EMAIL' else (dispositions.get(e.disposition) or ('connected' if e.connected else 'no answer'))|lower }}</td></tr>
         {% endfor %}</tbody>
       </table></div>
       {%- else -%}

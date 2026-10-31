@@ -139,3 +139,25 @@ def test_lead_page_walks_from_the_first_email_to_a_follow_up(world):
     page = client.get(f"/lead/{lead}").text
     assert "replied: answer from HubSpot" in page and "Draft the" not in page
     assert hs.sequence_enrollments(lead)[0].status == "UNENROLLED"         # a reply ends the sequence
+
+
+def test_call_brief_on_request_and_hubspots_call_outcome_as_the_first_touch(world):
+    path, conn, hs, owner, lead = world
+    client = TestClient(create_app(path))
+    page = client.get(f"/lead/{lead}").text
+    assert "Prepare the call brief" in page and "Call brief" not in page        # prepared on request, like the follow-ups
+    page = client.get(f"/lead/{lead}?call=1").text
+    assert "Call brief" in page and "Voicemail" in page and "Open with" in page and owner.meetings_link in page
+    assert "Prepared by the template" in page
+
+    r = client.post(f"/lead/{lead}/hubspot", data={"kind": "call", "disposition": "left_voicemail"}, follow_redirects=False)
+    assert r.status_code == 303
+    e = [x for x in hs.engagements_for_contact(lead) if x.type == "CALL"][-1]
+    assert e.disposition == "left_voicemail" and not e.connected
+    assert hs.get_contact(lead).hs_lead_status == "ATTEMPTED_TO_CONTACT"     # a voicemail is a touch: the slot is freed
+    page = client.get(f"/lead/{lead}").text
+    assert "left voicemail" in page and "first touch" in page
+    assert client.post(f"/lead/{lead}/hubspot", data={"kind": "call", "disposition": "shouted"}, follow_redirects=False).status_code == 400
+
+    r = client.post(f"/lead/{lead}/hubspot", data={"kind": "call", "disposition": "connected"}, follow_redirects=False)
+    assert r.status_code == 303 and hs.engagements_for_contact(lead)[-1].connected

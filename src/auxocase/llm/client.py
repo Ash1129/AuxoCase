@@ -36,7 +36,7 @@ class LLM(Protocol):
 
 
 CLI_MODELS = ("sonnet", "opus")      # the CLI runs on the owner's Claude Code plan: Sonnet for the checked, short answers, Opus for what a lead reads
-DRAFT_TASKS = ("outreach_email",)
+DRAFT_TASKS = ("outreach_email", "call_brief")     # what a lead reads or hears: Opus
 
 
 def _cli_model(value: str, what: str) -> str:
@@ -48,7 +48,7 @@ def _cli_model(value: str, what: str) -> str:
 @dataclass
 class ClaudeCLI:
     model: str = os.environ.get("AUXO_CLI_MODEL", "sonnet")                 # signals, reasons, loss reasons
-    draft_model: str = os.environ.get("AUXO_CLI_DRAFT_MODEL", "opus")       # the emails a lead reads
+    draft_model: str = os.environ.get("AUXO_CLI_DRAFT_MODEL", "opus")       # the emails a lead reads and the call brief
     timeout_s: int = 90
     name: str = "claude-cli"
     conn: Optional[sqlite3.Connection] = field(default=None, repr=False)   # where each call's metered cost is recorded
@@ -88,7 +88,10 @@ class ClaudeCLI:
         if data.get("is_error"):
             raise RuntimeError(f"claude CLI error: {data.get('result')}")
         if self.conn is not None:
-            model = next(iter(data.get("modelUsage") or {}), self.model_for(task))
+            # modelUsage lists every model the CLI touched, its own small side calls (Haiku) first: record the one
+            # that did the work, the entry that carried the cost, else the model the task asked for.
+            mu = data.get("modelUsage") or {}
+            model = max(mu, key=lambda m: float((mu[m] or {}).get("costUSD") or 0)) if mu else self.model_for(task)
             usage.record(self.conn, self.name, model, task, data.get("usage"), data.get("total_cost_usd"), data.get("duration_api_ms"))
         return str(data.get("result", ""))
 

@@ -61,7 +61,7 @@ def queue_groups(st, owner_id: str) -> dict:
     return {"waiting": waiting, "touched": touched, "done": done_rows[:DONE_SHOWN], "done_total": len(done_rows)}
 
 
-def queue_page(st, owner_id: str, lead: Optional[str] = None, draft: bool = False) -> Optional[dict]:
+def queue_page(st, owner_id: str, lead: Optional[str] = None, draft: bool = False, call: bool = False) -> Optional[dict]:
     """owner, the groups above, and `open`: the lead_detail of the lead in view (`lead` if it is in this queue, else
     the first waiting lead, else the first touched one), or None when the queue is empty. waiting_count/limit: the
     SDR's slot use."""
@@ -71,5 +71,5 @@ def queue_page(st, owner_id: str, lead: Optional[str] = None, draft: bool = Fals
     g = queue_groups(st, owner_id)
     in_queue = [e["c"].id for e in g["waiting"] + g["touched"]]
     chosen = lead if lead in in_queue else (in_queue[0] if in_queue else None)
-    return {"owner": owner, **g, "open": lead_detail(st, chosen, draft) if chosen else None,
+    return {"owner": owner, **g, "open": lead_detail(st, chosen, draft, call) if chosen else None,
             "waiting_count": len(g["waiting"]), "limit": owner.capacity_limit}

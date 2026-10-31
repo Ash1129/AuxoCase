@@ -169,7 +169,7 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
 
 # Columns added after a database may already exist; CREATE TABLE IF NOT EXISTS does not add them.
 _ADDED_COLUMNS = {"hs_deals": {"closed_lost_reason": "TEXT"}, "outcomes": {"lead_created_at": "TEXT"},
-                  "hs_owners": {"meetings_link": "TEXT"},
+                  "hs_owners": {"meetings_link": "TEXT"}, "hs_engagements": {"disposition": "TEXT"},
                   "routing_log": {"probability": "REAL", "below_gate": "INTEGER"},
                   "hs_contacts": {"auxo_email_subject": "TEXT", "auxo_email_body": "TEXT", "auxo_below_gate": "INTEGER"}}
 

@@ -4,8 +4,19 @@
     {
       "name": "auxocase",
       "runtimeExecutable": "bash",
-      "runtimeArgs": ["scripts/serve.sh"],
+      "runtimeArgs": [
+        "scripts/serve.sh"
+      ],
       "port": 8000
+    },
+    {
+      "name": "auxocase-8002",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "PORT=8002 exec scripts/serve.sh"
+      ],
+      "port": 8002
     }
   ]
 }

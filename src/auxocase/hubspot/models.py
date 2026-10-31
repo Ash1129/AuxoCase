@@ -159,6 +159,11 @@ class Owner:
     meetings_link: str = ""        # the SDR's HubSpot meetings (booking) page, put in drafts so leads can pick a time
 
 
+# HubSpot's default call outcomes (hs_call_disposition), by the key the service uses and the name HubSpot shows.
+CALL_DISPOSITIONS = {"connected": "Connected", "no_answer": "No answer", "left_voicemail": "Left voicemail",
+                     "left_live_message": "Left live message", "busy": "Busy", "wrong_number": "Wrong number"}
+
+
 @dataclass
 class Engagement:
     """An email or call logged on a contact in HubSpot (H07): what an SDR's touch leaves behind.
@@ -174,6 +179,7 @@ class Engagement:
     owner_id: Optional[str] = None
     subject: str = ""
     connected: bool = False        # calls only: the SDR reached the lead
+    disposition: str = ""          # calls only: HubSpot's call outcome, a CALL_DISPOSITIONS key when known
     logged_at: datetime = field(default_factory=datetime.utcnow)
 
 

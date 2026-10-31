@@ -8,7 +8,7 @@ the owner's Revenium tenant. Two things make them useful there and here:
 
 - Each call is tagged with Revenium's own resource attributes (OTLP
   integration): `revenium.product.name` = `AuxoCase`, `revenium.task.type` =
-  the prompt's task (`signals`, `reason`, `outreach_email`, `loss_reason`)
+  the prompt's task (`signals`, `reason`, `outreach_email`, `call_brief`, `loss_reason`)
   and `revenium.agent.name` = `auxocase`, so Revenium's cost-by-product and
   cost-by-task views show the service apart from the owner's own sessions.
 - The same per-call figure (`total_cost_usd` and the token counts in the
@@ -51,7 +51,7 @@ def current_reference() -> str:
 
 
 def task_of(user_prompt: str) -> str:
-    """The prompts all open with a `TASK: <name>` line (signals, reason, outreach_email, loss_reason)."""
+    """The prompts all open with a `TASK: <name>` line (signals, reason, outreach_email, call_brief, loss_reason)."""
     m = re.match(r"\s*TASK:\s*([a-z_]+)", user_prompt or "")
     return m.group(1) if m else "unknown"
 

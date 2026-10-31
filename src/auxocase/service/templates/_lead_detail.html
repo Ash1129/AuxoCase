@@ -42,6 +42,10 @@
 .list a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
 .draft-body{overflow-wrap:anywhere}
 .part.wide .block,.part.wide .demo{max-width:none}
+.brief{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(300px,100%),1fr));gap:16px 48px}
+.brief h4{margin:0 0 4px;font-size:12px;line-height:18px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:400}
+.brief p{margin:0}.brief-q{margin:0;padding-left:1.3em}.brief-q li+li{margin-top:4px}
+.outcome{display:inline-flex;align-items:center;gap:8px}.outcome select{min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:4px;background:transparent;color:var(--ink);font:inherit}
 @media (max-width:640px){.score{flex-direction:column;gap:20px}.score>div{max-width:none}.score>div+div{border-top:1px solid var(--line);padding-top:20px}.draft-body{font-size:16px;line-height:26px}}
 {%- endmacro %}
 
@@ -179,9 +183,9 @@
 {#- Reach out, in two parts so a page can place them apart: reach_head is the address, the sequence's three emails
     and where they stand; reach_rest is the draft (or the link that drafts it), any page-only content (`extra`), and
     on the mock the buttons that stand in for HubSpot. reach() is both in a row, with a {% call %} as the extra. -#}
-{% macro reach(d, draft_href, where) -%}
+{% macro reach(d, draft_href, where, call_href='') -%}
 {{ reach_head(d, where) }}
-{{ reach_rest(d, draft_href, where, caller() if caller is defined else '') }}
+{{ reach_rest(d, draft_href, where, caller() if caller is defined else '', call_href=call_href) }}
 {%- endmacro %}
 
 {% macro reach_head(d, where, below=false) -%}
@@ -203,12 +207,12 @@
     {% for en in d.enrollments %}<p class="small muted">In HubSpot: sequence {{ en.sequence_id }} from {{ en.sender_email }}, enrolled {{ en.enrolled_at.strftime('%d %b %Y %H:%M') }} · {{ en.status|lower }}.</p>
     {% endfor %}
   </div>
-  {% if below and d.touch %}<p class="small muted" style="margin: 0"><a class="muted" href="#draft-{{ c.id }}">The {{ labels[d.touch] }}{{ "'s draft is" if d.email else ' is drafted' }} further down this page.</a></p>{% endif %}
+  {% if below and d.touch %}<p class="small muted" style="margin: 0"><a class="muted" href="#draft-{{ c.id }}">The {{ labels[d.touch] }}{{ "'s draft" if d.email else '' }} and the call brief are further down this page.</a></p>{% endif %}
   {%- endif %}
 </section>
 {%- endmacro %}
 
-{% macro reach_rest(d, draft_href, where, extra='', wide=false) -%}
+{% macro reach_rest(d, draft_href, where, extra='', wide=false, call_href='') -%}
 {%- set c = d.c -%}{%- set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} -%}
 {%- set tasks = 'your' if where == 'queue' else ((d.owner.name ~ "'s") if d.owner else "the SDR's") -%}
 <section class="part{{ ' wide' if wide }}" id="draft-{{ c.id }}" aria-label="Reaching {{ first(c) }}">
@@ -235,6 +239,30 @@
   </div>
   {%- endif %}
   {%- endif %}
+  {%- set b = d.get('call') %}
+  {% if call_href -%}
+  <div class="block" id="call-{{ c.id }}">
+    {% if b -%}
+    <h3 class="kicker">Call brief</h3>
+    <div class="brief">
+      <div><h4>Open with</h4><p>{{ b.opener }}</p></div>
+      <div><h4>Ask</h4><ol class="brief-q">{% for q in b.questions %}<li>{{ q }}</li>{% endfor %}</ol></div>
+      <div><h4>If they say “{{ b.objection }}”</h4><p>{{ b.answer }}</p></div>
+      <div><h4>The ask</h4><p>{{ b.ask }}</p></div>
+      <div><h4>Voicemail</h4><p>{{ b.voicemail }}</p></div>
+    </div>
+    <p class="small muted">Prepared by {{ 'Claude' if b.source == 'llm' else 'the template' }}{% if b.rejected %} · Claude's brief was set aside: {{ b.rejected }}{% endif %}. The questions come from what moved the score, the objection from why deals with companies of this size were lost. Read it; don't recite it.</p>
+    <div class="actions"><a class="btn" href="{{ call_href }}" data-busy="Preparing… this takes a few seconds">Prepare it again</a></div>
+    {%- else -%}
+    <h3>Calling instead? The call brief is prepared on request</h3>
+    <div class="placeholder">
+      <span class="muted"><b>[CALL BRIEF PREPARED ON REQUEST]</b></span>
+      <span class="small muted">An opener, two or three questions from what moved the score, the objection to expect, the ask and a voicemail. Not stored; with Claude on it is a model call of a few seconds.</span>
+      <div class="actions"><a class="btn" href="{{ call_href }}" data-busy="Preparing… this takes a few seconds">Prepare the call brief</a></div>
+    </div>
+    {%- endif %}
+  </div>
+  {%- endif %}
   {{ extra }}
   {%- set automated = d.get('tier2') and d.get('tier2').status == 'sent' and not c.hubspot_owner_id %}
   {% if d.mock and (c.hubspot_owner_id or automated) -%}
@@ -251,8 +279,7 @@
     <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
       <input type="hidden" name="subject" value="{{ d.email.subject if d.email else '' }}">
       <button class="btn" type="submit" name="kind" value="email">Send {{ 'this ' ~ labels[d.email.touch] if d.email else 'an email' }}</button>
-      <button class="btn" type="submit" name="kind" value="call_no_answer">Log a call: no answer</button>
-      <button class="btn" type="submit" name="kind" value="call_connected">Log a call: connected</button>
+      <span class="outcome"><label class="vh" for="outcome-{{ c.id }}">Call outcome</label><select id="outcome-{{ c.id }}" name="disposition">{% for k, v in d.dispositions.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="call">Log a call</button></span>
       <button class="btn" type="submit" name="kind" value="reply">The lead replies</button>
     </form>
     {%- endif %}

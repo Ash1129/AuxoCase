@@ -7,8 +7,10 @@ from typing import Optional
 from ...data.generate import LATE_TOUCH_FACTOR
 from ...feedback.loop import speed_effect, speed_to_lead
 from ...hubspot.mock import MockHubSpot
+from ...hubspot.models import CALL_DISPOSITIONS
 from ...llm.emails import LAST_TOUCH, Draft, next_touch
-from ...routing.outreach import draft_for, stored_draft
+from ...llm import usage
+from ...routing.outreach import call_brief_for, draft_for, stored_draft
 from ...scoring.explain import driver_rows
 from ...storage.db import clock, get_setting, loads
 from ..security import lead_token
@@ -128,7 +130,7 @@ def _timeline(c, score, routing, stored, first_touch, history, owners) -> list[d
     return out
 
 
-def lead_detail(st, contact_id: str, draft: bool = False) -> Optional[dict]:
+def lead_detail(st, contact_id: str, draft: bool = False, call: bool = False) -> Optional[dict]:
     """Everything known about one lead, or None if HubSpot has no such contact.
 
     c, co: the contact and its company. score: the latest scores row, with `contributions` and `signals` parsed and
@@ -140,7 +142,8 @@ def lead_detail(st, contact_id: str, draft: bool = False) -> Optional[dict]:
     first_touch: the touches row, if the first touch was seen, with `when`; touched_in: {span, inside (the first
     day), at} from arrival to that touch. touch: which email is next (1, 2, 3, or None) and no_draft why not;
     emails: the sequence's three steps {n, label, state sent|next|later|stopped, note}; email: the draft shown (the
-    stored first email, or one drafted on request); stored: the outreach row (status enrolled|drafted|refused,
+    stored first email, or one drafted on request); call: the call brief (llm/calls.py CallBrief), prepared when
+    `call` is asked for, else None; stored: the outreach row (status enrolled|drafted|refused,
     sequence_id) with `when`. mock: the demo stand-in for HubSpot is on, with enrollments listed. seen: the version
     token lead forms must carry. owner: the owning SDR, if any; owners: every owner by id.
     assigned: the latest assignment's routing row; decision: the SDR's latest worked/junk/skipped call (overrides
@@ -177,6 +180,10 @@ def lead_detail(st, contact_id: str, draft: bool = False) -> Optional[dict]:
         email, no_draft = draft_for(st.hs, st.conn, st.llm, c, activity)
     elif touch == 1 and stored:
         email = Draft(stored["subject"], stored["body"], stored["source"], stored["rejected"] or "", st.llm.name)
+    brief = None
+    if call:
+        with usage.reference(contact_id):
+            brief = call_brief_for(st.hs, st.conn, st.llm, c, activity)
     first_touch = st.conn.execute("SELECT * FROM touches WHERE contact_id=?", (contact_id,)).fetchone()
     first_touch = {**dict(first_touch), "when": when(first_touch["touched_at"])} if first_touch else None
     mock = isinstance(st.hs, MockHubSpot)
@@ -208,7 +215,7 @@ def lead_detail(st, contact_id: str, draft: bool = False) -> Optional[dict]:
             "band": calibration_band(loads(live["metrics"]) if live else None, c.auxo_probability),
             "clock": first_day(c.createdate, clock(st.conn)), "history": history, "routing": routing,
             "activity": activity, "first_touch": first_touch, "touch": touch,
-            "no_draft": no_draft, "email": email, "stored": stored, "mock": mock,
+            "no_draft": no_draft, "email": email, "call": brief, "stored": stored, "mock": mock, "dispositions": CALL_DISPOSITIONS,
             "enrollments": st.hs.sequence_enrollments(contact_id) if mock else [], "seen": lead_token(st.conn, c),
             "owner": owner, "owners": owners, "assigned": assigned,
             "decision": next((h for h in reversed(history) if h["action"] in DECISIONS), None),
