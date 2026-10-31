@@ -52,7 +52,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 .ld-cap{display:flex;flex-direction:column;gap:16px;margin-top:24px}
 form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
 .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px 24px}
-.fields input{width:100%}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:14px;line-height:20px;color:var(--muted)}
+.fields input,.fields select{width:100%}.field{display:flex;flex-direction:column;gap:6px}.field label{font-size:14px;line-height:20px;color:var(--muted)}
 {% endblock %}
 {% block body %}
 {% set mock = env == 'mock' %}
@@ -326,26 +326,28 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
 
 <hr class="rule">
 
-{# ---- capacity: first touches a month, from SDR minutes ---- #}
+{# ---- capacity: leads worked a month, from SDR minutes ---- #}
 <section class="ld-sec" aria-labelledby="ld-capacity">
-  <h2 id="ld-capacity" class="kicker">Capacity · first touches a month{% call note('cap-note', 'How the capacity is counted') %}<span class="ln">Capacity: {{ cap.sdrs }} SDRs × {{ cap.hours_text }} hours a month on first touches × 60 ÷ {{ '{:g}'.format(cap.minutes_touch) }} minutes a touch = {{ '{:,}'.format(cap.per_month) }}.</span><span class="ln">The hours are set so the defaults give the brief's {{ cap.brief }}; the minutes are the lever. A quicker touch is more leads worked by the same team.</span><span class="ln">Read by routing's capacity line ({{ cap.line_days }} days of work: place {{ '{:,}'.format(cap.line_place) }} in the pool), the Overview, the simulator and the cost report.</span>{% if cap.override %}<span class="ln">Overridden: team_capacity_per_month is set to {{ '{:,}'.format(cap.override|int) }}; setting a value below drops it.</span>{% endif %}{% endcall %}</h2>
+  <h2 id="ld-capacity" class="kicker">Capacity · leads worked a month{% call note('cap-note', 'How the capacity is counted') %}<span class="ln">Capacity: {{ cap.sdrs }} SDRs × {{ cap.hours_text }} hours a month × 60 ÷ {{ '{:g}'.format(cap.minutes_lead) }} minutes a lead = {{ '{:,}'.format(cap.per_month) }}.</span><span class="ln">A lead: a cold touch of {{ '{:g}'.format(cap.minutes_touch) }} minutes{% if cap.auto %}; the follow-up and the last email are sent for the SDR, so they cost no SDR time{% else %}, then the follow-up and the last email at {{ '{:g}'.format(cap.minutes_followup) }} each{% endif %}.</span><span class="ln">The hours are set so the defaults give the brief's {{ cap.brief }}; the minutes are the lever.</span><span class="ln">Read by routing's capacity line ({{ cap.line_days }} days of work: place {{ '{:,}'.format(cap.line_place) }} in the pool), the Overview, the simulator and the cost report.</span>{% if cap.override %}<span class="ln">Overridden: team_capacity_per_month is set to {{ '{:,}'.format(cap.override|int) }}; setting a value below drops it.</span>{% endif %}{% endcall %}</h2>
   {% if notice and notice.refused %}<p class="notice warn" role="status"><b>Not set.</b> {{ notice.refused[:1]|upper }}{{ notice.refused[1:] }}</p>
   {% elif notice and notice.set == '0' %}<p class="notice" role="status"><b>Nothing changed.</b> The inputs were left as they are.</p>
-  {% elif notice and notice.set %}<p class="notice" role="status"><b>Set.</b> Routing draws the capacity line at the new capacity on its next pass; the Overview and the costs read it now.</p>{% endif %}
+  {% elif notice and notice.set %}<p class="notice" role="status"><b>Set.</b> Routing draws the capacity line at the new capacity on its next pass; the Overview and the costs read it now.{% if cap.auto %} Follow-ups go out for leads first emailed from now on.{% endif %}</p>{% endif %}
   <div class="ld-figs">
-    <div class="ld-fig"><span class="big">{{ '{:,}'.format(cap.per_month) }}</span><span>first touches a month: {{ cap.sdrs }} SDRs × {{ cap.hours_text }} h ÷ {{ '{:g}'.format(cap.minutes_touch) }} min</span></div>
-    <div class="ld-fig"><span class="big">{{ '{:g}'.format(cap.minutes_touch) }}</span><span>minutes a cold touch · {{ '{:g}'.format(cap.minutes_reply) }} a reply</span></div>
+    <div class="ld-fig"><span class="big">{{ '{:,}'.format(cap.per_month) }}</span><span>leads a month: {{ cap.sdrs }} SDRs × {{ cap.hours_text }} h ÷ {{ '{:g}'.format(cap.minutes_lead) }} min</span></div>
+    <div class="ld-fig"><span class="big">{{ '{:g}'.format(cap.minutes_lead) }}</span><span>minutes a lead: {{ '{:g}'.format(cap.minutes_touch) }} the cold touch{% if cap.auto %}, follow-ups sent for the SDR{% else %} + 2 × {{ '{:g}'.format(cap.minutes_followup) }} the follow-ups{% endif %}</span></div>
     <div class="ld-fig"><span class="big">{{ cap.per_sdr|round|int }}</span><span>a month per SDR</span></div>
   </div>
   <div class="ld-cap">
-    {% if cap.at %}<p class="small muted">At {% for a in cap.at %}{{ a.minutes }} minutes a touch, {{ '{:,}'.format(a.per_month) }}{{ '; ' if not loop.last else '.' }}{% endfor %}</p>{% endif %}
+    <p class="small muted">{% if cap.auto %}Follow-ups sent by the SDR instead, {{ '{:,}'.format(cap.switched) }}.{% else %}Follow-ups sent for the SDR, {{ '{:,}'.format(cap.switched) }}.{% endif %}{% if cap.at %} At {% for a in cap.at %}{{ a.minutes }} minutes a cold touch, {{ '{:,}'.format(a.per_month) }}{{ '; ' if not loop.last else '.' }}{% endfor %}{% endif %}</p>
     <form class="switches" method="post" action="/leadership/capacity">
       <div class="fields">
         <div class="field"><label for="cap-touch">Minutes a cold touch</label><input id="cap-touch" name="minutes_touch" type="number" inputmode="decimal" min="1" max="240" step="0.5" value="{{ '{:g}'.format(cap.minutes_touch) }}"></div>
+        <div class="field"><label for="cap-followup">Minutes a follow-up, when the SDR sends it</label><input id="cap-followup" name="minutes_followup" type="number" inputmode="decimal" min="0" max="240" step="0.5" value="{{ '{:g}'.format(cap.minutes_followup) }}"></div>
         <div class="field"><label for="cap-reply">Minutes a reply</label><input id="cap-reply" name="minutes_reply" type="number" inputmode="decimal" min="1" max="240" step="0.5" value="{{ '{:g}'.format(cap.minutes_reply) }}"></div>
-        <div class="field"><label for="cap-hours">Hours an SDR gives first touches a month</label><input id="cap-hours" name="hours" type="number" inputmode="decimal" min="0.5" max="200" step="0.1" value="{{ cap.hours_text }}"></div>
+        <div class="field"><label for="cap-hours">Hours an SDR gives leads a month</label><input id="cap-hours" name="hours" type="number" inputmode="decimal" min="0.5" max="200" step="0.1" value="{{ cap.hours_text }}"></div>
+        <div class="field"><label for="cap-followups">The follow-up and the last email</label><select id="cap-followups" name="followups"><option value="sdr"{% if not cap.auto %} selected{% endif %}>Written and sent by the SDR</option><option value="auto"{% if cap.auto %} selected{% endif %}>Sent for the SDR, unless the lead answers</option></select></div>
       </div>
-      <div class="actions"><button class="btn primary" type="submit">Set the capacity</button></div>
+      <div class="actions"><button class="btn primary" type="submit">Set the capacity</button><span class="small muted">Sent for the SDR: drafted from the lead's activity on its day (3 and 7 days after the first email), from the SDR's inbox. A reply, a booking or the SDR stops them.</span></div>
     </form>
   </div>
 </section>

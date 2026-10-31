@@ -10,6 +10,8 @@ from ...hubspot.mock import MockHubSpot
 from ...hubspot.models import CALL_DISPOSITIONS
 from ...llm.emails import LAST_TOUCH, Draft, next_touch
 from ...llm import usage
+from ...capacity import followups_auto
+from ...routing.followups import rows_for as followup_rows
 from ...routing.outreach import call_brief_for, draft_for, stored_draft
 from ...scoring.explain import driver_rows
 from ...storage.db import clock, get_setting, loads
@@ -91,13 +93,21 @@ def _call_steps(activity, first_touch) -> list[dict]:
              "first": bool(first_touch and first_touch["engagement_id"] == e.id)} for e in calls]
 
 
-def _email_steps(activity, touch: Optional[int], no_draft: str, email: Optional[Draft]) -> list[dict]:
-    """The three emails of the sequence and where each stands: sent (seen in HubSpot), next, later, or stopped."""
+def _email_steps(activity, touch: Optional[int], no_draft: str, email: Optional[Draft], followups: Optional[dict] = None) -> list[dict]:
+    """The three emails of the sequence and where each stands: sent (seen in HubSpot; by the service when it sent
+    it), next, due (the service will send it that day), later, or stopped."""
     sent = sorted((e for e in activity if e.type == "EMAIL" and e.direction == "OUTGOING"), key=lambda e: e.timestamp)
+    followups = followups or {}
     steps = []
     for n in range(1, LAST_TOUCH + 1):
+        f = followups.get(n)
         if n <= len(sent):
-            state, note = "sent", "sent, seen in HubSpot " + when(sent[n - 1].timestamp)
+            state = "sent"
+            note = ("sent for you " if f and f["status"] == "sent" else "sent, seen in HubSpot ") + when(sent[n - 1].timestamp)
+        elif f and f["status"] == "due":
+            state, note = "due", "sent for you on " + when(f["due_at"]) + " unless they answer"
+        elif f and f["status"] == "stopped":
+            state, note = "stopped", "not sent: " + f["reason"]
         elif n == touch:
             state, note = "next", "next, drafted below" if email and email.touch == n else "next, not drafted yet"
         elif no_draft == "replied":
@@ -108,7 +118,7 @@ def _email_steps(activity, touch: Optional[int], no_draft: str, email: Optional[
     return steps
 
 
-def _timeline(c, score, routing, stored, first_touch, history, owners) -> list[dict]:
+def _timeline(c, score, routing, stored, first_touch, history, owners, followups=()) -> list[dict]:
     """What happened to the lead, in the order it happens: created, scored, routed, drafted, touched, decided.
     `clock` says which clock stamped it: HubSpot and routing run on the service clock ("demo" on the mock),
     AuxoCase's own logs on wall time ("wall")."""
@@ -135,6 +145,11 @@ def _timeline(c, score, routing, stored, first_touch, history, owners) -> list[d
     for h in history:
         out.append({"when": when(h["created_at"]), "clock": "wall",
                     "what": f"{name(h['owner_id'])} {ACTION_WORDS.get(h['action'], h['action'])}" + (f" ({h['note']})" if h["note"] else "")})
+    for f in followups:
+        if f["status"] == "sent":
+            out.append({"when": when(f["sent_at"]), "clock": "demo", "what": f"{EMAIL_LABELS[f['step']]} sent for {name(f['owner_id'])}"})
+        elif f["status"] == "stopped":
+            out.append({"when": when(f["updated_at"]), "clock": "wall", "what": f"{EMAIL_LABELS[f['step']]} not sent: {f['reason']}"})
     return out
 
 
@@ -217,6 +232,8 @@ def lead_detail(st, contact_id: str, draft: bool = False, call: bool = False) ->
     watch = {**dict(watch), "month": months_text([watch["period"]])} if watch else None
     enrichment = [{**dict(r), "filled": loads(r["filled"]) or {}, "when": when(r["created_at"])}
                   for r in st.conn.execute("SELECT * FROM enrichment_log WHERE contact_id=? ORDER BY id", (contact_id,)).fetchall()]
+    fups = [{**f, "when": when(f["due_at"])} for f in followup_rows(st.conn, contact_id)]
+    by_step = {f["step"]: f for f in fups}
     t2 = st.conn.execute("SELECT * FROM tier2 WHERE contact_id=?", (contact_id,)).fetchone()
     t2 = {**dict(t2), "when": when(t2["created_at"]), "replied_when": when(t2["replied_at"]) if t2["replied_at"] else None} if t2 else None
     return {"c": c, "co": co, "score": score, "drivers": driver_rows((score or {}).get("contributions")), "tier2": t2,
@@ -228,8 +245,10 @@ def lead_detail(st, contact_id: str, draft: bool = False, call: bool = False) ->
             "owner": owner, "owners": owners, "assigned": assigned,
             "decision": next((h for h in reversed(history) if h["action"] in DECISIONS), None),
             "activity_rows": activity_rows, "touched_in": touched_in, "slot_next": slot_next,
-            "emails": _email_steps(activity, touch, no_draft, email), "calls": _call_steps(activity, first_touch),
+            "emails": _email_steps(activity, touch, no_draft, email, by_step), "calls": _call_steps(activity, first_touch),
+            "followups": {"auto": followups_auto(st.conn), "rows": fups, "due": [f for f in fups if f["status"] == "due"],
+                          "next": next((f for f in fups if f["status"] == "due"), None)},
             "speed": speed_effect(st.conn),
             "late_factor": LATE_TOUCH_FACTOR if mock else None, "pace": speed_to_lead(st.conn), "watch": watch,
-            "enrichment": enrichment, "timeline": _timeline(c, score, routing, stored, first_touch, history, owners),
+            "enrichment": enrichment, "timeline": _timeline(c, score, routing, stored, first_touch, history, owners, fups),
             "last_read": when(get_setting(st.conn, TOUCHES_READ))}

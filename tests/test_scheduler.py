@@ -42,14 +42,16 @@ def test_first_start_runs_score_and_route_then_each_job_on_its_interval(db):
     s = Scheduler(db, jobs=list(DEFAULT_JOBS), score_batch=10)
     every5 = ["score", "rescore", "route", "touches", "outreach"]
     assert s.run_due(T0) == [(j, "ok") for j in every5]                    # the slow jobs wait one interval
+    every5 += ["followups"]                                                 # skipped while the switch is off, on its 5 minutes
     assert s.run_due(T0 + timedelta(seconds=30)) == []
     assert [j for j, _ in s.run_due(T0 + timedelta(minutes=1))] == ["rescore", "touches", "outreach"]
     assert [j for j, _ in s.run_due(T0 + timedelta(minutes=5))] == every5
     hour = s.run_due(T0 + timedelta(minutes=61))
-    assert [j for j, _ in hour] == every5 + ["remind", "sync"] and all(st == "ok" for _, st in hour)
+    assert [j for j, _ in hour] == every5 + ["remind", "sync"] and all(st == "ok" for j, st in hour if j != "followups")
+    assert dict(hour)["followups"] == "skipped"
     assert [j for j, _ in s.run_due(T0 + timedelta(days=1, minutes=1))] == every5 + ["remind", "sync", "monitor"]
     assert _log(s.conn)[:2] == [("scheduled.score", "ok"), ("scheduled.rescore", "ok")]
-    assert len(_log(s.conn)) == 5 + 3 + 5 + 7 + 8
+    assert len(_log(s.conn)) == 5 + 3 + 6 + 8 + 9                              # the follow-ups job on its 5 minutes, from the second pass
 
 
 def test_a_restart_does_not_rerun_jobs_that_ran_recently(db):

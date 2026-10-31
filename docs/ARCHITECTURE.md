@@ -59,7 +59,8 @@ HubSpot (mock in development, real API in production)
 | `hubspot/mock.py` | all | SQLite stand-in with HubSpot's semantics: batch 207 results, duplicated/out-of-order webhooks, compare-and-set owner, property history |
 | `hubspot/real.py` | all | httpx client for the v3 API, webhook signature check; unverified against a live portal |
 | `data/generate.py`, `simulate.py` | dev | 14 months of BrightPath-like history with the SDRs' cherry-picking baked in; a month replay with the system in place |
-| `capacity.py` | all | first touches a month from SDR minutes: SDRs × hours on first touches ÷ minutes a touch (settings; defaults give the brief's 500), read by the capacity line, the Overview, Leadership, the simulator and the cost report |
+| `capacity.py` | all | leads worked a month from SDR minutes: SDRs × hours ÷ minutes a lead (a cold touch plus two follow-ups unless they are sent for the SDR; settings; defaults give the brief's 500), read by the capacity line, the Overview, Leadership, the simulator and the cost report |
+| `routing/followups.py` | all | with `followups_auto` on: the follow-up and the last email put on the calendar when the first email is the first touch, drafted from the lead's activity on their day and sent from the SDR (the mock logs the send; a real portal's sequence sends from the rewritten tokens); a reply, a booking or the SDR stops them |
 | `data/rebase.py` | dev | shifts the mock's demo-clock dates onto the present by whole years, leaves wall-time logs, and sets `clock_live` so `storage/db.clock` is the wall clock |
 | `pool.py` | 1, 2 | the pool both jobs share: unowned leads in the pool stages, inside the age window |
 | `scoring/enrich.py` | 1 | one enrichment lookup per lead missing a title or size, written back and logged |

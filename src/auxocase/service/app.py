@@ -50,6 +50,7 @@ from .views.model import model_page
 from .views.overview import overview_page
 from .views.phases import phases_page, throw_switches
 from ..capacity import set_assumptions
+from ..routing import followups
 from .views.queue import queue_page
 from .views.stats import hit_rate
 
@@ -155,6 +156,20 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         detect_replies(st.hs, st.conn)
         return RedirectResponse(f"/lead/{contact_id}", status_code=303)
 
+    @app.post("/lead/{contact_id}/followups")
+    def lead_followups(contact_id: str, what: str = Form(...)):
+        """The SDR's say over the automatic emails: 'stop' ends them for this lead; 'now' (demo only) sends the next one
+        without waiting for its day."""
+        if st.hs.get_contact(contact_id) is None:
+            raise HTTPException(404)
+        if what == "stop":
+            followups.stop(st.conn, contact_id)
+        elif what == "now" and isinstance(st.hs, MockHubSpot):
+            followups.send_due(st.hs, st.conn, st.llm, contact_id=contact_id)
+        else:
+            raise HTTPException(400, "unknown action")
+        return RedirectResponse(f"/lead/{contact_id}#reach-{contact_id}", status_code=303)
+
     @app.post("/lead/{contact_id}/action")
     def lead_action(contact_id: str, owner_id: str = Form(...), action: str = Form(...), note: str = Form(""), move: int = Form(0),
                     seen: str = Form("")):
@@ -214,12 +229,15 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "leadership.html", ctx(request, nav="leadership", notice=notice, **leadership_page(st)))
 
     @app.post("/leadership/capacity")
-    def capacity_set(minutes_touch: str = Form(""), minutes_reply: str = Form(""), hours: str = Form("")):
-        """The capacity inputs: minutes a cold touch, minutes a reply, hours an SDR gives first touches a month. Blank
-        leaves one as it is; a value out of range is refused and nothing is set."""
+    def capacity_set(minutes_touch: str = Form(""), minutes_followup: str = Form(""), minutes_reply: str = Form(""), hours: str = Form(""),
+                     followups: str = Form("")):
+        """The capacity inputs: minutes a cold touch, a follow-up and a reply, hours an SDR gives leads a month, and who
+        sends the follow-ups ('auto' or 'sdr'). Blank leaves one as it is; a value out of range is refused and nothing
+        is set."""
         try:
-            given = {k: (float(v) if v.strip() else None) for k, v in (("minutes_touch", minutes_touch), ("minutes_reply", minutes_reply), ("hours", hours))}
-            changed = set_assumptions(st.conn, **given)
+            given = {k: (float(v) if v.strip() else None) for k, v in (("minutes_touch", minutes_touch), ("minutes_followup", minutes_followup),
+                                                                      ("minutes_reply", minutes_reply), ("hours", hours))}
+            changed = set_assumptions(st.conn, auto={"auto": True, "sdr": False}.get(followups), **given)
         except ValueError as e:
             return RedirectResponse(f"/leadership?refused={quote(str(e))}#ld-capacity", status_code=303)
         return RedirectResponse(f"/leadership?set={len(changed)}#ld-capacity", status_code=303)

@@ -25,6 +25,7 @@
 .dot{flex:0 0 10px;width:10px;height:10px;margin-top:6px;border-radius:50%;border:1px solid var(--muted)}
 .dot.sent{background:var(--good);border-color:var(--good)}
 .dot.next{border:2px solid var(--accent)}
+.dot.due{border:2px solid var(--accent);background:var(--surface)}
 .placeholder{border-top:1px solid var(--line);padding:12px 0 0;display:flex;flex-direction:column;gap:4px}
 .placeholder .actions{margin-top:8px;align-items:center}
 .demo{border-top:1px dashed var(--muted);border-bottom:1px dashed var(--muted);padding:16px 0;display:flex;flex-direction:column;gap:12px;max-width:760px}
@@ -224,6 +225,17 @@
   {% if c.email -%}
   {% if not d.touch -%}
   <p class="muted">{% if d.no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif d.no_draft == 'finished' %}All three emails sent.{% else %}{{ d.no_draft }}{% endif %}</p>
+  {%- elif d.get('followups') and d.followups.next and d.followups.next.step == d.touch and not d.email -%}
+  {%- set f = d.followups.next -%}
+  <div class="block">
+    <h3>Next: the {{ labels[d.touch] }}, sent for {{ 'you' if where == 'queue' else (d.owner.name if d.owner else 'the SDR') }} on {{ f.when }}</h3>
+    <p class="small muted">Drafted from {{ first(c) }}'s activity that day and sent from {{ 'your' if where == 'queue' else 'the' }} inbox, unless they answer or book first.{% if d.followups.due|length > 1 %} The last email follows {{ d.followups.due[1].when }}.{% endif %}</p>
+    <form class="actions" method="post" action="/lead/{{ c.id }}/followups">
+      <button class="btn" type="submit" name="what" value="stop">Stop: I'll write them</button>
+      {% if d.mock %}<button class="btn" type="submit" name="what" value="now">Demo: send it now</button>{% endif %}
+      <a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">See a draft</a>
+    </form>
+  </div>
   {%- elif d.email -%}
   {%- set e = d.email -%}
   <div class="block">

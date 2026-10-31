@@ -134,6 +134,13 @@ CREATE TABLE IF NOT EXISTS outreach (
   contact_id TEXT PRIMARY KEY, owner_id TEXT, subject TEXT, body TEXT, source TEXT, rejected TEXT,
   sequence_id TEXT, enrollment_id TEXT, status TEXT, created_at TEXT
 );
+-- The follow-up (step 2) and the last email (step 3) the service sends for the SDR once the first email has gone
+-- (routing/followups.py): due at due_at, then sent (with the draft), stopped (reason), or skipped (the SDR sent it).
+CREATE TABLE IF NOT EXISTS followups (
+  contact_id TEXT, step INTEGER, owner_id TEXT, due_at TEXT, status TEXT, sent_at TEXT, subject TEXT, body TEXT, source TEXT,
+  reason TEXT, created_at TEXT, updated_at TEXT, PRIMARY KEY (contact_id, step)
+);
+CREATE INDEX IF NOT EXISTS followups_due ON followups(status, due_at);
 -- Phase 3: leads below the capacity line put in an automated sequence (arm 'emailed') or left to the ordinary
 -- process as the comparison (arm 'control'). One row per lead, written when the lead became eligible.
 CREATE TABLE IF NOT EXISTS tier2 (

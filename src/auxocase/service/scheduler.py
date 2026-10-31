@@ -10,6 +10,7 @@ decides when to run them:
 | route   | 5 min     | fill free SDR slots, hold strong leads that waited, create tasks  |
 | touches | 1 min     | first email or call logged in HubSpot -> lead worked, slot refilled |
 | outreach| 1 min     | draft the first email for new assignments, enrol in the sequence  |
+| followups| 5 min    | send the follow-up and the last email for the SDR, on their day (off by default) |
 | remind  | 60 min    | reminder task for assigned leads untouched past the SLA           |
 | sync    | 60 min    | pull meetings, deal stages and lead status back into outcomes     |
 | monitor | 1 day     | per-channel check of observed against predicted demo rate         |
@@ -57,6 +58,7 @@ from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
 from ..llm.client import make_llm
 from ..routing.engine import Router
+from ..routing import followups
 from ..routing.outreach import DEFAULT_LIMIT as DEFAULT_OUTREACH_BATCH, prepare_outreach
 from ..routing.touches import detect_first_touches
 from ..routing.tier2 import detect_replies, run_tier2
@@ -85,6 +87,7 @@ DEFAULT_JOBS = (
     Job("route", 5, run_on_first_start=True),
     Job("touches", 1, run_on_first_start=True),
     Job("outreach", 1, run_on_first_start=True),
+    Job("followups", 5),
     Job("remind", 60),
     Job("sync", 60),
     Job("monitor", 24 * 60),
@@ -125,7 +128,7 @@ class Scheduler:
         self._stop = threading.Event()
         self._thread: Optional[threading.Thread] = None
         self.actions: dict[str, Callable[[], dict]] = {
-            "score": self._score, "rescore": self._rescore, "route": self._route, "touches": self._touches, "outreach": self._outreach, "remind": self._remind,
+            "score": self._score, "rescore": self._rescore, "route": self._route, "touches": self._touches, "outreach": self._outreach, "followups": self._followups, "remind": self._remind,
             "sync": self._sync, "monitor": self._monitor, "train": self._train,
         }
 
@@ -161,6 +164,12 @@ class Scheduler:
 
     def _outreach(self) -> dict:
         return prepare_outreach(self.hs, self.conn, self.llm, limit=self.outreach_batch)
+
+    def _followups(self) -> dict:
+        out = followups.run(self.hs, self.conn, self.llm, limit=self.outreach_batch)
+        if not out["auto"]:
+            raise Skipped("follow-ups are the SDR's: the switch is off")
+        return out
 
     def _remind(self) -> dict:
         return {"reminders": Router(self.hs, self.conn).re_alert_stale()}

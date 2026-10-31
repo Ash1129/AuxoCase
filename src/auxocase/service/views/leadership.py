@@ -17,7 +17,7 @@ from typing import Optional
 
 from ...data.generate import LATE_TOUCH_FACTOR
 from ...hubspot.mock import MockHubSpot
-from ...capacity import breakdown, touches_per_month
+from ...capacity import FOLLOWUPS, breakdown, touches_per_month
 from ...routing.engine import DEFAULT_LINE_HORIZON_DAYS
 from ...scoring.model import DEMO_MATURITY_DAYS
 from ...storage.db import get_setting
@@ -321,7 +321,9 @@ def _capacity(st, sdrs: int) -> dict:
     b["line_place"] = max(1, int(round(b["per_month"] * days / 30.4)))
     b["line_days"] = round(days)
     b["hours_text"] = f"{b['hours']:.1f}".rstrip("0").rstrip(".")
-    b["at"] = [{"minutes": m, "per_month": round(sdrs * b["hours"] * 60 / m)} for m in (20, 15, 12, 10) if abs(m - b["minutes_touch"]) > 0.5]
+    later = 0.0 if b["auto"] else FOLLOWUPS * b["minutes_followup"]
+    b["at"] = [{"minutes": m, "per_month": round(sdrs * b["hours"] * 60 / (m + later))} for m in (20, 15, 12, 10) if abs(m - b["minutes_touch"]) > 0.5]
+    b["switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_touch"] + (FOLLOWUPS * b["minutes_followup"] if b["auto"] else 0.0)))
     return b
 
 
