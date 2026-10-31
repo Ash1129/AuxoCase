@@ -17,7 +17,8 @@ from typing import Optional
 
 from ...data.generate import LATE_TOUCH_FACTOR
 from ...hubspot.mock import MockHubSpot
-from ...routing.engine import DEFAULT_TEAM_CAPACITY_PER_MONTH
+from ...capacity import breakdown, touches_per_month
+from ...routing.engine import DEFAULT_LINE_HORIZON_DAYS
 from ...scoring.model import DEMO_MATURITY_DAYS
 from ...storage.db import get_setting
 
@@ -312,6 +313,18 @@ def _in_use(st) -> tuple:
     return (float(get_setting(st.conn, "stale_lead_factor") or 1.0), limits.pop())
 
 
+def _capacity(st, sdrs: int) -> dict:
+    """The capacity figures: breakdown() plus line_place (the capacity line's place in the pool: a week's work) and
+    the week in words."""
+    b = breakdown(st.conn, sdrs)
+    days = float(get_setting(st.conn, "capacity_line_days") or DEFAULT_LINE_HORIZON_DAYS)
+    b["line_place"] = max(1, int(round(b["per_month"] * days / 30.4)))
+    b["line_days"] = round(days)
+    b["hours_text"] = f"{b['hours']:.1f}".rstrip("0").rstrip(".")
+    b["at"] = [{"minutes": m, "per_month": round(sdrs * b["hours"] * 60 / m)} for m in (20, 15, 12, 10) if abs(m - b["minutes_touch"]) > 0.5]
+    return b
+
+
 def leadership_page(st) -> dict:
     """report: the stored evaluation dict (see evaluation.evaluate) or None; report_path; report_written (its
     generated_at, as text); queue_limits: the experiment's {runs, summary} or None; queue_limits_path;
@@ -346,11 +359,12 @@ def leadership_page(st) -> dict:
       scale, line (the history's demos a month on the bars' scale, or None), seeds, seeds_word, fresh_words,
       first_desk, first_off, first_demos, speed_adds}."""
     report, ql, in_use = _load(REPORT), _load(QUEUE_LIMITS), _in_use(st)
+    sdrs = sum(1 for o in st.hs.list_owners(active_only=True) if o.team == "sdr")
     fresh_as_often, late_as_often = _as_often(LATE_TOUCH_FACTOR)
     out = {"report": report, "report_path": str(REPORT), "report_written": _when((report or {}).get("generated_at")),
            "queue_limits": ql, "queue_limits_path": str(QUEUE_LIMITS), "queue_limits_written": _written(QUEUE_LIMITS) if ql else None,
-           "sdrs": sum(1 for o in st.hs.list_owners() if o.team == "sdr"),
-           "capacity": round(float(get_setting(st.conn, "team_capacity_per_month") or DEFAULT_TEAM_CAPACITY_PER_MONTH)),
+           "sdrs": sdrs,
+           "capacity": round(touches_per_month(st.conn, sdrs)), "cap": _capacity(st, sdrs),
            "desk": f"{_leads(in_use[1], 'waiting lead')} a desk" if in_use else None, "leads_per_month": LEADS_PER_MONTH,
            "maturity_days": DEMO_MATURITY_DAYS, "generator_factor": LATE_TOUCH_FACTOR, "fresh_as_often": fresh_as_often,
            "late_as_often": late_as_often, "months": None, "shared": None, "ranking": None, "explore": None, "precision": None,

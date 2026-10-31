@@ -19,6 +19,7 @@ from ...hubspot.models import SDR_LIFECYCLE_STAGES, WAITING_LEAD_STATUSES
 from ...pool import max_age_days, passed_gate, ranks_below_gate
 from ...routing.engine import (DEFAULT_FIRST_TOUCH_SLA_HOURS, DEFAULT_FRESH_HOURS, DEFAULT_LINE_HORIZON_DAYS,
                                DEFAULT_TEAM_CAPACITY_PER_MONTH)
+from ...capacity import touches_per_month
 from ...storage.db import clock, clock_frozen, get_setting, loads
 from .. import tz
 from ..scheduler import DEFAULT_JOBS
@@ -237,7 +238,7 @@ def overview_page(st) -> dict:
         "SELECT * FROM run_log WHERE job='scheduled.score' AND status='ok' ORDER BY id DESC LIMIT 1").fetchone()
 
     # the capacity line, as routing/engine.py draws it: the value at place k, the team's reach in the horizon
-    per_month = float(get_setting(conn, "team_capacity_per_month") or DEFAULT_TEAM_CAPACITY_PER_MONTH)
+    per_month = touches_per_month(conn, len(sdrs))
     days = float(get_setting(conn, "capacity_line_days") or DEFAULT_LINE_HORIZON_DAYS)
     horizon = _window(days * 24)
     k = max(1, int(round(per_month * days / 30.4)))

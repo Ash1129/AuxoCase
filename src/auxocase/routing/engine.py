@@ -47,12 +47,13 @@ from typing import Callable, Optional
 from ..hubspot.client import HubSpotClient
 from ..hubspot.models import Contact, Owner
 from ..pool import BELOW_GATE_REASON, BELOW_GATE_STAGE, below_gate_contacts, explore_below_gate_share, pool_contacts
+from ..capacity import touches_per_month
 from ..storage.db import clock, dumps, get_setting, now_iso, set_setting, tx
 
 DEFAULT_EXPLORATION_SHARE = 0.08
 DEFAULT_TASK_DUE_HOURS = 4
 DEFAULT_FIRST_TOUCH_SLA_HOURS = 24
-DEFAULT_TEAM_CAPACITY_PER_MONTH = 500    # the brief: 12 SDRs work about 500 MQLs a month
+DEFAULT_TEAM_CAPACITY_PER_MONTH = 500    # the brief: 12 SDRs work about 500 MQLs a month; capacity.py derives it from SDR minutes
 DEFAULT_LINE_HORIZON_DAYS = 7
 DEFAULT_HOLD_AFTER_HOURS = 24            # an above-line lead unplaced this long goes to the manager
 DEFAULT_FRESH_HOURS = 24
@@ -206,7 +207,7 @@ class Router:
 
     def _line_probability(self, pool: list[Contact], now: datetime) -> Optional[float]:
         """The value at the rank the team reaches in the line horizon at its monthly capacity."""
-        per_month = float(get_setting(self.conn, "team_capacity_per_month") or DEFAULT_TEAM_CAPACITY_PER_MONTH)
+        per_month = touches_per_month(self.conn, len(self.free_slots()[1]))
         days = float(get_setting(self.conn, "capacity_line_days") or DEFAULT_LINE_HORIZON_DAYS)
         k = max(1, int(round(per_month * days / 30.4)))
         c = pool[min(k, len(pool)) - 1]

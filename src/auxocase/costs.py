@@ -27,14 +27,15 @@ import os
 import urllib.parse
 import urllib.request
 
+from . import capacity
 from .llm import usage
 from .routing.engine import REPLY_REASON
 from .storage.db import clock, get_setting
 
 DEFAULTS = {
     "cost_sdr_hour": 45.0,         # loaded hourly cost of an SDR (salary, benefits, tools)
-    "sdr_minutes_touch": 20.0,     # a cold first touch: read the reason, the notes, write or call
-    "sdr_minutes_reply": 10.0,     # answering a lead who replied to the sequence
+    "sdr_minutes_touch": capacity.DEFAULTS["sdr_minutes_touch"],   # a cold first touch: read the reason, the notes, write or call
+    "sdr_minutes_reply": capacity.DEFAULTS["sdr_minutes_reply"],   # answering a lead who replied to the sequence
     "cost_draft": 0.02,            # one Claude draft when none has been metered yet (about two thousand tokens on Opus)
     "acv": 24000.0,                # the brief: average annual contract value
     "close_rate": 0.20,            # the brief: of the demos booked, about 20% close

@@ -27,6 +27,7 @@ import random
 import sqlite3
 from datetime import datetime, timedelta
 
+from ..capacity import touches_per_month
 from ..feedback import loop as fb
 from ..hubspot.mock import MockHubSpot
 from ..hubspot.models import Contact
@@ -36,7 +37,7 @@ from ..costs import unit
 from ..routing.tier2 import detect_replies, run_tier2, send_share
 from ..scoring.pipeline import Scorer, load_live_model
 from ..storage.db import clock, freeze_clock, now_iso, set_setting
-from .generate import (CLOSE_DAYS, TIER2_DEMO_GIVEN_REPLY, TIER2_REPLY_DAYS, TIER2_REPLY_FACTOR, WORKED_PER_MONTH,
+from .generate import (CLOSE_DAYS, TIER2_DEMO_GIVEN_REPLY, TIER2_REPLY_DAYS, TIER2_REPLY_FACTOR,
                        add_leads_between, loss_reason_text, touch_factor, true_close_probability, true_demo_probability,
                        truth_for)
 
@@ -160,7 +161,8 @@ def simulate_month(conn: sqlite3.Connection, hs: MockHubSpot, seed: int = 101, n
     start = as_of or clock(conn)        # the data clock: where the last replayed month (or the history) ended
     ticks = days * 24 // TICK_HOURS
     per_tick_leads = new_leads / ticks
-    per_tick_touches = WORKED_PER_MONTH * TICK_HOURS / (30.4 * 24)
+    sdr_count = sum(1 for o in hs.list_owners(active_only=True) if o.team == "sdr") or None
+    per_tick_touches = touches_per_month(conn, sdr_count) * TICK_HOURS / (30.4 * 24)   # the brief's 500 at the defaults
     reply_cost = unit(conn, "sdr_minutes_reply") / unit(conn, "sdr_minutes_touch")
     scorer = Scorer(hs, conn, load_live_model(conn), make_llm(conn=conn))
     router = Router(hs, conn, seed=seed)

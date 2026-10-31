@@ -10,6 +10,8 @@ Every lead gets **one calibrated number** ("62" means about a 62% chance of book
 
 Three years of BrightPath-like history, generated to match the brief and BrightPath's follow-up answers (`docs/blueprint/brief-answers.md`), then three simulated months with the system in place at the same 12 SDRs and ~500 touches a month. The "after" includes the 8% exploration slice: random leads that cost a few demos a month and are what keeps the model's labels unbiased.
 
+The 500 is SDR time, not a constant: 12 SDRs × about 14 hours a month on first touches ÷ 20 minutes a cold touch. The minutes are a setting on the Leadership page (with minutes a reply and the hours); a quicker touch is more leads worked by the same team, and routing's capacity line, the Overview, the simulator and the cost report all read the result.
+
 | | Before (history) | After (AuxoCase) |
 |---|---|---|
 | Demos booked per month | 172 | **274** (+59%) |

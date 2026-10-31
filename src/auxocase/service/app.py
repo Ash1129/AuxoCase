@@ -49,6 +49,7 @@ from .views.leadership import leadership_page
 from .views.model import model_page
 from .views.overview import overview_page
 from .views.phases import phases_page, throw_switches
+from ..capacity import set_assumptions
 from .views.queue import queue_page
 from .views.stats import hit_rate
 
@@ -207,8 +208,21 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, nav="model", **model_page(st), stale=stale))
 
     @app.get("/leadership", response_class=HTMLResponse)
-    def leadership(request: Request):
-        return TEMPLATES.TemplateResponse(request, "leadership.html", ctx(request, nav="leadership", **leadership_page(st)))
+    def leadership(request: Request, set: str = "", refused: str = ""):
+        """`set`: how many capacity inputs the last submit changed (0: none); `refused`: why one was not set."""
+        notice = {"set": set[:3], "refused": refused[:300]}
+        return TEMPLATES.TemplateResponse(request, "leadership.html", ctx(request, nav="leadership", notice=notice, **leadership_page(st)))
+
+    @app.post("/leadership/capacity")
+    def capacity_set(minutes_touch: str = Form(""), minutes_reply: str = Form(""), hours: str = Form("")):
+        """The capacity inputs: minutes a cold touch, minutes a reply, hours an SDR gives first touches a month. Blank
+        leaves one as it is; a value out of range is refused and nothing is set."""
+        try:
+            given = {k: (float(v) if v.strip() else None) for k, v in (("minutes_touch", minutes_touch), ("minutes_reply", minutes_reply), ("hours", hours))}
+            changed = set_assumptions(st.conn, **given)
+        except ValueError as e:
+            return RedirectResponse(f"/leadership?refused={quote(str(e))}#ld-capacity", status_code=303)
+        return RedirectResponse(f"/leadership?set={len(changed)}#ld-capacity", status_code=303)
 
     @app.get("/phases", response_class=HTMLResponse)
     def phases(request: Request, phase: str = "", refused: str = "", set: str = "", explore: str = "", switch: str = "",
