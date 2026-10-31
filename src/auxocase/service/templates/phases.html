@@ -28,6 +28,7 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
 .log li:last-child{border-bottom:1px solid var(--line)}
 .log .by{display:block;font-size:13px;line-height:18px;color:var(--muted)}
 .empty{margin:0;color:var(--muted);max-width:760px}
+.stands{margin:0;max-width:760px}.stands .ln{display:block}.stands .ln+.ln{margin-top:6px}.stands .ln:first-child{color:var(--muted)}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;overflow-wrap:anywhere}
 {% endblock %}
 {% block body %}
@@ -40,20 +41,21 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {% if notice.phase == phase %}
 {% if notice.refused %}<p class="notice warn" role="status"><b>Not set.</b> {{ notice.refused[:1]|upper }}{{ notice.refused[1:] }} Your choices are still in the form.</p>
 {% elif notice.set == '0' %}<p class="notice" role="status"><b>Nothing changed.</b> Both switches were left as they are.</p>
-{% elif notice.set %}<p class="notice" role="status"><b>Set.</b> {{ next }}{% if mock and frozen %} On the demo's frozen clock the labels move only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
+{% elif notice.set %}<p class="notice" role="status"><b>Set.</b> {{ next }}{% if mock and frozen %} On the demo's frozen clock the outcomes arrive only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
 {% endif %}
 {% endmacro %}
+{% macro stands(lines) %}<p class="stands">{% for s in lines %}<span class="ln">{{ s }}</span>{% endfor %}</p>{% endmacro %}
 {% macro log(rows) %}
-{% if rows %}<ul class="log" aria-label="Switches thrown">
+{% if rows %}<ul class="log" aria-label="Switches set">
   {% for d in rows %}<li>{{ d.label }}<span class="by">{{ d.who }} · {{ when(d.created_at) }} log time{% if d.note %} · <span class="quote">“{{ d.note }}”</span>{% endif %}</span></li>{% endfor %}
-</ul>{% else %}<p class="empty">No switch thrown from this page yet.</p>{% endif %}
+</ul>{% else %}<p class="empty">No switch set from this page yet.</p>{% endif %}
 {% endmacro %}
 {% macro switches(phase, p, second, second_help) %}
 {% set k = notice.keep if notice.phase == phase and notice.refused else {} %}
 <form class="switches" method="post" action="/phases/{{ phase }}">
   <div class="fields">
     <div class="field">
-      <label for="{{ phase }}-explore">{% if phase == 'gate' %}Share of the exploration slice sent below the gate{% else %}Share of the leads below the line put in the sequence{% endif %}</label>
+      <label for="{{ phase }}-explore">{% if phase == 'gate' %}Share of the exploration slice drawn from below the gate{% else %}Share of the leads below the line that get the email sequence{% endif %}</label>
       <select id="{{ phase }}-explore" name="explore">
         <option value="">Leave as is ({{ p.share }}%)</option>
         {% for s in p.shares %}<option value="{{ s.value }}"{% if k.explore == s.value %} selected{% endif %}>{{ s.label|capitalize }}{% if s.current %} · now{% endif %}</option>{% endfor %}
@@ -84,16 +86,17 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {% endmacro %}
 
 <header class="ph-head">
-  <p class="kicker">Next phases · phase 2 {{ gate.state }} · phase 3 {{ seq.state }}{{ ref() }}{% call note('phases-note', 'What the phases are') %}<span class="ln">Routing works the top of the MQL pool.</span><span class="ln">Phase 2: the leads HubSpot's gate keeps out of it.</span><span class="ln">Phase 3: the MQLs below the capacity line that no SDR reaches.</span><span class="ln">Each runs as an experiment: explore buys outcomes, a bar counts them, the second switch waits for enough.</span>{% endcall %}</p>
-  <h1 class="title">Below the gate, below the line</h1>
-  <p class="lede">Two switches each, recorded with a name. The second waits for the labels the first buys.</p>
+  <p class="kicker">Next phases · phase 2 {{ gate.state }} · phase 3 {{ seq.state }}{{ ref() }}{% call note('phases-note', 'What the phases are') %}<span class="ln">Routing works the top of the MQL pool; two groups of leads never reach an SDR.</span><span class="ln">Phase 2: the leads HubSpot's gate keeps out of the pool.</span><span class="ln">Phase 3: the MQLs below the capacity line.</span><span class="ln">Each tries a few first, counts what they book, and only then can be switched on for all of them.</span>{% endcall %}</p>
+  <h1 class="title">The leads nobody works</h1>
+  <p class="lede">Two groups the SDRs never see. Each phase tries a few first and counts what they book; the second switch waits for that count.</p>
 </header>
 
 <hr class="rule">
 
 {# ---- phase 2: below HubSpot's gate ---- #}
 <section class="ph-sec" aria-labelledby="ph-gate">
-  <h2 id="ph-gate" class="kicker">Phase 2 · Below HubSpot's gate · {{ gate.state }}{% if mock %} · simulated{% endif %}{% call note('gate-note', 'Why the gate matters') %}<span class="ln">Only MQLs reach the pool. HubSpot's points give nothing for a blank title or size, so most referral and webinar leads never pass.</span><span class="ln">Explore: {{ gate.share }}% of the {{ exploration }}% exploration slice ({{ gate.slots }}% of all slots), drawn at random from plain leads and scored as handed out.</span><span class="ln">Ranking: refused until {{ gate.needed }} of those have matured labels, {{ maturity_days }} days after arrival, unless forced.</span><span class="ln">An assigned plain lead moves to SQL, counts against capacity and carries a "below old threshold" badge.</span>{% endcall %}</h2>
+  <h2 id="ph-gate" class="kicker">Phase 2 · Leads HubSpot's gate keeps out · {{ gate.state }}{% if mock %} · simulated{% endif %}{% call note('gate-note', 'Why the gate matters') %}<span class="ln">Only MQLs reach the pool. HubSpot's points give nothing for a blank title or size, so most referral and webinar leads never pass.</span><span class="ln">Trying a few: {{ gate.share }}% of the exploration slice ({{ exploration }}% of hand-outs, drawn at random; {{ gate.slots }}% of all hand-outs) comes from below the gate, scored as handed out.</span><span class="ln">Ranking there is refused until {{ gate.needed }} of those have an outcome, {{ maturity_days }} days after arrival, unless forced.</span><span class="ln">A handed-out lead moves to SQL, counts against capacity and carries a "below old threshold" badge.</span>{% endcall %}</h2>
+  {{ stands(gate.stands) }}
   <div class="ph-figs">
     <div class="ph-fig">
       {% if estimate %}<span class="big num">{{ '{:+d}'.format(estimate.mean) }}</span>
@@ -103,13 +106,13 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
     </div>
     <div class="ph-fig">
       <span class="big num{{ ' good' if gate.ready }}">{% if gate.ready %}{{ '{:,}'.format(gate.matured) }}{% else %}{{ gate.matured }} of {{ gate.needed }}{% endif %}</span>
-      <span>matured labels below the gate{% if gate.ready %}, past the {{ gate.needed }} ranking waits for{% endif %}{% call note('matured-note', 'How the labels are counted') %}<span class="ln">Plain leads handed out at random from below the gate, worked, and old enough for the demo label to mature.</span><span class="ln">{{ gate.assigned }} handed out · {{ gate.worked }} worked · {{ gate.matured }} matured · {{ gate.booked }} booked.</span><span class="ln">{% if gate.by_rank %}Another {{ gate.by_rank }} went out by rank, counted apart: the SDRs' choice biases them.{% endif %}</span><span class="ln">{% if gate.ready %}Enough to judge ranking there.{% else %}The second switch waits for {{ gate.needed }}.{% endif %}</span>{% endcall %}</span>
+      <span>below-gate leads with an outcome{% if gate.ready %}, past the {{ gate.needed }} ranking waits for{% endif %}{% call note('matured-note', 'How the outcomes are counted') %}<span class="ln">Leads handed out at random from below the gate, worked, and old enough for the demo outcome to be known ({{ maturity_days }} days).</span><span class="ln">{{ gate.assigned }} handed out · {{ gate.worked }} worked · {{ gate.matured }} with an outcome · {{ gate.booked }} booked.</span><span class="ln">{% if gate.by_rank %}Another {{ gate.by_rank }} went out by rank, counted apart: the SDRs' choice biases them.{% endif %}</span><span class="ln">{% if gate.ready %}Enough to judge ranking there.{% else %}The second switch waits for {{ gate.needed }}.{% endif %}</span>{% endcall %}</span>
     </div>
     <div class="ph-fig">
       {% if gate.observed is not none %}<span class="big num">{{ gate.observed }}%</span>
-      <span>booked, against the {{ v(gate.predicted, '{}%') }} the model said{% call note('rate-note', 'What the two rates mean') %}<span class="ln">Observed: of {{ gate.matured }} matured leads, {{ gate.booked }} booked a demo.</span><span class="ln">Predicted: the model's score at hand-out, averaged: {{ v(gate.predicted, '{}%') }}.</span><span class="ln">Far apart means the model does not yet understand these leads, however many labels there are.</span>{% endcall %}</span>
+      <span>booked, against the {{ v(gate.predicted, '{}%') }} the model said{% call note('rate-note', 'What the two rates mean') %}<span class="ln">Observed: of {{ gate.matured }} leads with an outcome, {{ gate.booked }} booked a demo.</span><span class="ln">Predicted: the model's score at hand-out, averaged: {{ v(gate.predicted, '{}%') }}.</span><span class="ln">Far apart means the model does not yet understand these leads, however many outcomes there are.</span>{% endcall %}</span>
       {% else %}<span class="big num muted">—</span>
-      <span>no matured outcome below the gate yet{% call note('rate-note', 'What will show here') %}<span class="ln">Observed: the share of matured below-gate leads that booked.</span><span class="ln">Predicted: the model's score at hand-out. Close means the model understands them.</span>{% endcall %}</span>{% endif %}
+      <span>no matured outcome below the gate yet{% call note('rate-note', 'What will show here') %}<span class="ln">Observed: the share of below-gate leads with an outcome that booked.</span><span class="ln">Predicted: the model's score at hand-out. Close means the model understands them.</span>{% endcall %}</span>{% endif %}
     </div>
   </div>
 
@@ -128,13 +131,13 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
       {% else %}<p class="empty">No evaluation at <code>{{ report_path }}</code>. Run <code>python run.py eval</code> to write it.</p>{% endif %}
     </div>
     <div class="ph-sub">
-      <h3 class="kicker">The switches{% call note('gate-switch-note', 'What each switch does') %}<span class="ln">Share: how much of the exploration slice goes below the gate. The ranked pool is untouched.</span><span class="ln">Ranking on: plain leads join the pool, the rescore job scores the waiting ones best first, and the capacity line is drawn over the bigger pool.</span><span class="ln">Before {{ gate.needed }} matured labels, ranking on is refused unless forced.</span>{% endcall %}</h3>
-      {{ switches('gate', gate, 'Ranking below the gate', 'Force ranking on ahead of the labels') }}
+      <h3 class="kicker">The switches{% call note('gate-switch-note', 'What each switch does') %}<span class="ln">Share: how much of the exploration slice is drawn from below the gate. The ranked pool is untouched.</span><span class="ln">Rank them: below-gate leads join the pool, the rescore job scores the waiting ones best first, and the capacity line is drawn over the bigger pool.</span><span class="ln">Before {{ gate.needed }} outcomes, ranking them is refused unless forced.</span>{% endcall %}</h3>
+      {{ switches('gate', gate, 'Rank below-gate leads with the MQLs', 'Switch it on before the outcomes are in') }}
     </div>
   </div>
 
   <div class="ph-sub">
-    <h3 id="ph-gate-log" class="kicker">Thrown so far</h3>
+    <h3 id="ph-gate-log" class="kicker">Set so far</h3>
     {{ notices('gate', "Routing draws from below the gate on its next pass.") }}
     {{ log(gate.decisions) }}
   </div>
@@ -144,31 +147,32 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 
 {# ---- phase 3: below the capacity line ---- #}
 <section class="ph-sec" aria-labelledby="ph-line">
-  <h2 id="ph-line" class="kicker">Phase 3 · Automated outreach below the line · {{ seq.state }}{% if mock %} · simulated{% endif %}{% call note('line-note', 'How the experiment runs') %}<span class="ln">The SDRs reach the leads above the capacity line; the MQLs below it are never contacted.</span><span class="ln">Sequence: emails some of them from an SDR's inbox in rotation, at most {{ seq.daily_limit }} a day.</span><span class="ln">Arms: each eligible lead is drawn as it becomes eligible, emailed or left to the ordinary process as the control.</span><span class="ln">A reply hands the lead to the SDR it heard from; a sequence that ends unanswered puts it back.</span><span class="ln">Band: every eligible lead but a {{ seq.holdback }}% holdback. Refused until {{ seq.needed }} emailed leads have matured labels, unless forced.</span><span class="ln">Emailed leads stay out of the model's training table: an email is not an SDR's touch.</span><span class="ln">{% if not seq.sequence %}No automated sequence is set in HubSpot (<code>AUXO_TIER2_SEQUENCE_ID</code>){% if mock %}; the mock logs the send itself{% endif %}.{% endif %}</span>{% endcall %}</h2>
+  <h2 id="ph-line" class="kicker">Phase 3 · MQLs below the capacity line, emailed · {{ seq.state }}{% if mock %} · simulated{% endif %}{% call note('line-note', 'How the experiment runs') %}<span class="ln">The SDRs reach the leads above the capacity line; the MQLs below it are never contacted.</span><span class="ln">Sequence: emails some of them from an SDR's inbox in rotation, at most {{ seq.daily_limit }} a day.</span><span class="ln">Each eligible lead is drawn as it becomes eligible: emailed, or left alone as the comparison.</span><span class="ln">A reply hands the lead to the SDR it heard from; a sequence that ends unanswered puts it back.</span><span class="ln">Every lead: all eligible leads but {{ seq.holdback }}% left alone. Refused until {{ seq.needed }} emailed leads have an outcome, unless forced.</span><span class="ln">Emailed leads stay out of the model's training table: an email is not an SDR's touch.</span><span class="ln">{% if not seq.sequence %}No automated sequence is set in HubSpot (<code>AUXO_TIER2_SEQUENCE_ID</code>){% if mock %}; the mock logs the send itself{% endif %}.{% endif %}</span>{% endcall %}</h2>
+  {{ stands(seq.stands) }}
   <div class="ph-figs">
     <div class="ph-fig">
       {% if seq.lift is not none %}<span class="big num">{{ '{:+g}'.format(seq.lift) }}</span>
-      <span>points of demo rate from the sequence{% call note('lift-note', 'How the lift is counted') %}<span class="ln">Lift: the emailed arm's booking rate minus the control arm's, on matured leads from the same slice.</span><span class="ln">"Model said": the chance if an SDR worked the lead promptly. The emailed arm's shortfall against it is what an email gives up against a person.</span>{% endcall %}</span>
+      <span>points more booked by the emailed leads{% call note('lift-note', 'How the lift is counted') %}<span class="ln">Lift: the emailed leads' booking rate minus the left-alone leads', on leads with an outcome from the same slice.</span><span class="ln">"Model's guess": the chance if an SDR worked the lead promptly. The emailed leads' shortfall against it is what an email gives up against a person.</span>{% endcall %}</span>
       {% else %}<span class="big num muted">—</span>
-      <span>no lift measured yet{% call note('lift-note', 'What will show here') %}The emailed arm's booking rate minus the control arm's, once both have matured leads.{% endcall %}</span>{% endif %}
+      <span>no lift measured yet{% call note('lift-note', 'What will show here') %}The emailed leads' booking rate minus the left-alone leads', once both have outcomes.{% endcall %}</span>{% endif %}
     </div>
     <div class="ph-fig">
       <span class="big num{{ ' good' if seq.ready }}">{% if seq.ready %}{{ '{:,}'.format(seq.emailed_matured) }}{% else %}{{ seq.emailed_matured }} of {{ seq.needed }}{% endif %}</span>
-      <span>emailed leads with matured labels{% if seq.ready %}, past the {{ seq.needed }} the band waits for{% endif %}{% call note('line-matured-note', 'How the labels are counted') %}<span class="ln">A label matures {{ maturity_days }} days after the lead was drawn.</span><span class="ln">{{ '{:,}'.format(seq.emailed) }} emailed · {{ '{:,}'.format(seq.control) }} control{% if seq.refused %} · {{ seq.refused }} refused: already emailed, or nobody to send from{% endif %}.</span><span class="ln">{% if seq.ready %}Enough to judge the band.{% else %}The band waits for {{ seq.needed }}.{% endif %}</span>{% endcall %}</span>
+      <span>emailed leads with an outcome{% if seq.ready %}, past the {{ seq.needed }} the second switch waits for{% endif %}{% call note('line-matured-note', 'How the outcomes are counted') %}<span class="ln">An outcome is known {{ maturity_days }} days after the lead was drawn.</span><span class="ln">{{ '{:,}'.format(seq.emailed) }} emailed · {{ '{:,}'.format(seq.control) }} left alone{% if seq.refused %} · {{ seq.refused }} refused: already emailed, or nobody to send from{% endif %}.</span><span class="ln">{% if seq.ready %}Enough to judge emailing every lead.{% else %}The second switch waits for {{ seq.needed }}.{% endif %}</span>{% endcall %}</span>
     </div>
     <div class="ph-fig">
       <span class="big num">{{ seq.send }}%</span>
-      <span>of eligible leads get the sequence now{% call note('send-note', 'How the share is set') %}<span class="ln">{% if seq.on %}Band on: every eligible lead but the {{ seq.holdback }}% holdback.{% else %}Explore: {{ seq.share }}% of the leads below the line; the rest are the control arm.{% endif %}</span><span class="ln">Eligible: scored, below the line, inside the last seven days, with an address, not yet drawn.</span>{% endcall %}</span>
+      <span>of eligible leads get the sequence now{% call note('send-note', 'How the share is set') %}<span class="ln">{% if seq.on %}Every lead: all eligible leads but the {{ seq.holdback }}% left alone.{% else %}Trying a few: {{ seq.share }}% of the leads below the line; the rest are left alone for comparison.{% endif %}</span><span class="ln">Eligible: scored, below the line, inside the last seven days, with an address, not yet drawn.</span>{% endcall %}</span>
     </div>
   </div>
 
   <div class="ph-grid">
     <div class="ph-sub">
-      <h3 class="kicker">The two arms</h3>
+      <h3 class="kicker">Emailed against left alone</h3>
       {% if seq.emailed or seq.control %}
       <div class="scroll" role="region" aria-label="The two arms, scrolls sideways" tabindex="0">
-        <table class="ph-table" aria-label="The sequence's arms">
-          <thead><tr><th scope="col">Arm</th><th scope="col" class="r">Leads</th><th scope="col" class="r">Replied</th><th scope="col" class="r">Matured</th><th scope="col" class="r">Booked</th><th scope="col" class="r">Rate</th><th scope="col" class="r">Model said</th></tr></thead>
+        <table class="ph-table" aria-label="Emailed against left alone">
+          <thead><tr><th scope="col">Arm</th><th scope="col" class="r">Leads</th><th scope="col" class="r">Replied</th><th scope="col" class="r">Matured</th><th scope="col" class="r">Booked</th><th scope="col" class="r">Rate</th><th scope="col" class="r">Model's guess</th></tr></thead>
           <tbody>
             {% for r in seq.rows %}<tr><th scope="row">{{ r.label }}</th><td class="r num">{{ '{:,}'.format(r.leads) }}</td><td class="r num">{{ '{:,}'.format(r.replied) }}</td><td class="r num">{{ '{:,}'.format(r.matured) }}</td><td class="r num">{{ '{:,}'.format(r.booked) }}</td><td class="r num">{{ v(r.rate, '{}%') }}</td><td class="r num">{{ v(r.predicted, '{}%') }}</td></tr>{% endfor %}
           </tbody>
@@ -177,17 +181,17 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
       {% else %}<p class="empty">Off; no lead drawn yet. Set a share below to start the sequence.</p>{% endif %}
     </div>
     <div class="ph-sub">
-      <h3 class="kicker">The switches{% call note('line-switch-note', 'What each switch does') %}<span class="ln">Share: how many eligible leads are emailed while the band is off; the rest are the control arm.</span><span class="ln">Band on: every eligible lead but the holdback. Before {{ seq.needed }} matured emailed leads it is refused unless forced.</span><span class="ln">Band off: sequences already running finish.</span>{% endcall %}</h3>
-      {{ switches('line', seq, 'The band', 'Force the band on ahead of the labels') }}
+      <h3 class="kicker">The switches{% call note('line-switch-note', 'What each switch does') %}<span class="ln">Share: how many eligible leads are emailed while the second switch is off; the rest are left alone.</span><span class="ln">Every lead on: all eligible leads but the {{ seq.holdback }}% left alone. Before {{ seq.needed }} emailed outcomes it is refused unless forced.</span><span class="ln">Every lead off: sequences already running finish.</span>{% endcall %}</h3>
+      {{ switches('line', seq, 'Email every lead below the line', 'Switch it on before the outcomes are in') }}
     </div>
   </div>
 
   <div class="ph-sub">
-    <h3 id="ph-line-log" class="kicker">Thrown so far</h3>
+    <h3 id="ph-line-log" class="kicker">Set so far</h3>
     {{ notices('line', "The sequence draws its arms on routing's next pass.") }}
     {{ log(seq.decisions) }}
   </div>
 </section>
 
-{% if mock %}<footer><ol class="fnotes"><li id="fn-sim">Simulated · synthetic data. Counts come from the mock portal, not real leads. The clock is frozen at {{ clock_text }}: labels mature only when a month is replayed (<code>python run.py simulate</code>). The estimate and the gate's loss come from <code>{{ report_path }}</code>{% if report_written %} ({{ report_written }}){% endif %}.</li></ol></footer>{% endif %}
+{% if mock %}<footer><ol class="fnotes"><li id="fn-sim">Simulated · synthetic data. Counts come from the mock portal, not real leads.{% if frozen %} The clock is frozen at {{ clock_text }}: outcomes arrive only when a month is replayed (<code>python run.py simulate</code>).{% endif %} The estimate and the gate's loss come from <code>{{ report_path }}</code>{% if report_written %} ({{ report_written }}){% endif %}.</li></ol></footer>{% endif %}
 {% endblock %}

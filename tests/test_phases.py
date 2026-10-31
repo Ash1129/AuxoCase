@@ -52,7 +52,7 @@ def test_the_page_reads_both_phases_live_and_says_what_the_estimate_needs(world)
     t = r.text
     assert "phase 2 off · phase 3 off" in t and "0 of 100" in t and "0 of 200" in t
     assert "no estimate of the gain yet" in t and "no matured outcome below the gate yet" in t and "no lift measured yet" in t
-    assert "Run <code>python run.py eval</code>" in t and "No switch thrown from this page yet" in t
+    assert "Run <code>python run.py eval</code>" in t and "No switch set from this page yet" in t
     assert "<script>" not in t and "onclick=" not in t
     assert 'href="/phases"' in client.get("/").text                                      # in the navigation
 
@@ -95,7 +95,7 @@ def test_switches_thrown_from_the_page_are_set_recorded_and_refused_when_not_rea
     row = conn.execute("SELECT * FROM phase_decisions ORDER BY id DESC LIMIT 1").fetchone()
     assert (row["switch"], row["value"], row["forced"]) == ("on", "on", 1)
     t = client.get("/phases").text
-    assert "phase 2 ranking" in t and "Ranking below the gate switched on, ahead of the labels" in t
+    assert "phase 2 ranking" in t and "Ranking below the gate switched on, ahead of the outcomes" in t
     # Nothing changed: nothing recorded. A bad share: refused.
     r = client.post("/phases/gate", data={"who": "Dana from sales", "explore": "0.5", "switch": "on"}, follow_redirects=False)
     assert r.headers["location"] == "/phases?phase=gate&set=0#ph-gate-log" and "Nothing changed." in client.get(r.headers["location"]).text
