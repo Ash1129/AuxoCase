@@ -29,6 +29,26 @@
 .ld-row .w1{flex:0 0 112px}.ld-row .w2{flex:0 0 104px}.ld-row .w3{flex:0 0 96px}
 .ld-row .barcol{flex:0 0 200px;display:flex}
 .range{font-size:13px;font-weight:400;color:var(--muted)}
+.charts{display:flex;flex-wrap:wrap;gap:28px 40px;margin-top:8px}
+.chart{flex:1 1 360px;min-width:0;max-width:640px}
+.chart h3{margin:0 0 6px}
+.chart svg{display:block;width:100%;height:auto;font:13px/18px var(--body);fill:var(--ink)}
+.chart .lbl{fill:var(--ink)}.chart .lbl.on{font-weight:600}.chart .val{fill:var(--ink)}.chart .mut{fill:var(--muted)}
+.chart .axis{stroke:var(--line);stroke-width:1}
+.chart .bar-setup,.chart .bar-history{fill:var(--accent)}.chart .bar-after{fill:var(--accentInk)}
+.chart .col-before{fill:var(--muted);opacity:.55}.chart .col-after{fill:var(--accent)}
+.chart .gap{stroke:var(--bg);stroke-width:2}
+.pie{display:flex;flex-wrap:wrap;align-items:center;gap:12px 28px}
+.pie svg{flex:0 0 160px;width:160px;height:160px}
+.legend{list-style:none;margin:0;padding:0;font-size:14px;line-height:22px}
+.legend li{display:flex;align-items:center;gap:10px}.legend .sw{width:12px;height:12px;border-radius:3px;flex:0 0 12px}
+.legend .n{margin-left:auto;font-variant-numeric:tabular-nums;color:var(--muted)}
+.s1{fill:#2a78d6}.s2{fill:#eb6834}.s3{fill:#1baf7a}.s4{fill:#eda100}.s5{fill:#e87ba4}.s6{fill:#008300}.s7,.s8,.s9{fill:var(--muted)}
+.legend .s1{background:#2a78d6}.legend .s2{background:#eb6834}.legend .s3{background:#1baf7a}.legend .s4{background:#eda100}.legend .s5{background:#e87ba4}.legend .s6{background:#008300}.legend .s7,.legend .s8,.legend .s9{background:var(--muted)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .s1{fill:#3987e5}:root:not([data-theme="light"]) .s2{fill:#d95926}:root:not([data-theme="light"]) .s3{fill:#199e70}:root:not([data-theme="light"]) .s4{fill:#c98500}:root:not([data-theme="light"]) .s5{fill:#d55181}
+:root:not([data-theme="light"]) .legend .s1{background:#3987e5}:root:not([data-theme="light"]) .legend .s2{background:#d95926}:root:not([data-theme="light"]) .legend .s3{background:#199e70}:root:not([data-theme="light"]) .legend .s4{background:#c98500}:root:not([data-theme="light"]) .legend .s5{background:#d55181}}
+:root[data-theme="dark"] .s1{fill:#3987e5}:root[data-theme="dark"] .s2{fill:#d95926}:root[data-theme="dark"] .s3{fill:#199e70}:root[data-theme="dark"] .s4{fill:#c98500}:root[data-theme="dark"] .s5{fill:#d55181}
+:root[data-theme="dark"] .legend .s1{background:#3987e5}:root[data-theme="dark"] .legend .s2{background:#d95926}:root[data-theme="dark"] .legend .s3{background:#199e70}:root[data-theme="dark"] .legend .s4{background:#c98500}:root[data-theme="dark"] .legend .s5{background:#d55181}
 .bar-out{fill:none;stroke:var(--muted);stroke-width:1}
 .bar-dash{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:3 2}
 .bar-dash-accent{fill:none;stroke:var(--accent);stroke-width:1;stroke-dasharray:3 2}
@@ -150,23 +170,50 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
   <h2 id="ld-gain" class="kicker">Where the gain comes from · simulated{% if queue_limits and setups %}{% call note('gain-how', 'How the experiment was run') %}<span class="ln">One simulated month per setup at the brief's capacity, averaged over {{ setups.seeds_word }} seed{{ '' if setups.seeds == 1 else 's' }}. Small figures: the range across seeds.</span><span class="ln">{% if setups.fresh_words %}Freshness discount: a lead past its first day counts at {{ setups.fresh_words }}.{% endif %}</span><span class="ln">Bars: 0 to {{ setups.scale }} demos a month{% if setups.line is not none %}; the dark rule is the history's {{ shared.before.demos_a_month }}{% endif %}.</span><span class="ln">Source: <code>{{ queue_limits_path }}</code> (<code>python run.py queue-limits --seeds {{ setups.seeds }}</code>{% if queue_limits_written %}, {{ queue_limits_written }}{% endif %}).</span>{% endcall %}{% endif %}</h2>
   {% if not queue_limits %}{{ no_limits() }}
   {% elif not setups %}<p class="empty">No summary rows in <code>{{ queue_limits_path }}</code>. Run <code>python run.py queue-limits</code> again.</p>
-  {% else %}
-  {% if setups.first_off and shared %}<p class="lede">With {{ setups.first_desk }}, better picks take the month from {{ shared.before.demos_a_month }} to {{ setups.first_demos }}.{% if setups.speed_adds %} The rest is speed: small queues reach the best leads on their first day.{% endif %}</p>{% endif %}
-  <div class="ld-rows" role="table" aria-label="Demos a month by routing setup">
-    <div class="ld-row hd" role="row">
-      <span role="columnheader" class="lbl">Routing setup</span>
-      <span role="columnheader" class="w1">Demos a month</span>
-      <span role="columnheader" class="w2">Touched in 24 h</span>
-      <span role="columnheader" class="barcol">0 to {{ setups.scale }}{% if setups.line is not none %} · line: history's {{ shared.before.demos_a_month }}{% endif %}</span>
-    </div>
-    {% for r in setups.rows %}
-    <div class="ld-row{{ ' on' if r.in_use }}{{ ' end' if loop.last }}" role="row">
-      <span role="cell" class="lbl">{{ r.label }}{% if r.in_use %} <span class="range">· the setup in use now</span>{% endif %}</span>
-      <span role="cell" class="w1 num">{{ r.demos }} <span class="range">{{ r.demos_lo }}–{{ r.demos_hi }}</span></span>
-      <span role="cell" class="w2 num">{{ v(r.within, '{}%') }} <span class="range">{{ r.within_lo }}–{{ r.within_hi }}</span></span>
-      <span role="cell" class="barcol"><svg width="200" height="12" viewBox="0 0 200 12" aria-hidden="true"><rect class="bar-accent" x="0" y="3" width="{{ r.bar }}" height="6" rx="1"></rect>{% if setups.line is not none %}<rect class="bar-ink" x="{{ setups.line }}" y="0" width="1.5" height="12"></rect>{% endif %}</svg></span>
-    </div>
-    {% endfor %}
+  {% elif setups.first_off and shared %}<p class="lede">With {{ setups.first_desk }}, better picks take the month from {{ shared.before.demos_a_month }} to {{ setups.first_demos }}.{% if setups.speed_adds %} The rest is speed: small queues reach the best leads on their first day.{% endif %}{% if gain and gain.projected %} The time the AI steps save takes it to {{ shared.after.demos_a_month }}.{% endif %}</p>{% endif %}
+  {% if gain %}
+  {% macro steps(key, title, unit, bar_key, max_text) %}
+  <figure class="chart">
+    <h3 class="kicker">{{ title }}</h3>
+    <svg viewBox="0 0 640 {{ 8 + 30 * gain.steps|length }}" role="img" aria-label="{{ title }} by step">
+      {% for s in gain.steps %}{% set y = 4 + 30 * loop.index0 %}
+      <text class="lbl{{ ' on' if s.in_use }}" x="0" y="{{ y + 15 }}">{{ s.label }}{% if s.in_use %} · in use{% endif %}</text>
+      <rect class="bar-{{ s.kind }}" x="290" y="{{ y + 3 }}" width="{{ s[bar_key] }}" height="16" rx="0"><title>{{ s.label }}{% if s.in_use %}, the setup in use now{% endif %}: {{ s[key] }}{{ unit }}{% if s.range %} ({{ s.range }}){% endif %}</title></rect>
+      <text class="val" x="{{ 296 + s[bar_key] }}" y="{{ y + 15 }}">{{ s[key] }}{{ unit }}</text>
+      {% endfor %}
+    </svg>
+    <figcaption class="small muted">{{ max_text }}</figcaption>
+  </figure>
+  {% endmacro %}
+  <div class="charts">
+    {{ steps('demos', 'Demos a month', '', 'bar', 'Each step adds one change to the one above it; history is the twelve months before routing.' ~ (' The last bar is the months simulated ahead with the AI steps on.' if gain.projected else '')) }}
+    {{ steps('within', 'Touched within 24 hours', '%', 'bar_within', 'The share of leads touched within a day of arriving, by the same steps.') }}
+    <figure class="chart">
+      <h3 class="kicker">Leads worked a month</h3>
+      <svg viewBox="0 0 {{ gain.leads.width + 8 }} {{ 20 + 120 + 28 }}" role="img" aria-label="Leads worked a month, month by month">
+        {% for t in gain.leads.ticks %}<line class="axis" x1="42" x2="{{ gain.leads.width }}" y1="{{ 20 + t.y }}" y2="{{ 20 + t.y }}"></line><text class="mut" x="38" y="{{ 20 + t.y + 4 }}" text-anchor="end">{{ t.text }}</text>{% endfor %}
+        {% for r in gain.leads.rows %}
+        <rect class="col-{{ r.group }}" x="{{ r.x }}" y="{{ 20 + 120 - r.h }}" width="24" height="{{ r.h }}"><title>{{ r.month }}: {{ '{:,}'.format(r.worked) }} leads worked{{ ', the AI steps on' if r.group == 'after' and gain.projected else '' }}</title></rect>
+        {% if r.show %}<text class="mut" x="{{ r.x + 12 }}" y="{{ 20 + 120 + 18 }}" text-anchor="middle">{{ r.month }}</text>{% endif %}
+        {% endfor %}
+      </svg>
+      <figcaption class="small muted">Grey, before routing; gold, after. Before, {{ gain.leads.before_avg }} a month on average · After, {{ '{:,}'.format(gain.leads.after_avg) }}{% if gain.projected %}, the AI steps on{% endif %}.</figcaption>
+    </figure>
+    {% if gain.channels %}
+    <figure class="chart">
+      <h3 class="kicker">Where the leads worked came from · {{ gain.after_span }}</h3>
+      <div class="pie">
+        <svg viewBox="0 0 140 140" role="img" aria-label="Leads worked by channel, {{ gain.after_span }}">
+          {% for s in gain.channels.slices %}<path class="s{{ s.i }} gap" d="{{ s.path }}"><title>{{ s.label }}: {{ '{:,}'.format(s.n) }} leads, {{ s.share }}%</title></path>{% endfor %}
+          <text class="val" x="70" y="75" text-anchor="middle" font-size="16" font-weight="600">{{ '{:,}'.format(gain.channels.total) }}</text>
+        </svg>
+        <ul class="legend" aria-label="Leads worked by channel">
+          {% for s in gain.channels.slices %}<li><span class="sw s{{ s.i }}"></span>{{ s.label }}<span class="n">{{ '{:,}'.format(s.n) }} · {{ s.share }}%</span></li>{% endfor %}
+        </ul>
+      </div>
+      <figcaption class="small muted">{{ '{:,}'.format(gain.channels.total) }} leads worked over the After months, by the channel each came in on.</figcaption>
+    </figure>
+    {% endif %}
   </div>
   {% endif %}
 </section>

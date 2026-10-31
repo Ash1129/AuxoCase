@@ -27,6 +27,8 @@ REPORT = Path("docs/evaluation.json")
 QUEUE_LIMITS = Path("outputs/queue_limits.json")
 LEADS_PER_MONTH = 6000      # the brief: "about 6,000 new leads a month" (docs/blueprint/brief.txt), per 1,000 without a recorded count
 WHOLE_MONTH = 0.6           # as evaluation.write_report: fewer first touches than this share of the median month is a partial month
+BAR_W = 280                 # the gain charts: a bar's full width, in the SVG's units
+COL_X0, COL_STEP, COL_H = 48, 36, 120   # the leads-a-month columns: where the first stands, the step between them, the plot's height
 WORDS = {1: "one", 2: "two", 3: "three", 4: "four", 5: "five", 6: "six", 7: "seven", 8: "eight", 9: "nine", 10: "ten",
          11: "eleven", 12: "twelve"}
 
@@ -212,6 +214,73 @@ def _setups(ql: dict, history: Optional[float], in_use: tuple) -> Optional[dict]
             "first_demos": round(first["demos_mean"]), "speed_adds": last["demos_mean"] > first["demos_mean"]}
 
 
+CHANNEL_WORDS = {"paid_ads": "paid ads", "website": "website", "webinar": "webinar", "referral": "referral", "events": "events", "email": "email"}
+PIE_R, PIE_R0, PIE_C = 56.0, 34.0, 70.0            # the donut: outer and inner radius, centre, in a 140 x 140 box
+
+
+def _arc(a0: float, a1: float) -> str:
+    """An SVG path for one donut slice from angle a0 to a1 (degrees, clockwise from the top)."""
+    def pt(r: float, a: float) -> str:
+        rad = math.radians(a - 90)
+        return f"{PIE_C + r * math.cos(rad):.1f} {PIE_C + r * math.sin(rad):.1f}"
+    big = 1 if a1 - a0 > 180 else 0
+    return (f"M {pt(PIE_R, a0)} A {PIE_R} {PIE_R} 0 {big} 1 {pt(PIE_R, a1)} L {pt(PIE_R0, a1)} "
+            f"A {PIE_R0} {PIE_R0} 0 {big} 0 {pt(PIE_R0, a0)} Z")
+
+
+def _channels(st, months: list[str]) -> Optional[dict]:
+    """The leads worked in `months` by the channel they came in on, largest first, as donut slices:
+    {total, slices: [{channel, label, n, share %, path, i}]}; None when the database has none of them."""
+    if not months:
+        return None
+    rows = st.conn.execute(
+        "SELECT COALESCE(NULLIF(c.channel, ''), 'unknown') ch, COUNT(*) n FROM outcomes o JOIN hs_contacts c ON c.id = o.contact_id "
+        f"WHERE o.worked = 1 AND substr(o.first_touch_at, 1, 7) IN ({','.join('?' * len(months))}) GROUP BY ch ORDER BY n DESC, ch", months).fetchall()
+    total = sum(r["n"] for r in rows)
+    if not total:
+        return None
+    slices, a = [], 0.0
+    for i, r in enumerate(rows):
+        sweep = 360.0 * r["n"] / total
+        slices.append({"channel": r["ch"], "label": CHANNEL_WORDS.get(r["ch"], r["ch"].replace("_", " ")), "n": r["n"],
+                       "share": round(100 * r["n"] / total), "path": _arc(a, min(a + sweep, 360.0) - (0.0 if len(rows) == 1 else 0.01)), "i": i + 1})
+        a += sweep
+    return {"total": total, "slices": slices}
+
+
+def _gain(setups: Optional[dict], shared: Optional[dict], mo: Optional[dict], st) -> Optional[dict]:
+    """The gain, metric by metric, as charts: `steps` (history, each routing setup, and the months simulated ahead
+    with the AI steps on) with demos a month and the share touched within 24 h, each with its bar width out of
+    BAR_W; `leads` (leads worked a month, month by month, with the group each is in and its column); `channels`
+    (the After's worked leads by channel, a donut). None when the report has no before and after."""
+    if not shared or not mo:
+        return None
+    b, a = shared["before"], shared["after"]
+    steps = [{"label": "History", "demos": b["demos_a_month"], "within": shared["within_before"], "kind": "history", "range": None}]
+    if setups:
+        steps += [{"label": r["label"], "demos": r["demos"], "within": r["within"], "kind": "setup", "in_use": r["in_use"],
+                   "range": f"{r['demos_lo']}–{r['demos_hi']} across seeds, touched within 24 h {r['within_lo']}–{r['within_hi']}%"} for r in setups["rows"]]
+    if mo["projected"]:
+        steps.append({"label": "Add the time the AI steps save", "demos": a["demos_a_month"], "within": shared["within_after"], "kind": "after", "range": None})
+    top = max(s["demos"] for s in steps) or 1
+    for s in steps:
+        s["bar"] = round(BAR_W * s["demos"] / top, 1)
+        s["bar_within"] = round(BAR_W * (s["within"] or 0) / 100, 1)
+    rows = [{**r, "group": "before"} for r in mo["before_rows"]] + [{**r, "group": "after"} for r in mo["after_rows"]]
+    peak = max((r["worked"] for r in rows), default=0) or 1
+    tick = 500 if peak <= 1500 else 1000
+    axis_top = math.ceil(peak / tick) * tick
+    for i, r in enumerate(rows):
+        r["x"] = COL_X0 + i * COL_STEP
+        r["h"] = round(COL_H * r["worked"] / axis_top, 1)
+        r["show"] = i == 0 or i == len(rows) - 1 or r["month"][:3] == "Jan" or (i > 0 and rows[i - 1]["group"] != r["group"])
+    ticks = [{"v": v, "y": round(COL_H - COL_H * v / axis_top, 1), "text": f"{v / 1000:g}K" if v >= 1000 else f"{v:,}"}
+             for v in range(0, axis_top + 1, tick)]
+    return {"steps": steps, "projected": mo["projected"], "leads": {"rows": rows, "ticks": ticks, "width": COL_X0 + len(rows) * COL_STEP,
+            "before_avg": b["worked_a_month"], "after_avg": a["worked_a_month"]},
+            "channels": _channels(st, [m["month"] for m in mo["after"]]), "after_span": span(mo["after"][0]["month"], mo["after"][-1]["month"])}
+
+
 def _ranking(report: dict) -> Optional[dict]:
     t = report.get("capacity_head_to_head")
     if not t:
@@ -388,7 +457,9 @@ def leadership_page(st) -> dict:
         draft_cost_metered}.
     setups: from queue_limits, {rows: [{label, demos, demos_lo, demos_hi, within, within_lo, within_hi, bar, in_use}],
       scale, line (the history's demos a month on the bars' scale, or None), seeds, seeds_word, fresh_words,
-      first_desk, first_off, first_demos, speed_adds}."""
+      first_desk, first_off, first_demos, speed_adds}.
+    gain: the charts (see _gain): steps, projected, leads {rows, ticks, width, before_avg, after_avg}, channels
+      {total, slices}, after_span."""
     report, ql, in_use = _load(REPORT), _load(QUEUE_LIMITS), _in_use(st)
     sdrs = sum(1 for o in st.hs.list_owners(active_only=True) if o.team == "sdr")
     fresh_as_often, late_as_often = _as_often(LATE_TOUCH_FACTOR)
@@ -408,4 +479,5 @@ def leadership_page(st) -> dict:
                    speed_effect=_speed_effect(report), tier2=_tier2(report), costs=_costs(report))
     if ql:
         out["setups"] = _setups(ql, out["shared"]["before"]["demos_a_month_raw"] if out["shared"] else None, in_use)
+    out["gain"] = _gain(out["setups"], out["shared"], out["months"], st) if report else None
     return out
