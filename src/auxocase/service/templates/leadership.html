@@ -44,6 +44,7 @@
 .ld-limits{margin:0;padding:0;list-style:none;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));column-gap:48px;font-size:14px;line-height:20px}
 .ld-limits li{padding:10px 0;border-top:1px solid var(--line)}
 .empty{margin:0;color:var(--muted);max-width:760px}
+.tap{display:inline-flex;align-items:center;min-height:44px;align-self:flex-start}
 code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:14px;overflow-wrap:anywhere}
 .ld-table thead th{vertical-align:bottom}
 {% endblock %}
@@ -255,7 +256,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 
   {# ---- below the gate ---- #}
   <section class="ld-sec" aria-labelledby="ld-gate">
-    <h2 id="ld-gate" class="kicker">Below HubSpot's gate · phase 2, {{ 'on' if gate and gate.ranks_below_gate else 'off' }}{% if mock %} · simulated{% endif %}{% if report %}{% call note('gate-how', 'What ranking below the gate would add') %}{% if ranking %}{{ '{:+d}'.format(ranking.all_vs_mql.lo) }} to {{ '{:+d}'.format(ranking.all_vs_mql.hi) }} with the {{ ranking.months_word }} months resampled, on the same {{ ranking.capacity }} touches. About {{ ranking.below_gate_picked }} of the {{ ranking.capacity }} would be leads the gate keeps out today{% if ranking.below_gate_by_channel %}: {% for c, n in ranking.below_gate_by_channel %}{{ c }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}.{% endif %} {% if gate %}{% if gate.ranks_below_gate %}Ranking below the gate is switched on{% if not gate.ready %}, with {{ gate.matured }} of the {{ gate.needed }} matured labels it is meant to wait for{% endif %}.{% else %}{% if gate.matured %}The model has {{ gate.matured }} matured outcome{{ '' if gate.matured == 1 else 's' }} from below the gate, fewer than it needs{% else %}The model has never seen an outcome below the gate{% endif %}, so this is not switched on. Ranking there is refused until {{ gate.needed }} worked leads from below the gate have matured labels, unless someone forces it.{% endif %}{% endif %}{% endcall %}{% endif %}</h2>
+    <h2 id="ld-gate" class="kicker">Below HubSpot's gate · phase 2, {{ 'on' if gate and gate.ranks_below_gate else 'off' }}{% if mock %} · simulated{% endif %}{% if report and ranking %}{% call note('gate-how', 'What ranking below the gate would add') %}{{ '{:+d}'.format(ranking.all_vs_mql.lo) }} to {{ '{:+d}'.format(ranking.all_vs_mql.hi) }} with the {{ ranking.months_word }} months resampled, on the same {{ ranking.capacity }} touches. About {{ ranking.below_gate_picked }} of the {{ ranking.capacity }} would be leads the gate keeps out today{% if ranking.below_gate_by_channel %}: {% for c, n in ranking.below_gate_by_channel %}{{ c }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}. The model has never been tested there, so the switches, the matured labels and where the gate loses leads are on Next phases.{% endcall %}{% endif %}</h2>
     {% if not report %}{{ no_report() }}
     {% else %}
     {% if not ranking %}<p class="empty">The stored evaluation at <code>{{ report_path }}</code> has no capacity head to head, so there is no estimate for ranking below the gate.</p>
@@ -265,9 +266,8 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
       <span>if the model ranked every lead, not only the MQLs</span>
     </div>
     {% endif %}
-    {% if gate %}
     {% endif %}
-    {% endif %}
+    <a class="tap" href="/phases#ph-gate">{% if gate and gate.matured %}{{ gate.matured }} of {{ gate.needed }} matured labels below the gate{% else %}The switches and the readiness bar{% endif %}, on Next phases</a>
   </section>
 </div>
 
@@ -276,32 +276,13 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {# ---- phase 3: the automated band and what a demo costs ---- #}
 <div class="ld-grid">
   <section class="ld-sec" aria-labelledby="ld-tier2">
-    <h2 id="ld-tier2" class="kicker">Automated outreach below the line · phase 3, {{ tier2.state if tier2 else 'off' }}{% if mock %} · simulated{% endif %}{% if report and tier2 %}{% call note('tier2-how', 'How to read the arms') %}{% if tier2.lift is not none %}The sequence lifts a below-the-line lead's chance of a demo by {{ tier2.lift }} points. {% endif %}"Model said" is the chance if an SDR worked the lead promptly, so the emailed arm's shortfall against it is what an automated email gives up against a person. {% if tier2.ready %}Enough matured labels to judge the band.{% else %}The band waits for {{ tier2.needed }} matured emailed leads; {{ tier2.matured }} so far.{% endif %}{% if not tier2.sequence %} No automated sequence is set in HubSpot (<code>AUXO_TIER2_SEQUENCE_ID</code>){% if mock %}; the mock logs the send itself{% endif %}.{% endif %}{% endcall %}{% endif %}</h2>
+    <h2 id="ld-tier2" class="kicker">Automated outreach below the line · phase 3, {{ tier2.state if tier2 else 'off' }}{% if mock %} · simulated{% endif %}{% if report and tier2 %}{% call note('tier2-how', 'How the lift is read') %}{% if tier2.lift is not none %}The sequence lifts a below-the-line lead's chance of a demo by {{ tier2.lift }} points: the emailed arm's booking rate against the control arm's, on matured leads drawn from the same slice. {% endif %}{% if tier2.ready %}Enough matured labels to judge the band.{% else %}The band waits for {{ tier2.needed }} matured emailed leads; {{ tier2.matured }} so far.{% endif %} The two arms and the switches are on Next phases.{% endcall %}{% endif %}</h2>
     {% if not report %}{{ no_report() }}
-    {% elif not tier2 %}<p class="empty">Off, and no lead has been drawn yet. <code>python run.py tier2 --explore 0.2</code> puts a fifth of the leads below the capacity line in the automated sequence and keeps the rest as the comparison; the stored evaluation then fills this in.</p>
+    {% elif not tier2 %}<p class="empty">Off, and no lead has been drawn yet.</p>
     {% else %}
-    <p class="lede">{% if tier2.on %}Every lead below the line but a {{ tier2.holdback }}% holdback gets the sequence{% else %}{{ tier2.explore }}% of the leads below the line get the sequence{% endif %}, at most {{ tier2.daily_limit }} a day.</p>
-    <div class="scroll" role="region" aria-labelledby="ld-tier2" tabindex="0">
-      <table class="ld-table narrow" aria-labelledby="ld-tier2">
-        <thead>
-          <tr>
-            <th scope="col">Arm</th>
-            <th scope="col" class="r">Leads</th>
-            <th scope="col" class="r">Replied</th>
-            <th scope="col" class="r">Matured</th>
-            <th scope="col" class="r">Booked</th>
-            <th scope="col" class="r">Rate</th>
-            <th scope="col" class="r">Model said</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for r in tier2.rows %}
-          <tr><th scope="row">{{ r.label }}</th><td class="r num">{{ '{:,}'.format(r.leads) }}</td><td class="r num">{{ '{:,}'.format(r.replied) }}</td><td class="r num">{{ '{:,}'.format(r.matured) }}</td><td class="r num">{{ '{:,}'.format(r.booked) }}</td><td class="r num">{{ v(r.rate, '{}%') }}</td><td class="r num">{{ v(r.predicted, '{}%') }}</td></tr>
-          {% endfor %}
-        </tbody>
-      </table>
-    </div>
+    <p class="lede">{% if tier2.on %}Every lead below the line but a {{ tier2.holdback }}% holdback gets the sequence{% else %}{{ tier2.explore }}% of the leads below the line get the sequence{% endif %}, at most {{ tier2.daily_limit }} a day{% if tier2.lift is not none %}: {{ '{:+g}'.format(tier2.lift) }} points of demo rate over the control arm{% endif %}.</p>
     {% endif %}
+    <a class="tap" href="/phases#ph-line">The two arms and the switches, on Next phases</a>
   </section>
 
   <section class="ld-sec" aria-labelledby="ld-costs">

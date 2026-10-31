@@ -150,6 +150,10 @@ CREATE TABLE IF NOT EXISTS llm_usage (
 );
 CREATE INDEX IF NOT EXISTS llm_usage_task ON llm_usage(task, reference);
 CREATE INDEX IF NOT EXISTS run_log_job ON run_log(job, id);
+-- A phase switch thrown from the Next phases page: which, to what, by whom (feedback/loop and routing/tier2 hold the switches).
+CREATE TABLE IF NOT EXISTS phase_decisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, phase TEXT, switch TEXT, value TEXT, forced INTEGER DEFAULT 0, who TEXT, note TEXT, created_at TEXT
+);
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
 """
 
