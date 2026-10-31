@@ -1,6 +1,6 @@
 # Evaluation report
 
-Generated 2026-10-31T21:07:33 UTC. Live model: `demo-v1`.
+Generated 2026-10-31T21:43:14 UTC. Live model: `demo-v1`.
 
 ## The win BrightPath asked for: more demos, faster follow-up, same 12 SDRs
 
@@ -23,11 +23,11 @@ Month of first touch. Before: the history, SDRs choosing by gut feel and HubSpot
 | 2026-08 | yes | 498 | 306 | 0.61 | 18 | 64% |
 | 2026-09 | yes | 491 | 304 | 0.62 | 17 | 69% |
 | 2026-10 | yes | 512 | 265 | 0.52 | 19 | 62% |
-| 2026-11 | yes | 724 | 425 | 0.59 | 8 | 82% |
-| 2026-12 | yes | 742 | 432 | 0.58 | 7 | 84% |
-| 2027-01 | yes | 726 | 418 | 0.58 | 7 | 84% |
+| 2026-11 | yes | 1111 | 622 | 0.56 | 8 | 89% |
+| 2026-12 | yes | 1155 | 669 | 0.58 | 8 | 89% |
+| 2027-01 | yes | 1100 | 629 | 0.57 | 8 | 90% |
 
-Average per month: 172 demos from 497 leads worked before, 358 from 616 after (+108% demos at the same capacity). On the mock, the speed effect is the generator's assumption from BrightPath's answer 4 (a lead touched within a day books about twice as often); on the real portal it is measured.
+Average per month: 172 demos from 497 leads worked before, 466 from 811 after (+171% demos at the same capacity). On the mock, the speed effect is the generator's assumption from BrightPath's answer 4 (a lead touched within a day books about twice as often); on the real portal it is measured.
 
 All precision figures are computed on leads an SDR actually worked, because unworked leads have no label. They are biased by the SDRs' past choices until the exploration slice has run for a few months (knowledge base L05).
 
@@ -47,24 +47,24 @@ Months 2026-05, 2026-06 (a model from before the three-way split: it was refitte
 
 ## Below HubSpot's MQL gate: what the exploration slice has learned
 
-Exploration share drawn below the gate: 50%; ranking below the gate: off. 173 plain leads handed out at random, 173 worked, 147 with a matured label (34 booked); 0 more handed out by rank. The model's score at hand-out averaged 0.281 for the matured ones; 0.231 booked. Enough labels to judge ranking below the gate.
+Exploration share drawn below the gate: 50%; ranking below the gate: off. 135 plain leads handed out at random, 135 worked, 116 with a matured label (32 booked); 0 more handed out by rank. The model's score at hand-out averaged 0.285 for the matured ones; 0.276 booked. Enough labels to judge ranking below the gate.
 
 ## Cost against outcome: what a demo costs by the way the lead was reached
 
-Unit costs are settings, not facts: an SDR hour 45 dollars, a cold touch 20 minutes, answering a reply 4 minutes, a Claude draft 0.02 dollars. A demo is worth 4,800 dollars in first-year contract value (the brief: 24,000 at a 20% close rate; the outcomes show 23% on 3287 demos old enough to have closed).
+Unit costs are settings, not facts: an SDR hour 45 dollars, a cold touch 20 minutes, answering a reply 4 minutes, a Claude draft 0.02 dollars. A demo is worth 4,800 dollars in first-year contract value (the brief: 24,000 at a 20% close rate; the outcomes show 23% on 3434 demos old enough to have closed).
 
 | Route | Leads reached | Demos | Demo rate | SDR hours | Cost | Cost per demo | Demos per SDR hour | Value |
 |---|---|---|---|---|---|---|---|---|
-| An SDR's touch on a ranked lead | 3693 | 2150 | 0.582 | 1231.0 | 55,395 | 26 | 1.750 | 10,320,000 |
+| An SDR's touch on a ranked lead | 4867 | 2795 | 0.574 | 1622.3 | 73,005 | 26 | 1.720 | 13,416,000 |
 | The automated sequence (phase 3) | 0 | 0 | n/a | 0.0 | 0 | n/a | n/a | 0 |
 
 ## Ranked slice vs exploration slice
 
 | Slice | Assigned | Worked | Booked |
 |---|---|---|---|
-| assigned | 3266 | 3247 | 2044 |
-| holdout_assigned | 273 | 273 | 68 |
-| holdout_assigned (below HubSpot's gate) | 173 | 173 | 38 |
+| assigned | 4518 | 4497 | 2711 |
+| holdout_assigned | 235 | 235 | 48 |
+| holdout_assigned (below HubSpot's gate) | 135 | 135 | 36 |
 
 ## SDR overrides
 
@@ -81,9 +81,9 @@ Unit costs are settings, not facts: an SDR hour 45 dollars, a cold touch 20 minu
 | Leads | Touched | Median hours | Within 24 h |
 |---|---|---|---|
 | Not routed by AuxoCase (history) | 6043 | 70.4 | 21% |
-| Routed by AuxoCase | 3688 | 9.6 | 76% |
+| Routed by AuxoCase | 4862 | 9.8 | 82% |
 
-Measured from outcomes: leads first touched within a day booked at 0.641, later ones at 0.287 (factor 0.45; 4082 and 5655 leads). Routing discounts a lead past its first day by `stale_lead_factor` = 0.5; keep the two close.
+Measured from outcomes: leads first touched within a day booked at 0.621, later ones at 0.286 (factor 0.46; 5259 and 5652 leads). Routing discounts a lead past its first day by `stale_lead_factor` = 0.5; keep the two close.
 
 ## Where HubSpot's MQL gate drops leads (last three months)
 
@@ -100,44 +100,45 @@ Only MQLs reach the pool this service ranks. Leads missing a title or a size get
 
 ## Enrichment
 
-Asked the enrichment tool about 773 pool leads missing a field; it filled at least one field for 546. Titles: 61 of 112. Sizes: 494 of 678.
+Asked the enrichment tool about 748 pool leads missing a field; it filled at least one field for 539. Titles: 61 of 104. Sizes: 483 of 657.
 
 ## Why deals were lost (free-text reasons read into categories, quote checked)
 
 | Reason | under 50 | 50 149 | 150 299 | 300 500 | over 500 | unknown | Total |
 |---|---|---|---|---|---|---|---|
-| price | 69 | 595 | 389 | 238 | 17 | 29 | 1337 |
-| competitor | 46 | 535 | 369 | 225 | 33 | 29 | 1237 |
-| no decision | 32 | 453 | 294 | 173 | 29 | 33 | 1014 |
-| timing | 37 | 456 | 289 | 162 | 27 | 19 | 990 |
-| missing feature | 21 | 344 | 223 | 122 | 51 | 17 | 778 |
-| other | 25 | 212 | 132 | 80 | 11 | 12 | 472 |
-| poor fit | 31 | 176 | 93 | 70 | 11 | 15 | 396 |
+| price | 86 | 643 | 415 | 266 | 21 | 28 | 1459 |
+| competitor | 54 | 564 | 402 | 230 | 28 | 31 | 1309 |
+| no decision | 35 | 502 | 302 | 198 | 27 | 30 | 1094 |
+| timing | 37 | 495 | 319 | 177 | 37 | 23 | 1088 |
+| missing feature | 21 | 371 | 242 | 129 | 57 | 19 | 839 |
+| other | 25 | 226 | 148 | 80 | 12 | 12 | 503 |
+| poor fit | 35 | 179 | 111 | 73 | 11 | 15 | 424 |
 
 ## Channel monitor (latest run)
 
 | Period | Channel | Worked | Demos | Observed | Predicted | Flag |
 |---|---|---|---|---|---|---|
+| 2026-10 | email | 1 | 0 | 0.000 | 0.263 | held |
 | 2026-10 | events | 2 | 1 | 0.500 | 0.394 | held |
-| 2026-10 | paid_ads | 5 | 1 | 0.200 | 0.375 | held |
+| 2026-10 | paid_ads | 4 | 0 | 0.000 | 0.383 | held |
 | 2026-10 | referral | 1 | 0 | 0.000 | 0.357 | held |
-| 2026-10 | webinar | 4 | 4 | 1.000 | 0.517 | held |
-| 2026-10 | website | 18 | 5 | 0.278 | 0.409 | held |
-| 2026-11 | email | 74 | 32 | 0.432 | 0.355 | ok |
-| 2026-11 | events | 72 | 48 | 0.667 | 0.412 | above |
-| 2026-11 | paid_ads | 87 | 46 | 0.529 | 0.336 | above |
-| 2026-11 | referral | 47 | 37 | 0.787 | 0.497 | above |
-| 2026-11 | webinar | 72 | 51 | 0.708 | 0.461 | above |
-| 2026-11 | website | 369 | 211 | 0.572 | 0.379 | above |
-| 2026-12 | email | 66 | 35 | 0.530 | 0.368 | ok |
-| 2026-12 | events | 68 | 45 | 0.662 | 0.401 | above |
-| 2026-12 | paid_ads | 90 | 43 | 0.478 | 0.333 | ok |
-| 2026-12 | referral | 69 | 61 | 0.884 | 0.492 | above |
-| 2026-12 | webinar | 61 | 39 | 0.639 | 0.438 | above |
-| 2026-12 | website | 391 | 210 | 0.537 | 0.378 | above |
-| 2027-01 | email | 45 | 22 | 0.489 | 0.360 | ok |
-| 2027-01 | events | 58 | 29 | 0.500 | 0.414 | ok |
-| 2027-01 | paid_ads | 86 | 40 | 0.465 | 0.345 | ok |
-| 2027-01 | referral | 42 | 34 | 0.810 | 0.481 | above |
-| 2027-01 | webinar | 61 | 44 | 0.721 | 0.475 | above |
-| 2027-01 | website | 364 | 227 | 0.624 | 0.389 | above |
+| 2026-10 | webinar | 6 | 4 | 0.667 | 0.420 | held |
+| 2026-10 | website | 18 | 6 | 0.333 | 0.409 | held |
+| 2026-11 | email | 109 | 52 | 0.477 | 0.358 | ok |
+| 2026-11 | events | 98 | 59 | 0.602 | 0.400 | above |
+| 2026-11 | paid_ads | 160 | 84 | 0.525 | 0.338 | above |
+| 2026-11 | referral | 64 | 56 | 0.875 | 0.487 | above |
+| 2026-11 | webinar | 79 | 50 | 0.633 | 0.473 | ok |
+| 2026-11 | website | 600 | 326 | 0.543 | 0.367 | above |
+| 2026-12 | email | 100 | 56 | 0.560 | 0.354 | above |
+| 2026-12 | events | 90 | 50 | 0.556 | 0.400 | above |
+| 2026-12 | paid_ads | 179 | 94 | 0.525 | 0.333 | above |
+| 2026-12 | referral | 88 | 80 | 0.909 | 0.487 | above |
+| 2026-12 | webinar | 66 | 48 | 0.727 | 0.454 | above |
+| 2026-12 | website | 634 | 347 | 0.547 | 0.369 | above |
+| 2027-01 | email | 82 | 44 | 0.537 | 0.357 | above |
+| 2027-01 | events | 86 | 44 | 0.512 | 0.398 | ok |
+| 2027-01 | paid_ads | 145 | 71 | 0.490 | 0.340 | above |
+| 2027-01 | referral | 48 | 38 | 0.792 | 0.489 | above |
+| 2027-01 | webinar | 75 | 62 | 0.827 | 0.480 | above |
+| 2027-01 | website | 605 | 347 | 0.574 | 0.371 | above |

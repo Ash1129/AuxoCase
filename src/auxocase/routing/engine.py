@@ -167,15 +167,25 @@ class Router:
             set_setting(self.conn, "last_routing_run", now_iso())
             return decisions
 
+        # A lead in the manager's queue as a likely skip is theirs to place, not a candidate again: it would sit at
+        # the top of the pool and take a slot on every pass. A hold, or a lead found owned, does not use its slot up
+        # either: the pass goes on down the pool until the slots are filled or the pool runs out.
+        skip_held = {r["contact_id"] for r in self.conn.execute(
+            "SELECT contact_id FROM held_queue WHERE released_at IS NULL AND reason LIKE ?", (skips.HOLD_PREFIX + "%",))}
+        candidates = [c for c in pool if c.id not in skip_held]
         n_explore = min(budget, self._take_slots(EXPLORATION_CREDIT, budget * self.exploration_share))
         n_top = budget - n_explore
-        top = pool[:n_top]
-        below = pool[n_top:]
+        filled, i = 0, 0
+        while filled < n_top and i < len(candidates):
+            d = self._assign_one(candidates[i], owners, counts, False, now)
+            decisions.append(d)
+            filled += d.decision in ("assigned", "holdout_assigned")
+            i += 1
+        below = candidates[i:]
         gated = self._below_gate_picks(n_explore)
         n_explore -= len(gated)
         explore = self.rng.sample(below, min(n_explore, len(below))) if n_explore and below else []
-        chosen = [(c, False, None) for c in top] + [(c, True, None) for c in explore] + [(c, True, BELOW_GATE_REASON) for c in gated]
-        for contact, is_holdout, reason in chosen:
+        for contact, is_holdout, reason in [(c, True, None) for c in explore] + [(c, True, BELOW_GATE_REASON) for c in gated]:
             decisions.append(self._assign_one(contact, owners, counts, is_holdout, now, reason))
         set_setting(self.conn, "last_routing_run", now_iso())
         return decisions

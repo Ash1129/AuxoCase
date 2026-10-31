@@ -25,7 +25,8 @@ from ..storage.db import dumps, get_setting, loads, set_setting
 
 SKIP_ACTIONS = ("skipped", "junk")
 DECIDED = ("worked", "skipped", "junk")
-MIN_DECISIONS = 8                     # a trait is judged on at least this many decisions
+MIN_DECISIONS = 20                    # a trait is judged on at least this many decisions: nine on "outside the US" held hundreds
+HOLD_PREFIX = "likely skipped"        # how a hold for this reads in held_queue.reason, which routing tells its own holds by
 PRIOR = 1.0                           # smoothing: one skip and one worked lead assumed per trait
 DEFAULT_THRESHOLD = 0.5
 MARGIN = 0.15                         # a trait's skip rate must beat the overall skip rate by this much to mean anything
@@ -103,7 +104,7 @@ def likelihood(tally: dict[str, list[int]], c: Contact, co: Optional[Company], b
 
 
 def reason(found: dict) -> str:
-    return f"likely skipped: {word(found['trait'])}, {found['skipped']} of {found['decided']} skipped"
+    return f"{HOLD_PREFIX}: {word(found['trait'])}, {found['skipped']} of {found['decided']} skipped"
 
 
 def replay(hs: HubSpotClient, conn: sqlite3.Connection, tally: dict[str, list[int]], decided: dict[str, bool], cut: float) -> dict:

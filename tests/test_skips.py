@@ -32,7 +32,7 @@ def base(tmp_path_factory):
 
 @pytest.fixture
 def world(base, tmp_path, monkeypatch):
-    """The SDRs have skipped ten individual contributors and worked ten managers; no other decision."""
+    """The SDRs have skipped twenty individual contributors and worked twenty managers; no other decision."""
     for var in ("HUBSPOT_PRIVATE_APP_TOKEN", "HUBSPOT_APP_SECRET", "AUXO_ALLOWED_HOSTS"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.setenv("AUXO_LLM", "offline")
@@ -44,12 +44,12 @@ def world(base, tmp_path, monkeypatch):
     hs = MockHubSpot(conn, faithful_delivery=True)
     conn.execute("DELETE FROM overrides")
     owned = "hubspot_owner_id IS NOT NULL AND hubspot_owner_id != ''"
-    ics = [r["id"] for r in conn.execute(f"SELECT id FROM hs_contacts WHERE seniority='individual' AND {owned} LIMIT 10")]
-    mgrs = [r["id"] for r in conn.execute(f"SELECT id FROM hs_contacts WHERE seniority='manager' AND {owned} LIMIT 10")]
-    assert len(ics) == 10 and len(mgrs) == 10
+    ics = [r["id"] for r in conn.execute(f"SELECT id FROM hs_contacts WHERE seniority='individual' AND {owned} LIMIT 20")]
+    mgrs = [r["id"] for r in conn.execute(f"SELECT id FROM hs_contacts WHERE seniority='manager' AND {owned} LIMIT 20")]
+    assert len(ics) == 20 and len(mgrs) == 20
     for i, cid in enumerate(ics + mgrs):
         conn.execute("INSERT INTO overrides(contact_id, owner_id, action, note, created_at) VALUES(?,?,?,?,?)",
-                     (cid, "o1", "skipped" if i < 10 else "worked", "wrong fit" if i < 10 else "", f"2026-10-{(i % 28) + 1:02d}T09:00:00"))
+                     (cid, "o1", "skipped" if i < 20 else "worked", "wrong fit" if i < 20 else "", f"2026-10-{(i % 28) + 1:02d}T09:00:00"))
     conn.commit()
     return path, conn, hs
 
@@ -57,15 +57,15 @@ def world(base, tmp_path, monkeypatch):
 def test_the_counts_come_from_the_sdrs_decisions_and_name_the_trait(world):
     path, conn, hs = world
     model = skips.refresh(hs, conn)
-    assert model["traits"]["seniority:individual"] == [10, 10] and model["traits"]["seniority:manager"] == [0, 10]
-    assert model["replay"] == {"skips": 10, "worked": 10, "caught": 10, "held_worked": 0} and model["skip_share"] == 1.0 and model["caught_share"] == 1.0
+    assert model["traits"]["seniority:individual"] == [20, 20] and model["traits"]["seniority:manager"] == [0, 20]
+    assert model["replay"] == {"skips": 20, "worked": 20, "caught": 20, "held_worked": 0} and model["skip_share"] == 1.0 and model["caught_share"] == 1.0
     assert skips.stored(conn) == model
     ic = next(c for c in hs.list_contacts() if c.seniority == "individual" and not c.hubspot_owner_id)
     mgr = next(c for c in hs.list_contacts() if c.seniority == "manager" and not c.hubspot_owner_id)
-    assert model["base"] == 0.5 and skips.likely(model, ic, None) == "likely skipped: an individual contributor, 10 of 10 skipped"
+    assert model["base"] == 0.5 and skips.likely(model, ic, None) == "likely skipped: an individual contributor, 20 of 20 skipped"
     assert skips.likely(model, mgr, None) is None                       # no notes on every lead, half of them skipped: says nothing
     # A trait with too few decisions behind it says nothing either.
-    assert skips.likelihood({"seniority:individual": [5, 5]}, ic, None) is None
+    assert skips.likelihood({"seniority:individual": [19, 19]}, ic, None) is None
 
 
 def test_routing_holds_a_likely_skip_with_the_reason_only_when_switched_on(world):
@@ -90,16 +90,18 @@ def test_routing_holds_a_likely_skip_with_the_reason_only_when_switched_on(world
     router = Router(hs, conn, seed=1, exploration_share=0.0)
     decisions = router.run(now=now)
     mine = [d for d in decisions if d.contact_id == ic.id]
-    assert mine and mine[0].decision == "held" and mine[0].reason == "likely skipped: an individual contributor, 10 of 10 skipped"
+    assert mine and mine[0].decision == "held" and mine[0].reason == "likely skipped: an individual contributor, 20 of 20 skipped"
     held = conn.execute("SELECT reason FROM held_queue WHERE contact_id=? AND released_at IS NULL", (ic.id,)).fetchone()
     assert held["reason"] == mine[0].reason and hs.get_contact(ic.id).auxo_route == "held"
     assert all(d.decision == "held" for d in decisions if hs.get_contact(d.contact_id).seniority == "individual" and d.decision != "already_owned")
     assert any(d.decision == "assigned" for d in decisions)
     client = TestClient(create_app(path, scheduler=False))
     t = client.get("/held").text
-    assert "likely skipped: an individual contributor, 10 of 10 skipped" in t and "or one like the leads the SDRs skip" in t
+    assert "likely skipped: an individual contributor, 20 of 20 skipped" in t and "or one like the leads the SDRs skip" in t
     assert router.release_held(ic.id, owner.id, "the manager", "worth a look")
     conn.execute("UPDATE hs_contacts SET hubspot_owner_id=NULL, auxo_route=NULL, lifecycle_stage='marketingqualifiedlead' WHERE id=?", (ic.id,))
+    conn.commit()
+    conn.execute("UPDATE hs_owners SET capacity_limit=capacity_limit+1 WHERE id=?", (owner.id,))     # the pass filled every slot
     conn.commit()
     again = Router(hs, conn, seed=1, exploration_share=0.0)
     again._skip_model = skips.stored(conn)
@@ -117,7 +119,7 @@ def test_the_skips_held_come_back_as_capacity_on_the_leadership_page(world):
     client = TestClient(create_app(path, scheduler=False))
     t = client.get("/leadership").text
     assert ">556<" in t and "less 3.0 saved on skips held" in t and 'value="auto" selected>Held for the manager' in t
-    assert "routing would have held 10 of the skips and 0 of the worked: an individual contributor (10 of 10 skipped)." in t
+    assert "routing would have held 20 of the skips and 0 of the worked: an individual contributor (20 of 20 skipped)." in t
     assert "Likely skips handed out instead, 500." in t
     r = client.post("/leadership/capacity", data={"skips": "sdr", "minutes_skip": "6"}, follow_redirects=False)
     assert r.headers["location"] == "/leadership?set=2#ld-capacity"
