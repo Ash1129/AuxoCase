@@ -22,6 +22,13 @@
 .fn a{color:var(--muted);text-decoration:none}.fn a:hover{color:var(--ink)}
 .fnotes{margin:0;padding-left:1.6em}.fnotes li{padding-left:4px}.fnotes li+li{margin-top:6px}.fnotes li::marker{color:var(--muted)}.fnotes li:target{color:var(--ink)}
 .part{display:flex;flex-direction:column;gap:12px}
+/* a section whose heading folds what is under it */
+.fold>summary{list-style:none;cursor:pointer;display:inline-flex;align-items:center;gap:10px;color:var(--accentInk)}
+.fold>summary::-webkit-details-marker{display:none}
+.fold>summary::after{content:"";border:5px solid transparent;border-top-color:currentColor;transform:translateY(3px)}
+.fold[open]>summary::after{border-top-color:transparent;border-bottom-color:currentColor;transform:translateY(-2px)}
+.fold>summary:focus-visible{outline:2px solid var(--ink);outline-offset:4px;border-radius:2px}
+.fold-body{display:flex;flex-direction:column;gap:12px;margin-top:12px}
 .part p{margin:0}
 .part h3{font-size:15px;line-height:22px;font-weight:600}
 .block{display:flex;flex-direction:column;gap:8px;max-width:680px}
@@ -161,7 +168,9 @@
 {% macro why(d) -%}
 {%- set c = d.c -%}{%- set s = d.score -%}
 <section class="part" aria-labelledby="why-{{ c.id }}">
-  <h2 class="kicker" id="why-{{ c.id }}">{% if s %}Why {{ first(c) }} is ranked here{% else %}Why {{ first(c) }} has no rank yet{% endif %}</h2>
+  <details class="fold">
+  <summary><h2 class="kicker" id="why-{{ c.id }}">{% if s %}Why {{ first(c) }} is ranked here{% else %}Why {{ first(c) }} has no rank yet{% endif %}</h2></summary>
+  <div class="fold-body">
   {% if c.auxo_reason %}<p class="lede">{{ c.auxo_reason }}</p>{% endif %}
   {%- set g = s.signals if s else {} -%}{%- set found = g.signals or [] if s else [] -%}
   {% if d.drivers -%}
@@ -181,6 +190,8 @@
   {%- else -%}
   <p class="muted">Not scored yet, so there is no breakdown.</p>
   {%- endif %}
+  </div>
+  </details>
 </section>
 {%- endmacro %}
 
