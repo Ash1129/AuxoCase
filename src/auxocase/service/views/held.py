@@ -15,7 +15,8 @@ from ...hubspot.mock import MockHubSpot
 from ...hubspot.models import SDR_LIFECYCLE_STAGES, WAITING_LEAD_STATUSES, Contact
 from ...pool import max_age_days, pool_contacts
 from ...routing.engine import DEFAULT_FIRST_TOUCH_SLA_HOURS
-from ...storage.db import clock, get_setting, loads
+from ...storage.db import clock, clock_frozen, get_setting, loads
+from .. import tz
 from ..scheduler import jobs_from_env
 from .lead import FIRST_DAY_HOURS, SMALL_BAND, WARN_AFTER_HOURS
 
@@ -213,8 +214,9 @@ def held_page(st) -> dict:
         cut = min(NEXT_SHOWN, len(upcoming))
     rest = upcoming[cut:]
     return {
-        "now": now, "now_text": f"{now.day} {now:%b %Y, %H:%M}", "mock": isinstance(st.hs, MockHubSpot),
-        "frozen": bool(get_setting(st.conn, "clock") or get_setting(st.conn, "generated_as_of")),
+        "now": now, "now_text": f"{now.day} {now:%b %Y, %H:%M}" if clock_frozen(st.conn) else tz.clock_text(now), "now_iso": tz.clock_iso(now),
+        "mock": isinstance(st.hs, MockHubSpot),
+        "frozen": clock_frozen(st.conn),
         "held": held, "shown": SHOWN,
         "held_span": {"first": _when(datetime.fromisoformat(min(held_ats))), "last": _when(datetime.fromisoformat(max(held_ats)))} if held_ats else None,
         "pool_size": len(pool), "ranked_at": ranked_at, "score_every": every.get("score"), "remind_every": every.get("remind"),

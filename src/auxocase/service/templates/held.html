@@ -124,7 +124,7 @@ details[open]>summary .shut,details:not([open])>summary .opened{display:none}
 </div>
 {%- endmacro %}
 <header class="hdr">
-  <p class="kicker">Sales manager · {% if env == 'mock' %}mock HubSpot portal · {% if frozen %}clock frozen at {{ now_text }}{% else %}{{ now_text }} UTC{% endif %}{% else %}HubSpot · {{ now_text }} UTC{% endif %}</p>
+  <p class="kicker">Sales manager · {% if env == 'mock' %}mock HubSpot portal · {% if frozen %}clock frozen at {{ now_text }}{% else %}<time data-clock datetime="{{ now_iso }}" data-tz="{{ tz }}">{{ now_text }}</time> {{ tz_label }}{% endif %}{% else %}HubSpot · <time data-clock datetime="{{ now_iso }}" data-tz="{{ tz }}">{{ now_text }}</time> {{ tz_label }}{% endif %}</p>
   <h1 class="title">Held and overdue</h1>
 </header>
 

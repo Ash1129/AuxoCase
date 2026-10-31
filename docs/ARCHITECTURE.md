@@ -59,6 +59,7 @@ HubSpot (mock in development, real API in production)
 | `hubspot/mock.py` | all | SQLite stand-in with HubSpot's semantics: batch 207 results, duplicated/out-of-order webhooks, compare-and-set owner, property history |
 | `hubspot/real.py` | all | httpx client for the v3 API, webhook signature check; unverified against a live portal |
 | `data/generate.py`, `simulate.py` | dev | 14 months of BrightPath-like history with the SDRs' cherry-picking baked in; a month replay with the system in place |
+| `data/rebase.py` | dev | shifts the mock's demo-clock dates onto the present by whole years, leaves wall-time logs, and sets `clock_live` so `storage/db.clock` is the wall clock |
 | `pool.py` | 1, 2 | the pool both jobs share: unowned leads in the pool stages, inside the age window |
 | `scoring/enrich.py` | 1 | one enrichment lookup per lead missing a title or size, written back and logged |
 | `scoring/features.py` | 1 | the feature row; no names, emails or note text |
@@ -74,7 +75,7 @@ HubSpot (mock in development, real API in production)
 | `feedback/loop.py` | 3 | outcomes sync, training table, p-chart monitor, registry, approvals, shadow |
 | `evaluation.py` | 3 | the report both teams read (`docs/evaluation.md`) |
 | `service/app.py` + templates | all | SDR queue, lead page, manager page, model page, the Next phases page (phase 2 and 3 switches, recorded), jobs API, webhook |
-| `run.py` | all | CLI: seed, score, route, sync, monitor, train, approve, simulate, eval, serve, demo |
+| `run.py` | all | CLI: seed, score, route, sync, monitor, train, approve, simulate, rebase, eval, serve, demo |
 
 ## Where the build departs from Blueprint's result, and why
 

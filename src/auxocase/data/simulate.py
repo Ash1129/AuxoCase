@@ -35,7 +35,7 @@ from ..routing.engine import Router, priority
 from ..costs import unit
 from ..routing.tier2 import detect_replies, run_tier2, send_share
 from ..scoring.pipeline import Scorer, load_live_model
-from ..storage.db import clock, now_iso, set_setting
+from ..storage.db import clock, freeze_clock, now_iso, set_setting
 from .generate import (CLOSE_DAYS, TIER2_DEMO_GIVEN_REPLY, TIER2_REPLY_DAYS, TIER2_REPLY_FACTOR, WORKED_PER_MONTH,
                        add_leads_between, loss_reason_text, touch_factor, true_close_probability, true_demo_probability,
                        truth_for)
@@ -175,7 +175,7 @@ def simulate_month(conn: sqlite3.Connection, hs: MockHubSpot, seed: int = 101, n
         t1 = t0 + timedelta(hours=TICK_HOURS)
         n = int(per_tick_leads) + (1 if rng.random() < per_tick_leads - int(per_tick_leads) else 0)
         tally["new_leads"] += add_leads_between(conn, hs, n, t0, t1, seed=seed * 10_007 + i)
-        set_setting(conn, "clock", t1.isoformat())
+        freeze_clock(conn, t1.isoformat())
         tally["scored"] += len(scorer.process_events(max_events=10_000))
         for d in router.run(now=t1):
             tally["assigned"] += d.decision in ("assigned", "holdout_assigned")
@@ -190,7 +190,7 @@ def simulate_month(conn: sqlite3.Connection, hs: MockHubSpot, seed: int = 101, n
                 _work(hs, conn, c, owner_id, t1 + timedelta(minutes=rng.randrange(TICK_HOURS * 60)), rng, tally)
 
     end = start + timedelta(days=days)
-    set_setting(conn, "clock", end.isoformat())
+    freeze_clock(conn, end.isoformat())
     scorer.refresh_ranks()
     sync = fb.sync_outcomes(hs, conn)
     losses = fb.classify_losses(hs, conn, make_llm(conn=conn))

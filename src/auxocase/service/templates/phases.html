@@ -40,7 +40,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {% if notice.phase == phase %}
 {% if notice.refused %}<p class="notice warn" role="status"><b>Not set.</b> {{ notice.refused[:1]|upper }}{{ notice.refused[1:] }} Your choices are still in the form.</p>
 {% elif notice.set == '0' %}<p class="notice" role="status"><b>Nothing changed.</b> Both switches were left as they are.</p>
-{% elif notice.set %}<p class="notice" role="status"><b>Set.</b> {{ next }}{% if mock %} On the demo's frozen clock the labels move only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
+{% elif notice.set %}<p class="notice" role="status"><b>Set.</b> {{ next }}{% if mock and frozen %} On the demo's frozen clock the labels move only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
 {% endif %}
 {% endmacro %}
 {% macro log(rows) %}

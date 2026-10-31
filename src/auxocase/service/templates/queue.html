@@ -121,7 +121,7 @@
   {%- else -%}
   <p class="muted">Nothing decided yet today.</p>
   {%- endif %}
-  {% if env == 'mock' %}<p class="tiny muted">Today is the wall-clock day, not the demo clock's.</p>{% endif %}
+  {% if frozen %}<p class="tiny muted">Today is the wall-clock day, not the demo clock's.</p>{% endif %}
 </section>
 
 {{ ld.footnote(open) }}

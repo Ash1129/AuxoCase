@@ -38,7 +38,8 @@ from ..routing.outreach import log_demo_activity, prepare_outreach
 from ..routing.touches import detect_first_touches
 from ..routing.tier2 import detect_replies, run_tier2
 from ..scoring.pipeline import Scorer, load_live_model
-from ..storage.db import DEFAULT_DB, clock, connect, dumps, get_setting, loads, now_iso
+from ..storage.db import DEFAULT_DB, clock, clock_frozen, connect, dumps, get_setting, loads, now_iso
+from . import tz
 from . import scheduler as sched
 from . import security
 from .security import approval_token, lead_token
@@ -107,12 +108,14 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         owners = st.hs.list_owners()
         last = request.cookies.get("auxo_owner")
         mock = isinstance(st.hs, MockHubSpot)
+        frozen, now = clock_frozen(st.conn), clock(st.conn)
         base = {"request": request, "live": live, "llm": st.llm.name, "scheduler": "on" if runner and runner.running else "off",
                 "line": loads(get_setting(st.conn, "capacity_line_probability")), "nav": "",
                 "held_count": st.conn.execute("SELECT COUNT(*) n FROM held_queue WHERE released_at IS NULL").fetchone()["n"],
                 "candidates": st.conn.execute("SELECT COUNT(*) n FROM model_registry WHERE status='candidate'").fetchone()["n"],
                 "queue_owner": last if any(o.id == last for o in owners) else (owners[0].id if owners else None),
-                "env": "mock" if mock else "hubspot", "clock_text": clock(st.conn).strftime("%d %b %Y %H:%M"),
+                "env": "mock" if mock else "hubspot", "frozen": frozen, "tz": tz.ZONE, "tz_label": tz.LABEL,
+                "clock_text": now.strftime("%d %b %Y %H:%M") if frozen else tz.clock_text(now), "clock_iso": tz.clock_iso(now),
                 "theme": request.cookies.get("auxo_theme", "system")}
         return {**base, **kw}
 

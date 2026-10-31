@@ -47,7 +47,7 @@
   {%- if (key == 'sim' and sim_note) or (key == 'clocks' and clocks_note) %}<sup class="fn"><a href="#fn-{{ key }}" aria-label="footnote {{ n }}">{{ n }}</a></sup>{% endif -%}
 {%- endmacro -%}
 <header class="ov-head">
-  <p class="kicker">Overview · {{ now_text }}{{ ' on the demo clock' if frozen and mock else (', frozen' if frozen else ' UTC') }}{{ ref('clocks') }}</p>
+  <p class="kicker">Overview · {% if frozen %}{{ now_text }}{{ ' on the demo clock' if mock else ', frozen' }}{% else %}<time data-clock datetime="{{ now_iso }}" data-tz="{{ tz }}" data-weekday>{{ now_text }}</time> {{ tz_label }}{% endif %}{{ ref('clocks') }}</p>
   <h1 class="title">{% if not team.sdrs %}No SDR is active{% elif team.free == 0 %}Every slot is full{% elif team.free == team.slots %}Every slot is free{% else %}{{ team.free }} of {{ team.slots }} slots {{ 'is' if team.free == 1 else 'are' }} free{% endif %}, and {% if held == 0 %}no lead is held{% elif held == 1 %}one lead is held{% else %}{{ held }} leads are held{% endif %}</h1>
   <p class="muted">{{ 'Mock HubSpot portal with synthetic leads' if mock else 'HubSpot portal' }} · {% if live %}live model {{ live.version }}{% else %}no live model: the points table scores{% endif %} · {% if team.overdue %}<a href="/held">{{ team.overdue }} first touch{{ 'es' if team.overdue != 1 }} overdue</a>{% else %}no first touch overdue{% endif %}</p>
 </header>

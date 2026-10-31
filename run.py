@@ -205,6 +205,18 @@ def cmd_demo(a):
     cmd_serve(a)
 
 
+def cmd_rebase(a):
+    """Move the mock's demo-clock dates onto this year and let the clock run live; wall-time logs stay."""
+    from auxocase.data.rebase import rebase, years_to_now
+    conn, hs = _ctx(a.db)
+    years = a.years if a.years is not None else years_to_now(conn)
+    if not years and not a.live:
+        print("the data clock is already in this year; nothing to shift")
+        return
+    out = rebase(conn, years=years, evaluation=Path(a.evaluation) if a.evaluation else None, live=a.live)
+    print(json.dumps(out, indent=1))
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default=str(DEFAULT_DB))
@@ -226,6 +238,8 @@ def main(argv=None):
     s = sub.add_parser("costs"); s.add_argument("--revenium", action="store_true"); s.add_argument("--days", type=int, default=30); s.set_defaults(fn=cmd_costs)
     s = sub.add_parser("tier2"); s.add_argument("--explore", type=float, default=None); s.add_argument("--band", choices=["on", "off"], default=None)
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_tier2)
+    s = sub.add_parser("rebase"); s.add_argument("--years", type=int, default=None, help="years to shift back (default: onto this year)")
+    s.add_argument("--evaluation", default="docs/evaluation.json"); s.add_argument("--no-live", dest="live", action="store_false"); s.set_defaults(fn=cmd_rebase)
     s = sub.add_parser("serve"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("demo"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_demo)
     a = p.parse_args(argv)

@@ -65,7 +65,7 @@
   <div class="main">
     {% call ld.reach(d, '/lead/' ~ c.id ~ '?draft=1', 'lead', '/lead/' ~ c.id ~ '?call=1') %}
     <div class="block" style="max-width: 760px">
-      <h3 id="activity-h">Seen in HubSpot{% if last_read %} <span class="muted" style="font-weight: 400">· {{ 'read every minute, ' if scheduler == 'on' else '' }}last read {{ last_read }}{% if env == 'mock' %}, wall clock{% endif %}</span>{% endif %}</h3>
+      <h3 id="activity-h">Seen in HubSpot{% if last_read %} <span class="muted" style="font-weight: 400">· {{ 'read every minute, ' if scheduler == 'on' else '' }}last read {{ last_read }}{% if frozen %}, wall clock{% endif %}</span>{% endif %}</h3>
       {% if activity_rows -%}
       <div class="scroll" role="region" aria-labelledby="activity-h" tabindex="0"><table style="min-width: 520px">
         <thead><tr><th scope="col">When</th><th scope="col">What</th><th scope="col">Detail</th></tr></thead>
@@ -134,7 +134,7 @@
     <section class="part" aria-labelledby="hist-h">
       <h2 class="kicker" id="hist-h">History{{ ld.ref('clocks', d) }}</h2>
       <ol class="list events">
-        {% for t in timeline %}<li><span class="small muted num">{{ t.when }}{% if env == 'mock' %} · {{ t.clock }} clock{% endif %}</span><span>{{ t.what }}</span></li>
+        {% for t in timeline %}<li><span class="small muted num">{{ t.when }}{% if frozen %} · {{ t.clock }} clock{% endif %}</span><span>{{ t.what }}</span></li>
         {% endfor %}
       </ol>
       {%- set calls = activity|selectattr('type', 'equalto', 'CALL')|list %}

@@ -16,8 +16,8 @@
   "ece": 0.0068,
   "k": 299,
   "validation_months": [
-   "2028-05",
-   "2028-06"
+   "2026-05",
+   "2026-06"
   ],
   "calibration_bins": [
    {
@@ -154,7 +154,7 @@
  },
  "success_by_month": [
   {
-   "month": "2026-10",
+   "month": "2024-10",
    "worked": 8,
    "demos": 2,
    "routed_share": 1.0,
@@ -162,7 +162,7 @@
    "within_24h": null
   },
   {
-   "month": "2027-06",
+   "month": "2025-06",
    "worked": 14,
    "demos": 6,
    "routed_share": 0.0,
@@ -170,7 +170,7 @@
    "within_24h": 0.5
   },
   {
-   "month": "2027-07",
+   "month": "2025-07",
    "worked": 463,
    "demos": 157,
    "routed_share": 0.0,
@@ -178,7 +178,7 @@
    "within_24h": 0.218
   },
   {
-   "month": "2027-08",
+   "month": "2025-08",
    "worked": 507,
    "demos": 174,
    "routed_share": 0.0,
@@ -186,7 +186,7 @@
    "within_24h": 0.243
   },
   {
-   "month": "2027-09",
+   "month": "2025-09",
    "worked": 497,
    "demos": 165,
    "routed_share": 0.0,
@@ -194,7 +194,7 @@
    "within_24h": 0.187
   },
   {
-   "month": "2027-10",
+   "month": "2025-10",
    "worked": 499,
    "demos": 160,
    "routed_share": 0.0,
@@ -202,7 +202,7 @@
    "within_24h": 0.22
   },
   {
-   "month": "2027-11",
+   "month": "2025-11",
    "worked": 494,
    "demos": 170,
    "routed_share": 0.0,
@@ -210,7 +210,7 @@
    "within_24h": 0.233
   },
   {
-   "month": "2027-12",
+   "month": "2025-12",
    "worked": 506,
    "demos": 176,
    "routed_share": 0.0,
@@ -218,7 +218,7 @@
    "within_24h": 0.206
   },
   {
-   "month": "2028-01",
+   "month": "2026-01",
    "worked": 500,
    "demos": 180,
    "routed_share": 0.0,
@@ -226,7 +226,7 @@
    "within_24h": 0.206
   },
   {
-   "month": "2028-02",
+   "month": "2026-02",
    "worked": 496,
    "demos": 185,
    "routed_share": 0.0,
@@ -234,7 +234,7 @@
    "within_24h": 0.222
   },
   {
-   "month": "2028-03",
+   "month": "2026-03",
    "worked": 491,
    "demos": 164,
    "routed_share": 0.0,
@@ -242,7 +242,7 @@
    "within_24h": 0.222
   },
   {
-   "month": "2028-04",
+   "month": "2026-04",
    "worked": 511,
    "demos": 178,
    "routed_share": 0.0,
@@ -250,7 +250,7 @@
    "within_24h": 0.204
   },
   {
-   "month": "2028-05",
+   "month": "2026-05",
    "worked": 493,
    "demos": 171,
    "routed_share": 0.0,
@@ -258,7 +258,7 @@
    "within_24h": 0.209
   },
   {
-   "month": "2028-06",
+   "month": "2026-06",
    "worked": 506,
    "demos": 186,
    "routed_share": 0.0,
@@ -266,7 +266,7 @@
    "within_24h": 0.192
   },
   {
-   "month": "2028-07",
+   "month": "2026-07",
    "worked": 67,
    "demos": 16,
    "routed_share": 0.0,
@@ -274,7 +274,7 @@
    "within_24h": 0.015
   },
   {
-   "month": "2028-08",
+   "month": "2026-08",
    "worked": 498,
    "demos": 306,
    "routed_share": 1.0,
@@ -282,7 +282,7 @@
    "within_24h": 0.641
   },
   {
-   "month": "2028-09",
+   "month": "2026-09",
    "worked": 490,
    "demos": 303,
    "routed_share": 1.0,
@@ -290,7 +290,7 @@
    "within_24h": 0.688
   },
   {
-   "month": "2028-10",
+   "month": "2026-10",
    "worked": 502,
    "demos": 280,
    "routed_share": 1.0,
@@ -298,7 +298,7 @@
    "within_24h": 0.647
   },
   {
-   "month": "2028-11",
+   "month": "2026-11",
    "worked": 551,
    "demos": 321,
    "routed_share": 1.0,
@@ -306,7 +306,7 @@
    "within_24h": 0.503
   },
   {
-   "month": "2028-12",
+   "month": "2026-12",
    "worked": 551,
    "demos": 317,
    "routed_share": 1.0,
@@ -314,7 +314,7 @@
    "within_24h": 0.515
   },
   {
-   "month": "2029-01",
+   "month": "2027-01",
    "worked": 491,
    "demos": 281,
    "routed_share": 1.0,
@@ -434,7 +434,7 @@
    "acv": 24000.0,
    "close_rate": 0.2
   },
-  "since": "2028-10-30T06:00:00",
+  "since": "2026-10-30T06:00:00",
   "value_per_demo": 4800,
   "measured_close_rate": 0.232,
   "closed_demos": 3211,
@@ -499,43 +499,43 @@
   },
   "months": [
    {
-    "month": "2028-07",
+    "month": "2026-07",
     "demos": 82,
     "via_sequence": 0,
     "period": "before"
    },
    {
-    "month": "2028-08",
+    "month": "2026-08",
     "demos": 231,
     "via_sequence": 0,
     "period": "before"
    },
    {
-    "month": "2028-09",
+    "month": "2026-09",
     "demos": 302,
     "via_sequence": 0,
     "period": "before"
    },
    {
-    "month": "2028-10",
+    "month": "2026-10",
     "demos": 298,
     "via_sequence": 0,
     "period": "first"
    },
    {
-    "month": "2028-11",
+    "month": "2026-11",
     "demos": 313,
     "via_sequence": 65,
     "period": "with"
    },
    {
-    "month": "2028-12",
+    "month": "2026-12",
     "demos": 322,
     "via_sequence": 61,
     "period": "with"
    },
    {
-    "month": "2029-01",
+    "month": "2027-01",
     "demos": 320,
     "via_sequence": 68,
     "period": "with"
@@ -617,7 +617,7 @@
  "monitor": [
   {
    "id": 135,
-   "period": "2028-10",
+   "period": "2026-10",
    "channel": "email",
    "n": 8,
    "demos": 4,
@@ -630,7 +630,7 @@
   },
   {
    "id": 136,
-   "period": "2028-10",
+   "period": "2026-10",
    "channel": "events",
    "n": 12,
    "demos": 6,
@@ -643,7 +643,7 @@
   },
   {
    "id": 137,
-   "period": "2028-10",
+   "period": "2026-10",
    "channel": "paid_ads",
    "n": 11,
    "demos": 4,
@@ -656,7 +656,7 @@
   },
   {
    "id": 138,
-   "period": "2028-10",
+   "period": "2026-10",
    "channel": "referral",
    "n": 6,
    "demos": 6,
@@ -669,7 +669,7 @@
   },
   {
    "id": 139,
-   "period": "2028-10",
+   "period": "2026-10",
    "channel": "webinar",
    "n": 14,
    "demos": 7,
@@ -682,7 +682,7 @@
   },
   {
    "id": 140,
-   "period": "2028-10",
+   "period": "2026-10",
    "channel": "website",
    "n": 55,
    "demos": 26,
@@ -695,7 +695,7 @@
   },
   {
    "id": 141,
-   "period": "2028-11",
+   "period": "2026-11",
    "channel": "email",
    "n": 44,
    "demos": 27,
@@ -708,7 +708,7 @@
   },
   {
    "id": 142,
-   "period": "2028-11",
+   "period": "2026-11",
    "channel": "events",
    "n": 37,
    "demos": 18,
@@ -721,7 +721,7 @@
   },
   {
    "id": 143,
-   "period": "2028-11",
+   "period": "2026-11",
    "channel": "paid_ads",
    "n": 46,
    "demos": 18,
@@ -734,7 +734,7 @@
   },
   {
    "id": 144,
-   "period": "2028-11",
+   "period": "2026-11",
    "channel": "referral",
    "n": 60,
    "demos": 51,
@@ -747,7 +747,7 @@
   },
   {
    "id": 145,
-   "period": "2028-11",
+   "period": "2026-11",
    "channel": "webinar",
    "n": 52,
    "demos": 32,
@@ -760,7 +760,7 @@
   },
   {
    "id": 146,
-   "period": "2028-11",
+   "period": "2026-11",
    "channel": "website",
    "n": 294,
    "demos": 160,
@@ -773,7 +773,7 @@
   },
   {
    "id": 147,
-   "period": "2028-12",
+   "period": "2026-12",
    "channel": "email",
    "n": 42,
    "demos": 18,
@@ -786,7 +786,7 @@
   },
   {
    "id": 148,
-   "period": "2028-12",
+   "period": "2026-12",
    "channel": "events",
    "n": 40,
    "demos": 26,
@@ -799,7 +799,7 @@
   },
   {
    "id": 149,
-   "period": "2028-12",
+   "period": "2026-12",
    "channel": "paid_ads",
    "n": 58,
    "demos": 33,
@@ -812,7 +812,7 @@
   },
   {
    "id": 150,
-   "period": "2028-12",
+   "period": "2026-12",
    "channel": "referral",
    "n": 60,
    "demos": 42,
@@ -825,7 +825,7 @@
   },
   {
    "id": 151,
-   "period": "2028-12",
+   "period": "2026-12",
    "channel": "webinar",
    "n": 69,
    "demos": 50,
@@ -838,7 +838,7 @@
   },
   {
    "id": 152,
-   "period": "2028-12",
+   "period": "2026-12",
    "channel": "website",
    "n": 285,
    "demos": 152,
@@ -851,7 +851,7 @@
   },
   {
    "id": 153,
-   "period": "2029-01",
+   "period": "2027-01",
    "channel": "email",
    "n": 22,
    "demos": 7,
@@ -864,7 +864,7 @@
   },
   {
    "id": 154,
-   "period": "2029-01",
+   "period": "2027-01",
    "channel": "events",
    "n": 52,
    "demos": 29,
@@ -877,7 +877,7 @@
   },
   {
    "id": 155,
-   "period": "2029-01",
+   "period": "2027-01",
    "channel": "paid_ads",
    "n": 39,
    "demos": 22,
@@ -890,7 +890,7 @@
   },
   {
    "id": 156,
-   "period": "2029-01",
+   "period": "2027-01",
    "channel": "referral",
    "n": 41,
    "demos": 28,
@@ -903,7 +903,7 @@
   },
   {
    "id": 157,
-   "period": "2029-01",
+   "period": "2027-01",
    "channel": "webinar",
    "n": 49,
    "demos": 33,
@@ -916,7 +916,7 @@
   },
   {
    "id": 158,
-   "period": "2029-01",
+   "period": "2027-01",
    "channel": "website",
    "n": 234,
    "demos": 142,

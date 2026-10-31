@@ -204,9 +204,23 @@ def now_iso() -> str:
 
 def clock(conn: sqlite3.Connection) -> datetime:
     """The service's 'now' for maturity windows and SLAs: the simulated clock when the mock's generator or
-    simulator set one (`clock`, else `generated_as_of`), wall time otherwise. Log timestamps stay wall time."""
+    simulator set one (`clock`, else `generated_as_of`) and `clock_live` is not set, wall time otherwise (a real
+    portal, or the mock after `run.py rebase`). Log timestamps stay wall time."""
+    if get_setting(conn, "clock_live") == "1":
+        return datetime.utcnow()
     v = get_setting(conn, "clock") or get_setting(conn, "generated_as_of")
     return datetime.fromisoformat(v) if v else datetime.utcnow()
+
+
+def clock_frozen(conn: sqlite3.Connection) -> bool:
+    """Whether `clock` is a simulated clock standing still, as against the wall clock."""
+    return get_setting(conn, "clock_live") != "1" and bool(get_setting(conn, "clock") or get_setting(conn, "generated_as_of"))
+
+
+def freeze_clock(conn: sqlite3.Connection, at: str) -> None:
+    """The simulator's clock: `at` (ISO), and no longer live."""
+    set_setting(conn, "clock", at)
+    set_setting(conn, "clock_live", "0")
 
 
 def dumps(obj: Any) -> str:

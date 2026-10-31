@@ -150,7 +150,7 @@ h2.kicker[id]{scroll-margin-top:24px}
       <dt>Scheduler</dt><dd>{{ scheduler }}</dd>
       {% if line is not none %}<dt>Capacity line</dt><dd class="num">{{ (100 * line)|round|int }}%</dd>{% endif %}
       <dt>Data</dt><dd>{{ 'Synthetic · mock HubSpot' if env == 'mock' else 'HubSpot' }}</dd>
-      {% if env == 'mock' %}<dt>Clock</dt><dd>{{ clock_text }} · frozen</dd>{% endif %}
+      {% if env == 'mock' %}<dt>Clock</dt><dd>{% if frozen %}{{ clock_text }} · frozen{% else %}<time data-clock datetime="{{ clock_iso }}" data-tz="{{ tz }}">{{ clock_text }}</time> {{ tz_label }} · live{% endif %}</dd>{% endif %}
     </dl>
     <form class="theme" method="post" action="/theme">
       <input type="hidden" name="next" value="{{ request.url.path }}">

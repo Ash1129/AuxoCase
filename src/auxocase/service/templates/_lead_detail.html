@@ -52,7 +52,7 @@
 {%- set ns = namespace(n=0, out=0) -%}
 {%- for k, on in [('sim', env == 'mock'), ('speed', env == 'mock' and d is not none and d.late_factor and d.speed.factor is defined),
                   ('hit', hit is defined and hit), ('draft', d is not none and d.touch and d.email),
-                  ('brief', d is not none and d.get('call')), ('clocks', env == 'mock' and timeline is defined)] -%}
+                  ('brief', d is not none and d.get('call')), ('clocks', frozen and timeline is defined)] -%}
 {%- if on -%}{%- set ns.n = ns.n + 1 -%}{%- if k == key -%}{%- set ns.out = ns.n -%}{%- endif -%}{%- endif -%}
 {%- endfor -%}
 {{ ns.out }}
@@ -307,7 +307,7 @@ Team hit rate, leads handed out in the last {{ hit.days }} days and worked since
     {% if hit is defined and hit %}<li id="fn-hit">{{ hit_text() }}</li>{% endif %}
     {% if d is not none and d.touch and d.email %}{% set e = d.email %}<li id="fn-draft">Drafted by {{ 'Claude' if e.source == 'llm' else 'the template' }}{% if e.rejected %} · Claude's draft was set aside: {{ e.rejected }}{% endif %}. {% if e.touch == 1 and d.stored and d.stored.status == 'enrolled' %}Edit it in HubSpot before you send{% else %}Edit it before you send{% endif %}; nothing is sent from here.</li>{% endif %}
     {% if d is not none and d.get('call') %}{% set b = d.get('call') %}<li id="fn-brief">Prepared by {{ 'Claude' if b.source == 'llm' else 'the template' }}{% if b.rejected %} · Claude's brief was set aside: {{ b.rejected }}{% endif %}. Questions from what moved the score; the objection from deals lost at this company size. Read it, don't recite it.</li>{% endif %}
-    {% if env == 'mock' and timeline is defined %}<li id="fn-clocks">Mock clocks: HubSpot activity and routing run on the demo clock, frozen at {{ clock_text }}; AuxoCase's own logs keep wall time. History is in the order things happened.</li>{% endif %}
+    {% if frozen and timeline is defined %}<li id="fn-clocks">Mock clocks: HubSpot activity and routing run on the demo clock, frozen at {{ clock_text }}; AuxoCase's own logs keep wall time. History is in the order things happened.</li>{% endif %}
   </ol>
 </footer>
 {%- endif %}

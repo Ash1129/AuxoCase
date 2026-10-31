@@ -105,6 +105,29 @@ APP_JS = """document.addEventListener('click', function (e) {
   }, { passive: true });
   mark();
 })();
+
+(function () {
+  var clocks = document.querySelectorAll('time[data-clock]');
+  if (!clocks.length || !window.Intl || !Intl.DateTimeFormat.prototype.formatToParts) return;
+  var loaded = Date.now();
+  function fmt(ms, tz, weekday) {
+    var parts = {};
+    new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', day: '2-digit', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ms))
+      .forEach(function (p) { parts[p.type] = p.value; });
+    var date = parts.day + ' ' + parts.month + ' ' + parts.year, time = parts.hour + ':' + parts.minute + ':' + parts.second;
+    return weekday ? parts.weekday + ' ' + date + ', ' + time : date + ' ' + time;
+  }
+  function tick() {
+    Array.prototype.forEach.call(clocks, function (el) {
+      var base = Date.parse(el.getAttribute('datetime'));
+      if (isNaN(base)) { return; }
+      el.textContent = fmt(base + (Date.now() - loaded), el.getAttribute('data-tz') || 'UTC', el.hasAttribute('data-weekday'));
+    });
+  }
+  tick();
+  setInterval(tick, 1000);
+})();
 """
 
 

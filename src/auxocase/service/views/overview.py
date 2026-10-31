@@ -19,7 +19,8 @@ from ...hubspot.models import SDR_LIFECYCLE_STAGES, WAITING_LEAD_STATUSES
 from ...pool import max_age_days, passed_gate, ranks_below_gate
 from ...routing.engine import (DEFAULT_FIRST_TOUCH_SLA_HOURS, DEFAULT_FRESH_HOURS, DEFAULT_LINE_HORIZON_DAYS,
                                DEFAULT_TEAM_CAPACITY_PER_MONTH)
-from ...storage.db import clock, get_setting, loads
+from ...storage.db import clock, clock_frozen, get_setting, loads
+from .. import tz
 from ..scheduler import DEFAULT_JOBS
 from .held import overdue_clocks
 from .lead import FIRST_DAY_HOURS, calibration_band, first_day
@@ -284,7 +285,9 @@ def overview_page(st) -> dict:
         desks.append(d)
     desks.sort(key=lambda d: (d["lead"] is None, d["lead"].createdate if d["lead"] else datetime.max))
 
-    return {"now_text": now.strftime("%a %d %b %Y, %H:%M"), "frozen": bool(get_setting(conn, "clock") or get_setting(conn, "generated_as_of")),
+    frozen = clock_frozen(conn)
+    return {"now_text": now.strftime("%a %d %b %Y, %H:%M") if frozen else tz.clock_text(now, weekday=True),
+            "now_iso": tz.clock_iso(now), "frozen": frozen,
             "run_day": datetime.fromisoformat(run_day).strftime("%d %b %Y").lstrip("0") if run_day else None,
             "pool_size": len(pool), "pool_label": "MQLs and plain leads" if ranks_below_gate(conn) else "MQLs",
             "pool_noun": "MQL or plain lead" if ranks_below_gate(conn) else "MQL", "pool_days": max_age_days(conn),
