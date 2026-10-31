@@ -20,7 +20,7 @@ h3.kicker{color:var(--muted)}
 form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
 .fields{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(220px,100%),1fr));gap:16px 24px}
 .fields input,.fields select{width:100%}
-.ph-sec .notice{margin:4px 0 8px;padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:4px;background:var(--surface)}
+.ph-sec .notice{margin:0 0 12px;padding:14px 16px;border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:4px;background:var(--surface)}
 .ph-sec .notice.warn{border-left-color:var(--warn)}
 .force{display:inline-flex;align-items:center;gap:8px;min-height:44px;font-size:14px;color:var(--muted)}
 .log{margin:0;padding:0;list-style:none;display:flex;flex-direction:column}
@@ -38,7 +38,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {% macro when(ts) %}{% if ts and ts|length >= 16 and (ts[5:7]|int) in range(1, 13) %}<time class="num" datetime="{{ ts[:16] }}">{{ ts[8:10]|int }} {{ ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(ts[5:7]|int) - 1] }} {{ ts[:4] }} {{ ts[11:16] }}</time>{% elif ts %}{{ ts }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}{% endmacro %}
 {% macro notices(phase, next) %}
 {% if notice.phase == phase %}
-{% if notice.refused %}<p class="notice warn" role="status"><b>Not set.</b> {{ notice.refused[:1]|upper }}{{ notice.refused[1:] }} Your choices are still in the form below.</p>
+{% if notice.refused %}<p class="notice warn" role="status"><b>Not set.</b> {{ notice.refused[:1]|upper }}{{ notice.refused[1:] }} Your choices are still in the form above.</p>
 {% elif notice.set == '0' %}<p class="notice" role="status"><b>Nothing changed.</b> Both switches were left as they are. Pick a share, or on or off, and set them again.</p>
 {% elif notice.set %}<p class="notice" role="status"><b>Set.</b> {{ next }}{% if mock %} On the demo's frozen clock nothing matures, so the labels here move only when a month is replayed with <code>python run.py simulate</code>.{% endif %}</p>{% endif %}
 {% endif %}
@@ -94,7 +94,6 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {# ---- phase 2: below HubSpot's gate ---- #}
 <section class="ph-sec" aria-labelledby="ph-gate">
   <h2 id="ph-gate" class="kicker">Phase 2 · Below HubSpot's gate · {{ gate.state }}{% if mock %} · simulated{% endif %}{% call note('gate-note', 'Why the gate matters') %}Only MQLs reach the pool, and HubSpot's points give nothing for a blank title or company size, so most referral and webinar leads never pass. The model has no outcome from below the gate to learn from, so exploration goes first: {{ gate.share }}% of the {{ exploration }}% exploration slice ({{ gate.slots }}% of all slots) is drawn at random from plain leads, scored as it is handed out. Ranking there is refused until {{ gate.needed }} of those have matured labels, {{ maturity_days }} days after the lead came in, unless someone forces it. An assigned plain lead moves to SQL, counts against the SDR's capacity and carries a "below old threshold" badge.{% endcall %}</h2>
-  {{ notices('gate', "Routing draws from below the gate on its next pass, every few minutes with the scheduler on; the counts here move as those leads are handed out, worked and their labels mature.") }}
   <div class="ph-figs">
     <div class="ph-fig">
       {% if estimate %}<span class="big num">{{ '{:+d}'.format(estimate.mean) }}</span>
@@ -135,7 +134,8 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
   </div>
 
   <div class="ph-sub">
-    <h3 class="kicker">Thrown so far</h3>
+    <h3 id="ph-gate-log" class="kicker">Thrown so far</h3>
+    {{ notices('gate', "Routing draws from below the gate on its next pass, every few minutes with the scheduler on; the counts here move as those leads are handed out, worked and their labels mature.") }}
     {{ log(gate.decisions) }}
   </div>
 </section>
@@ -145,7 +145,6 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {# ---- phase 3: below the capacity line ---- #}
 <section class="ph-sec" aria-labelledby="ph-line">
   <h2 id="ph-line" class="kicker">Phase 3 · Automated outreach below the line · {{ seq.state }}{% if mock %} · simulated{% endif %}{% call note('line-note', 'How the experiment runs') %}The SDRs reach the leads above the capacity line; the MQLs below it are never contacted. The sequence emails some of them instead, from an SDR's inbox in rotation, at most {{ seq.daily_limit }} a day. Every eligible lead is drawn into an arm as it becomes eligible: emailed, or left to the ordinary process as the control. A reply hands the lead to the SDR it heard from at once; a sequence that ends unanswered puts it back. The band, which emails every eligible lead but a {{ seq.holdback }}% holdback, is refused until {{ seq.needed }} emailed leads have matured labels, unless someone forces it. Emailed leads stay out of the model's training table: an automated email is a different treatment from an SDR's touch.{% if not seq.sequence %} No automated sequence is set in HubSpot (<code>AUXO_TIER2_SEQUENCE_ID</code>){% if mock %}; the mock logs the send itself{% endif %}.{% endif %}{% endcall %}</h2>
-  {{ notices('line', "The sequence draws its arms on routing's next pass, every few minutes with the scheduler on; the counts here move as leads are emailed, reply and their labels mature.") }}
   <div class="ph-figs">
     <div class="ph-fig">
       {% if seq.lift is not none %}<span class="big num">{{ '{:+g}'.format(seq.lift) }}</span>
@@ -184,7 +183,8 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
   </div>
 
   <div class="ph-sub">
-    <h3 class="kicker">Thrown so far</h3>
+    <h3 id="ph-line-log" class="kicker">Thrown so far</h3>
+    {{ notices('line', "The sequence draws its arms on routing's next pass, every few minutes with the scheduler on; the counts here move as leads are emailed, reply and their labels mature.") }}
     {{ log(seq.decisions) }}
   </div>
 </section>

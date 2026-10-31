@@ -73,7 +73,7 @@ def test_switches_thrown_from_the_page_are_set_recorded_and_refused_when_not_rea
     path, conn, client = world
     # Exploration below the gate: set, recorded with a name, and shown.
     r = client.post("/phases/gate", data={"who": "Dana from sales", "note": "see what is down there", "explore": "0.5"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == "/phases?phase=gate&set=1#ph-gate"
+    assert r.status_code == 303 and r.headers["location"] == "/phases?phase=gate&set=1#ph-gate-log"
     assert get_setting(conn, "explore_below_gate_share") == "0.5"
     rows = conn.execute("SELECT * FROM phase_decisions").fetchall()
     assert len(rows) == 1 and (rows[0]["phase"], rows[0]["switch"], rows[0]["value"], rows[0]["who"]) == ("gate", "explore", "0.5", "Dana from sales")
@@ -86,7 +86,7 @@ def test_switches_thrown_from_the_page_are_set_recorded_and_refused_when_not_rea
     assert not ranks_below_gate(conn) and conn.execute("SELECT COUNT(*) n FROM phase_decisions").fetchone()["n"] == 1
     t = client.get(r.headers["location"]).text
     assert "Not set." in t and "0 of 100 worked leads from below the gate have matured labels" in t
-    assert t.index("Not set.") > t.index('id="ph-gate"')                                  # in the phase's own section
+    assert t.index('id="ph-gate-log"') < t.index("Not set.") < t.index('id="ph-line"')    # under the phase's "Thrown so far"
     assert '<option value="on" selected>On</option>' in t and 'value="Dana from sales"' in t   # the choices kept in the form
     assert t.count(" selected") == 1 and 'name="force" value="1" checked' not in t
     # Forced on: recorded as such, and the waiting plain leads are marked for scoring.
@@ -98,7 +98,7 @@ def test_switches_thrown_from_the_page_are_set_recorded_and_refused_when_not_rea
     assert "phase 2 ranking" in t and "Ranking below the gate switched on, ahead of the labels" in t
     # Nothing changed: nothing recorded. A bad share: refused.
     r = client.post("/phases/gate", data={"who": "Dana from sales", "explore": "0.5", "switch": "on"}, follow_redirects=False)
-    assert r.headers["location"] == "/phases?phase=gate&set=0#ph-gate" and "Nothing changed." in client.get(r.headers["location"]).text
+    assert r.headers["location"] == "/phases?phase=gate&set=0#ph-gate-log" and "Nothing changed." in client.get(r.headers["location"]).text
     assert conn.execute("SELECT COUNT(*) n FROM phase_decisions").fetchone()["n"] == 2
     r = client.post("/phases/gate", data={"who": "Dana from sales", "explore": "1.5"}, follow_redirects=False)
     assert "refused=" in r.headers["location"] and get_setting(conn, "explore_below_gate_share") == "0.5"

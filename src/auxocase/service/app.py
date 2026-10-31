@@ -231,13 +231,13 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         except ValueError as e:
             keep = "".join(f"&{k}={quote(v.strip()[:200])}" for k, v in
                            (("explore", explore), ("switch", switch), ("force", force), ("who", who), ("note", note)) if v.strip())
-            return RedirectResponse(f"/phases?phase={phase}&refused={quote(str(e))}{keep}#ph-{phase}", status_code=303)
+            return RedirectResponse(f"/phases?phase={phase}&refused={quote(str(e))}{keep}#ph-{phase}-log", status_code=303)
         if phase == "gate" and any(c["switch"] == "on" and c["value"] == "on" for c in changed) and not (runner and runner.running):
             # Plain leads already waiting were never scored. With the scheduler on, its rescore job scores them within
             # a minute; without it, score them in the background here, as a model going live does.
             app.state.rescore_thread = threading.Thread(target=_rescore_in_background, args=(db_path, st.hs), daemon=True)
             app.state.rescore_thread.start()
-        return RedirectResponse(f"/phases?phase={phase}&set={len(changed)}#ph-{phase}", status_code=303)
+        return RedirectResponse(f"/phases?phase={phase}&set={len(changed)}#ph-{phase}-log", status_code=303)
 
     @app.get("/decisions", response_class=HTMLResponse)
     def decisions(request: Request, limit: int = 500):
