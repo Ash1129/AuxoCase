@@ -15,6 +15,8 @@
 .info-box{position:absolute;left:0;right:0;top:calc(100% + 8px);z-index:5;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);box-shadow:0 6px 20px rgba(0,0,0,.14);font-size:14px;line-height:20px;text-align:left;font-style:normal;visibility:hidden;opacity:0;transition:opacity .12s}
 .info-wrap:hover .info-box,.info-wrap:focus-within .info-box{visibility:visible;opacity:1}
 /* footnotes are numbered: a small superscript number in the text, the notes as a numbered list at the foot */
+.drivers .info-wrap{position:relative;display:inline-block;line-height:0}
+.drivers .info-box{left:auto;right:0;width:360px;max-width:70vw;font-weight:400}
 .fn{font-size:11px;line-height:0;vertical-align:super;margin-left:1px}
 .fn a{color:var(--muted);text-decoration:none}.fn a:hover{color:var(--ink)}
 .fnotes{margin:0;padding-left:1.6em}.fnotes li{padding-left:4px}.fnotes li+li{margin-top:6px}.fnotes li::marker{color:var(--muted)}.fnotes li:target{color:var(--ink)}
@@ -39,6 +41,7 @@
 .list li:last-child{border-bottom:1px solid var(--line)}
 .list a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}
 .draft-body{overflow-wrap:anywhere}
+.part.wide .block,.part.wide .demo{max-width:none}
 @media (max-width:640px){.score{flex-direction:column;gap:20px}.score>div{max-width:none}.score>div+div{border-top:1px solid var(--line);padding-top:20px}.draft-body{font-size:16px;line-height:26px}}
 {%- endmacro %}
 
@@ -152,16 +155,15 @@
 <section class="part" aria-labelledby="why-{{ c.id }}">
   <h2 class="kicker" id="why-{{ c.id }}">{% if s %}Why {{ first(c) }} is ranked here{% else %}Why {{ first(c) }} has no rank yet{% endif %}</h2>
   {% if c.auxo_reason %}<p class="lede">{{ c.auxo_reason }}</p>{% endif %}
+  {%- set g = s.signals if s else {} -%}{%- set found = g.signals or [] if s else [] -%}
   {% if d.drivers -%}
   <div class="drivers" role="table" aria-label="What moved {{ first(c) }}'s score">
-    <div role="row" style="display: contents"><span class="hd" role="columnheader">What moved {{ first(c) }}'s score</span><span class="hd" role="columnheader">Effect on the odds</span><span class="hd barcell" role="columnheader"><span class="vh">Size</span></span></div>
+    <div role="row" style="display: contents"><span class="hd" role="columnheader">What moved {{ first(c) }}'s score</span><span class="hd" role="columnheader">Effect on the odds{% if s %}{% call note('why-note-' ~ c.id, 'Where these numbers come from') %}Effect on the odds, from {{ s.model_version }} when it scored {{ first(c) }} ({{ s.when }}). The notes reader was {{ 'the offline stand-in (keyword rules, no model)' if g.llm == 'offline' else ('Claude' if g.llm else 'not recorded') }}: {% if found %}it found {{ found|length }} signal{{ 's' if found|length != 1 else '' }} in the notes, worth {{ '%+d'|format(g.adjustment or 0) }} points (capped at ±10){% elif not c.notes %}it found nothing to quote, as there are no notes on record{% else %}it found nothing to quote, so no adjustment{% endif %}.{% if g.dropped %} {{ g.dropped|length }} claimed signal{{ 's were' if g.dropped|length != 1 else ' was' }} dropped because the words were not in the notes.{% endif %}{% endcall %}{% endif %}</span><span class="hd barcell" role="columnheader"><span class="vh">Size</span></span></div>
     {% for x in d.drivers %}<div role="row" style="display: contents"><span role="cell">{{ x.label }}</span><span class="num {{ 'good' if x.better else 'muted' }}" role="cell">{{ x.word }} {{ x.effect }}</span><span class="barcell" role="cell"><svg width="136" height="6" aria-hidden="true"><rect class="bar-{{ 'good' if x.better else 'worse' }}" x="0" y="0" width="{{ x.bar }}" height="6" rx="1"></rect></svg></span></div>
     {% endfor %}
   </div>
   {%- endif %}
   {% if s -%}
-  {%- set g = s.signals -%}{%- set found = g.signals or [] -%}
-  <p class="small muted">Effect on the odds, from {{ s.model_version }} when it scored {{ first(c) }} ({{ s.when }}). The notes reader was {{ 'the offline stand-in (keyword rules, no model)' if g.llm == 'offline' else ('Claude' if g.llm else 'not recorded') }}: {% if found %}it found {{ found|length }} signal{{ 's' if found|length != 1 else '' }} in the notes, worth {{ '%+d'|format(g.adjustment or 0) }} points (capped at ±10){% elif not c.notes %}it found nothing to quote, as there are no notes on record{% else %}it found nothing to quote, so no adjustment{% endif %}.{% if g.dropped %} {{ g.dropped|length }} claimed signal{{ 's were' if g.dropped|length != 1 else ' was' }} dropped because the words were not in the notes.{% endif %}</p>
   {% if found -%}
   <div class="scroll"><table>
     <thead><tr><th scope="col">Signal</th><th scope="col">Exact words in the notes</th><th scope="col" class="r">Points</th></tr></thead>
@@ -174,9 +176,15 @@
 </section>
 {%- endmacro %}
 
-{#- Reach out: the email address, the sequence's three emails, the draft (or the link that drafts it), and on the
-    mock the buttons that stand in for HubSpot. A {% call %} adds page-only content before the demo panel. -#}
+{#- Reach out, in two parts so a page can place them apart: reach_head is the address, the sequence's three emails
+    and where they stand; reach_rest is the draft (or the link that drafts it), any page-only content (`extra`), and
+    on the mock the buttons that stand in for HubSpot. reach() is both in a row, with a {% call %} as the extra. -#}
 {% macro reach(d, draft_href, where) -%}
+{{ reach_head(d, where) }}
+{{ reach_rest(d, draft_href, where, caller() if caller is defined else '') }}
+{%- endmacro %}
+
+{% macro reach_head(d, where, below=false) -%}
 {%- set c = d.c -%}{%- set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} -%}
 {%- set tasks = 'your' if where == 'queue' else ((d.owner.name ~ "'s") if d.owner else "the SDR's") -%}
 <section class="part" aria-labelledby="reach-{{ c.id }}">
@@ -195,6 +203,16 @@
     {% for en in d.enrollments %}<p class="small muted">In HubSpot: sequence {{ en.sequence_id }} from {{ en.sender_email }}, enrolled {{ en.enrolled_at.strftime('%d %b %Y %H:%M') }} · {{ en.status|lower }}.</p>
     {% endfor %}
   </div>
+  {% if below and d.touch %}<p class="small muted" style="margin: 0"><a class="muted" href="#draft-{{ c.id }}">The {{ labels[d.touch] }}{{ "'s draft is" if d.email else ' is drafted' }} further down this page.</a></p>{% endif %}
+  {%- endif %}
+</section>
+{%- endmacro %}
+
+{% macro reach_rest(d, draft_href, where, extra='', wide=false) -%}
+{%- set c = d.c -%}{%- set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} -%}
+{%- set tasks = 'your' if where == 'queue' else ((d.owner.name ~ "'s") if d.owner else "the SDR's") -%}
+<section class="part{{ ' wide' if wide }}" id="draft-{{ c.id }}" aria-label="Reaching {{ first(c) }}">
+  {% if c.email -%}
   {% if not d.touch -%}
   <p class="muted">{% if d.no_draft == 'replied' %}{{ c.first_name or 'The lead' }} replied: answer from HubSpot. No draft needed.{% elif d.no_draft == 'finished' %}All three emails have gone; nothing more to send.{% else %}{{ d.no_draft }}{% endif %}</p>
   {%- elif d.email -%}
@@ -217,7 +235,7 @@
   </div>
   {%- endif %}
   {%- endif %}
-  {% if caller is defined %}{{ caller() }}{% endif %}
+  {{ extra }}
   {%- set automated = d.get('tier2') and d.get('tier2').status == 'sent' and not c.hubspot_owner_id %}
   {% if d.mock and (c.hubspot_owner_id or automated) -%}
   <section class="demo" aria-labelledby="demo-{{ c.id }}">

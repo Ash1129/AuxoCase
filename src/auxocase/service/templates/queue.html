@@ -12,6 +12,11 @@
 .decide .panel{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;padding:12px 0 0}
 .decide .panel p{flex-basis:100%;margin:0}
 @media (max-width:640px){.decide>*,.decide .panel>*{flex:1 1 100%}.decide .btn{width:100%;min-height:48px;font-size:16px}}
+/* "why" and "reach out" side by side where the page is wide enough; stacked below that */
+.pair{display:grid;grid-template-columns:minmax(0,1fr);gap:32px}
+.pair .col{display:flex;flex-direction:column;gap:32px;min-width:0}
+.pair .col+.col{border-top:1px solid var(--line);padding-top:32px}
+@media (min-width:1100px){.pair{grid-template-columns:minmax(0,7fr) minmax(0,4fr);column-gap:0}.pair .col+.col{border-top:0;padding-top:0;border-left:1px solid var(--line);padding-left:48px}.pair .col:first-child{padding-right:48px}.pair .drivers{max-width:none}}
 {% endblock %}
 {% block body %}
 {%- set labels = {'worked': 'worked', 'junk': 'junk', 'skipped': 'skipped'} -%}
@@ -68,11 +73,16 @@
 </div>
 
 <hr class="rule">
-{{ ld.why(open) }}
+<div class="pair">
+  <div class="col">{{ ld.why(open) }}</div>
+  <div class="col">
+    {{ ld.reach_head(open, 'queue', below=true) }}
+    <p class="small" style="margin: 0"><a class="tap" href="/lead/{{ c.id }}">Everything on {{ ld.first(c) }}: activity, notes and history</a></p>
+  </div>
+</div>
 
 <hr class="rule">
-{{ ld.reach(open, '/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&draft=1', 'queue') }}
-<p class="small" style="margin: 0"><a class="tap" href="/lead/{{ c.id }}">Everything on {{ ld.first(c) }}: activity, notes and history</a></p>
+{{ ld.reach_rest(open, '/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&draft=1', 'queue', wide=true) }}
 {%- endif %}
 
 {% if others_waiting -%}
