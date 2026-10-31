@@ -392,6 +392,19 @@ class MockHubSpot:
         rows = self.conn.execute("SELECT * FROM hs_meetings WHERE contact_id=? ORDER BY start_time, id", (contact_id,)).fetchall()
         return [_from_row(Meeting, r) for r in rows]
 
+    def meetings_for_owner(self, owner_id: str, start_from: datetime) -> list[Meeting]:
+        self._count()
+        rows = self.conn.execute("SELECT * FROM hs_meetings WHERE owner_id=? AND start_time >= ? ORDER BY start_time, id",
+                                 (owner_id, start_from.isoformat())).fetchall()
+        return [_from_row(Meeting, r) for r in rows]
+
+    def create_meeting(self, owner_id: str, contact_id: str, start: datetime, end: datetime, title: str,
+                       created_at: Optional[datetime] = None) -> Meeting:
+        self._count()
+        meeting = Meeting(id=self._next_id("hs_meetings", "mtg-"), contact_id=contact_id, owner_id=owner_id, start_time=start, outcome="SCHEDULED")
+        self.add_meeting(meeting, created_at=created_at or datetime.utcnow())
+        return meeting
+
     # ------------------------------------------------------------- activity
     def engagements_logged_since(self, since: datetime) -> list[Engagement]:
         self._count()

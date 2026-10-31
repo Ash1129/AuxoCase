@@ -7,12 +7,13 @@ waiting lead. A lead an SDR has decided on (worked, skipped, junk) leaves the qu
 """
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 from typing import Optional
 
 from ...hubspot.models import SDR_LIFECYCLE_STAGES, WAITING_LEAD_STATUSES
 from ...storage.db import clock, now_iso
 from ...llm.replies import ANSWERED, WORDS as REPLY_WORDS
+from ...llm.scheduling import slot_text
 from .lead import first_day, lead_detail, when
 
 QUEUE_DAYS = 30
@@ -32,7 +33,9 @@ def queue_groups(st, owner_id: str) -> dict:
     touches = {r["contact_id"]: dict(r) for r in st.conn.execute("SELECT contact_id, touched_at, type FROM touches WHERE owner_id=?", (owner_id,))}
     replied = {r["contact_id"]: r["replied_at"] for r in st.conn.execute("SELECT contact_id, replied_at FROM tier2 WHERE status='replied'")}
     triaged = {r["contact_id"]: dict(r) for r in st.conn.execute(
-        "SELECT contact_id, kind, summary, replied_at, acted FROM replies WHERE owner_id=? ORDER BY id", (owner_id,))}     # the latest wins
+        "SELECT contact_id, kind, summary, replied_at, acted, sent_at FROM replies WHERE owner_id=? ORDER BY id", (owner_id,))}     # the latest wins
+    booked = {r["contact_id"]: slot_text(datetime.fromisoformat(r["start_at"])) for r in st.conn.execute(
+        "SELECT contact_id, start_at FROM bookings WHERE owner_id=? AND status='booked' ORDER BY id", (owner_id,))}
     now = clock(st.conn)
     waiting, touched = [], []
     for cid in ids:
@@ -47,7 +50,8 @@ def queue_groups(st, owner_id: str) -> dict:
         entry = {"c": c, "co": st.hs.get_company(c.company_id) if c.company_id else None, "clock": first_day(c.createdate, now),
                  "replied": when(replied[cid]) if cid in replied else None,
                  "reply": {**triaged[cid], "when": when(triaged[cid]["replied_at"]), "word": REPLY_WORDS.get(triaged[cid]["kind"], triaged[cid]["kind"]),
-                           "answer": triaged[cid]["kind"] in ANSWERED} if cid in triaged else None}
+                           "answer": triaged[cid]["kind"] in ANSWERED and not triaged[cid]["sent_at"], "sent": bool(triaged[cid]["sent_at"])} if cid in triaged else None,
+                 "booked": booked.get(cid)}
         if cid in touches:
             t = touches[cid]
             touched.append({**entry, "seen_at": t["touched_at"], "seen_when": when(t["touched_at"]), "seen_type": t["type"] or ""})

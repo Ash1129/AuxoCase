@@ -331,6 +331,8 @@ def _capacity(st, sdrs: int) -> dict:
     rep = model.get("replay") or {}
     would_save = b["skips"]["share"] * b["skips"]["caught"] * b["minutes_skip"]
     b["skips_switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_lead"] + (b["skips"]["saving"] if b["skips_auto"] else -would_save)))
+    booking = b["demo_share"] * max(0.0, b["minutes_booking"] - b["minutes_booking_auto"])
+    b["booking_switched"] = round(sdrs * b["hours"] * 60 / (b["minutes_lead"] + (b["booking_saving"] if b["scheduling_auto"] else -booking)))
     b["skip_model"] = {"replay": rep, "threshold": model.get("threshold"),
                        "traits": sorted(((skip_counts.word(t), n[0], n[1]) for t, n in (model.get("traits") or {}).items()
                                          if n[1] >= skip_counts.MIN_DECISIONS and skip_counts.rate(n) >= max(model.get("threshold") or 0.5, (model.get("base") or 0.0) + skip_counts.MARGIN)),

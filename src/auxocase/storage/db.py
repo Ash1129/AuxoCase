@@ -148,6 +148,13 @@ CREATE TABLE IF NOT EXISTS replies (
   subject TEXT, body TEXT, source TEXT, rejected TEXT, acted TEXT, replied_at TEXT, created_at TEXT
 );
 CREATE INDEX IF NOT EXISTS replies_contact ON replies(contact_id);
+-- Demos booked for the SDR (routing/scheduling.py): per reply handled, the times offered (JSON), the time booked and
+-- HubSpot's meeting, status offered | clash | booked.
+CREATE TABLE IF NOT EXISTS bookings (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, contact_id TEXT, engagement_id TEXT, owner_id TEXT, meeting_id TEXT, start_at TEXT,
+  offered TEXT, status TEXT, created_at TEXT
+);
+CREATE INDEX IF NOT EXISTS bookings_contact ON bookings(contact_id);
 -- An SDR's rough call notes written up (routing/callnotes.py): the summary, outcome, facts learned (JSON), the next
 -- step with its day, the follow-up drafted from the call, and what was written to HubSpot.
 CREATE TABLE IF NOT EXISTS call_notes (
@@ -195,7 +202,7 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
 # Columns added after a database may already exist; CREATE TABLE IF NOT EXISTS does not add them.
 _ADDED_COLUMNS = {"hs_deals": {"closed_lost_reason": "TEXT"}, "outcomes": {"lead_created_at": "TEXT"},
                   "hs_owners": {"meetings_link": "TEXT"}, "hs_engagements": {"disposition": "TEXT", "body": "TEXT"},
-                  "routing_log": {"probability": "REAL", "below_gate": "INTEGER"},
+                  "routing_log": {"probability": "REAL", "below_gate": "INTEGER"}, "replies": {"sent_at": "TEXT"},
                   "hs_contacts": {"auxo_email_subject": "TEXT", "auxo_email_body": "TEXT", "auxo_below_gate": "INTEGER"}}
 
 

@@ -51,9 +51,10 @@ def without_auto_replies(conn: sqlite3.Connection, history: Sequence[Engagement]
     return [e for e in history if e.id not in ooo]
 
 
-def _act(hs: HubSpotClient, conn: sqlite3.Connection, c, e: Engagement, t: Triage, now: datetime) -> str:
+def _act(hs: HubSpotClient, conn: sqlite3.Connection, c, owner, e: Engagement, t: Triage, now: datetime) -> str:
     """Do the plain part and say what was done."""
     from .followups import stop
+    from . import scheduling
     if t.kind in CLOSES:
         hs.batch_update_contacts([(c.id, {"hs_lead_status": "UNQUALIFIED"})])
         conn.execute("INSERT INTO outcomes(contact_id, worked, first_touch_at, updated_at) VALUES(?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET "
@@ -69,6 +70,9 @@ def _act(hs: HubSpotClient, conn: sqlite3.Connection, c, e: Engagement, t: Triag
     stop(conn, c.id, "the lead replied")
     if t.kind == "not_now":
         return f"come back {t.until}" if t.until else "come back later"
+    booked = scheduling.act(hs, conn, c, owner, e, t, now)
+    if booked:
+        return booked
     return "answer drafted" if t.answered else "handed to the SDR"
 
 
@@ -101,10 +105,11 @@ def triage_new(hs: HubSpotClient, conn: sqlite3.Connection, llm: LLM, now: Optio
             t = triage(llm, text=e.body, subject=e.subject, first_name=c.first_name, sender=sender_first_name(owner.name if owner else None),
                        company=co.name if co else "", notes=c.notes, history=without_auto_replies(conn, history),
                        booking_link=owner.meetings_link if owner else "", now=now)
-        acted = _act(hs, conn, c, e, t, now)
-        conn.execute("INSERT INTO replies(contact_id, engagement_id, owner_id, kind, summary, until, subject, body, source, rejected, acted, replied_at, created_at) "
-                     "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)", (c.id, e.id, c.hubspot_owner_id, t.kind, t.summary, t.until, t.subject, t.body, t.source,
-                                                           t.rejected, acted, e.timestamp.isoformat(timespec="seconds"), now_iso()))
+        acted = _act(hs, conn, c, owner, e, t, now)
+        conn.execute("INSERT INTO replies(contact_id, engagement_id, owner_id, kind, summary, until, subject, body, source, rejected, acted, replied_at, created_at, sent_at) "
+                     "VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)", (c.id, e.id, c.hubspot_owner_id, t.kind, t.summary, t.until, t.subject, t.body, t.source,
+                                                             t.rejected, acted, e.timestamp.isoformat(timespec="seconds"), now_iso(),
+                                                             now.isoformat(timespec="seconds") if t.source == "scheduling" else None))
         conn.commit()
         out["triaged"] += 1
         out[t.kind] = out.get(t.kind, 0) + 1

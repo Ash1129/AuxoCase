@@ -18,8 +18,11 @@ the service write up the SDR's rough call notes (routing/callnotes.py): logging 
 `sdr_minutes_call_log_auto` (1) of the cold touch instead of `sdr_minutes_call_log` (4), for the share of first
 touches that are calls. The cold touch's minutes include the leads opened and skipped on the way to one worked;
 `skips_auto` ('1') has routing hold the leads the SDRs would skip (routing/skips.py), so the `sdr_minutes_skip` (3)
-each of those cost come off the touch. `team_capacity_per_month`, when set, overrides the arithmetic with a plain
-number.
+each of those cost come off the touch. So do the minutes of booking a demo, `sdr_minutes_booking` (8, the back and
+forth to fix a time and create the meeting), for the share of worked leads that book: `scheduling_auto` ('1') has
+the service offer times, book the pick and confirm it (routing/scheduling.py), and the SDR spends
+`sdr_minutes_booking_auto` (1) checking the invite instead. `team_capacity_per_month`, when set, overrides the
+arithmetic with a plain number.
 """
 from __future__ import annotations
 
@@ -39,20 +42,26 @@ DEFAULTS = {
     "sdr_minutes_call_log": 4.0,            # of the cold touch, when it is a call: typing the notes, the fields, the task
     "sdr_minutes_call_log_auto": 1.0,       # the same with the notes written up for the SDR: a few fragments typed
     "sdr_minutes_skip": 3.0,                # opening a lead and skipping it: part of the cold touch's minutes
+    "sdr_minutes_booking": 8.0,             # fixing a demo time with a lead who wants one and creating the meeting: part of the cold touch's minutes
+    "sdr_minutes_booking_auto": 1.0,        # the same when the service offers the times, books the pick and confirms it
     "sdr_touch_hours_month": BRIEF_TOUCHES_PER_MONTH * (20.0 + FOLLOWUPS * 5.0) / 60 / DEFAULT_SDRS,   # 20.8 hours: the brief's 500 at 30 minutes a lead
 }
 LIMITS = {"sdr_minutes_touch": (1.0, 240.0), "sdr_minutes_followup": (0.0, 240.0), "sdr_minutes_reply": (1.0, 240.0),
           "sdr_minutes_reply_triaged": (0.0, 240.0), "sdr_minutes_call_log": (0.0, 240.0), "sdr_minutes_call_log_auto": (0.0, 240.0),
-          "sdr_minutes_skip": (0.0, 240.0), "sdr_touch_hours_month": (0.5, 200.0)}
+          "sdr_minutes_skip": (0.0, 240.0), "sdr_minutes_booking": (0.0, 240.0), "sdr_minutes_booking_auto": (0.0, 240.0),
+          "sdr_touch_hours_month": (0.5, 200.0)}
 LABELS = {"sdr_minutes_touch": "minutes a cold touch", "sdr_minutes_followup": "minutes a follow-up",
           "sdr_minutes_reply": "minutes a reply", "sdr_minutes_reply_triaged": "minutes a triaged reply",
           "sdr_minutes_call_log": "minutes logging a call", "sdr_minutes_call_log_auto": "minutes logging a call written up",
-          "sdr_minutes_skip": "minutes a skip",
+          "sdr_minutes_skip": "minutes a skip", "sdr_minutes_booking": "minutes booking a demo",
+          "sdr_minutes_booking_auto": "minutes booking a demo booked for the SDR",
           "sdr_touch_hours_month": "hours an SDR gives leads a month"}
 AUTO = "followups_auto"
 REPLIES_AUTO = "replies_auto"
 CALL_NOTES_AUTO = "call_notes_auto"
 SKIPS_AUTO = "skips_auto"
+SCHEDULING_AUTO = "scheduling_auto"
+DEFAULT_DEMO_SHARE = 0.35               # of worked leads, booking a demo, until the outcomes say
 DEFAULT_SKIP_SHARE = 0.2                # skips per worked lead, until the SDRs' decisions say
 DEFAULT_CALL_SHARE = 0.5                # of first touches, when none has been seen yet
 AUTO_SINCE = "followups_since"      # when the switch went on: only leads first emailed after it get automatic follow-ups
@@ -111,6 +120,24 @@ def skip_figures(conn: sqlite3.Connection) -> dict:
     return {"share": share, "caught": caught, "saving": round(saving, 1)}
 
 
+def scheduling_auto(conn: sqlite3.Connection) -> bool:
+    return get_setting(conn, SCHEDULING_AUTO) == "1"
+
+
+def demo_share(conn: sqlite3.Connection) -> float:
+    """The share of worked leads that booked a demo, from the outcomes synced; a guess until there are any."""
+    r = conn.execute("SELECT COUNT(*) n, COALESCE(SUM(demo_booked), 0) booked FROM outcomes WHERE worked=1").fetchone()
+    return r["booked"] / r["n"] if r and r["n"] else DEFAULT_DEMO_SHARE
+
+
+def booking_saving(conn: sqlite3.Connection) -> float:
+    """Minutes a lead saved on booking demos while the service does the back and forth: the share of worked leads
+    that book times the minutes it saves on each. Zero while the switch is off."""
+    if not scheduling_auto(conn):
+        return 0.0
+    return demo_share(conn) * max(0.0, unit(conn, "sdr_minutes_booking") - unit(conn, "sdr_minutes_booking_auto"))
+
+
 def skip_saving(conn: sqlite3.Connection) -> float:
     """Minutes a lead saved on skips while routing holds the likely ones. Zero while the switch is off."""
     return skip_figures(conn)["saving"]
@@ -118,8 +145,8 @@ def skip_saving(conn: sqlite3.Connection) -> float:
 
 def minutes_per_lead(conn: sqlite3.Connection) -> float:
     """SDR minutes a lead takes: the cold touch (less what writing up the call notes saves, less the skips routing
-    holds), plus the two later emails when the SDR sends them."""
-    return (unit(conn, "sdr_minutes_touch") - call_log_saving(conn) - skip_saving(conn)
+    holds, less the demos booked for the SDR), plus the two later emails when the SDR sends them."""
+    return (unit(conn, "sdr_minutes_touch") - call_log_saving(conn) - skip_saving(conn) - booking_saving(conn)
             + (0.0 if followups_auto(conn) else FOLLOWUPS * unit(conn, "sdr_minutes_followup")))
 
 
@@ -145,6 +172,9 @@ def breakdown(conn: sqlite3.Connection, sdrs: Optional[int] = None) -> dict:
             "minutes_call_log_auto": unit(conn, "sdr_minutes_call_log_auto"), "call_share": round(call_share(conn), 2),
             "call_log_saving": round(call_log_saving(conn), 1),
             "skips_auto": skips_auto(conn), "minutes_skip": unit(conn, "sdr_minutes_skip"), "skips": skip_figures(conn),
+            "scheduling_auto": scheduling_auto(conn), "minutes_booking": unit(conn, "sdr_minutes_booking"),
+            "minutes_booking_auto": unit(conn, "sdr_minutes_booking_auto"), "demo_share": round(demo_share(conn), 2),
+            "booking_saving": round(booking_saving(conn), 1),
             "auto": followups_auto(conn), "minutes_lead": minutes_per_lead(conn),
             "hours": unit(conn, "sdr_touch_hours_month"), "per_month": round(per_month), "per_sdr": round(per_month / n, 1) if n else 0.0,
             "override": float(override) if override else None, "brief": BRIEF_TOUCHES_PER_MONTH}
@@ -154,14 +184,17 @@ def set_assumptions(conn: sqlite3.Connection, minutes_touch: Optional[float] = N
                     minutes_reply: Optional[float] = None, hours: Optional[float] = None, auto: Optional[bool] = None,
                     minutes_reply_triaged: Optional[float] = None, replies: Optional[bool] = None,
                     minutes_call_log: Optional[float] = None, minutes_call_log_auto: Optional[float] = None,
-                    call_notes: Optional[bool] = None, minutes_skip: Optional[float] = None, skips: Optional[bool] = None) -> list[str]:
+                    call_notes: Optional[bool] = None, minutes_skip: Optional[float] = None, skips: Optional[bool] = None,
+                    minutes_booking: Optional[float] = None, minutes_booking_auto: Optional[float] = None,
+                    scheduling: Optional[bool] = None) -> list[str]:
     """Set the inputs given (None leaves one as it is). Raises ValueError, with nothing set, when one is out of its
     range. Returns the keys that changed (a value equal to the current one at one decimal is unchanged). Setting any
     of them drops a plain-number override, so the arithmetic rules. Turning the follow-ups automatic stamps when, so
     only leads first emailed from then on get them."""
     wanted = {"sdr_minutes_touch": minutes_touch, "sdr_minutes_followup": minutes_followup, "sdr_minutes_reply": minutes_reply,
               "sdr_minutes_reply_triaged": minutes_reply_triaged, "sdr_minutes_call_log": minutes_call_log,
-              "sdr_minutes_call_log_auto": minutes_call_log_auto, "sdr_minutes_skip": minutes_skip, "sdr_touch_hours_month": hours}
+              "sdr_minutes_call_log_auto": minutes_call_log_auto, "sdr_minutes_skip": minutes_skip, "sdr_minutes_booking": minutes_booking,
+              "sdr_minutes_booking_auto": minutes_booking_auto, "sdr_touch_hours_month": hours}
     for key, v in wanted.items():
         if v is None:
             continue
@@ -187,6 +220,9 @@ def set_assumptions(conn: sqlite3.Connection, minutes_touch: Optional[float] = N
     if skips is not None and skips != skips_auto(conn):
         set_setting(conn, SKIPS_AUTO, "1" if skips else "0")
         changed.append(SKIPS_AUTO)
+    if scheduling is not None and scheduling != scheduling_auto(conn):
+        set_setting(conn, SCHEDULING_AUTO, "1" if scheduling else "0")
+        changed.append(SCHEDULING_AUTO)
     if changed and get_setting(conn, "team_capacity_per_month"):
         conn.execute("DELETE FROM settings WHERE key = 'team_capacity_per_month'")
         conn.commit()

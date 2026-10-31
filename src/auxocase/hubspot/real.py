@@ -608,6 +608,32 @@ class RealHubSpot:
         }
         return [self._meeting_from_json(o, contact_id) for o in self._search_all("meetings", body, max_results=200)]
 
+    def meetings_for_owner(self, owner_id: str, start_from: datetime) -> list[Meeting]:
+        body = {
+            "filterGroups": [{"filters": [{"propertyName": "hubspot_owner_id", "operator": "EQ", "value": owner_id},
+                                          {"propertyName": "hs_meeting_start_time", "operator": "GTE", "value": str(_ms(start_from))}]}],
+            "sorts": [{"propertyName": "hs_meeting_start_time", "direction": "ASCENDING"}],
+            "properties": MEETING_PROPERTIES,
+        }
+        objs = self._search_all("meetings", body, max_results=500)
+        contacts = self._contact_ids_for("meetings", [str(o["id"]) for o in objs])
+        return [self._meeting_from_json(o, contacts.get(str(o["id"]), "")) for o in objs]
+
+    def create_meeting(self, owner_id: str, contact_id: str, start: datetime, end: datetime, title: str,
+                       created_at: Optional[datetime] = None) -> Meeting:
+        payload = {
+            "properties": {
+                "hs_timestamp": str(_ms(start)), "hs_meeting_start_time": str(_ms(start)), "hs_meeting_end_time": str(_ms(end)),
+                "hs_meeting_title": title, "hs_meeting_outcome": "SCHEDULED", "hubspot_owner_id": owner_id,
+            },
+            "associations": [{
+                "to": {"id": contact_id},
+                "types": [{"associationCategory": "HUBSPOT_DEFINED", "associationTypeId": ASSOC_MEETING_TO_CONTACT}],
+            }],
+        }
+        data = self._request("POST", "/crm/v3/objects/meetings", json=payload).json()
+        return self._meeting_from_json(data, contact_id)
+
     # ------------------------------------------------------------- activity
     def engagements_logged_since(self, since: datetime) -> list[Engagement]:
         out: list[Engagement] = []

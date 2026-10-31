@@ -16,6 +16,8 @@ from ...llm.callnotes import NEXT_WORDS
 from ...routing.callnotes import latest as latest_call_note
 from ...routing.followups import rows_for as followup_rows
 from ...routing.replies import latest as latest_reply, without_auto_replies
+from ...routing.scheduling import latest as latest_booking, rows_for as booking_rows
+from ...llm.scheduling import slot_text
 from ...routing.outreach import call_brief_for, draft_for, stored_draft
 from ...scoring.explain import driver_rows
 from ...storage.db import clock, get_setting, loads
@@ -122,7 +124,7 @@ def _email_steps(activity, touch: Optional[int], no_draft: str, email: Optional[
     return steps
 
 
-def _timeline(c, score, routing, stored, first_touch, history, owners, followups=()) -> list[dict]:
+def _timeline(c, score, routing, stored, first_touch, history, owners, followups=(), bookings=()) -> list[dict]:
     """What happened to the lead, in the order it happens: created, scored, routed, drafted, touched, decided.
     `clock` says which clock stamped it: HubSpot and routing run on the service clock ("demo" on the mock),
     AuxoCase's own logs on wall time ("wall")."""
@@ -149,6 +151,11 @@ def _timeline(c, score, routing, stored, first_touch, history, owners, followups
     for h in history:
         out.append({"when": when(h["created_at"]), "clock": "wall",
                     "what": f"{name(h['owner_id'])} {ACTION_WORDS.get(h['action'], h['action'])}" + (f" ({h['note']})" if h["note"] else "")})
+    for b in bookings:
+        if b["status"] == "booked":
+            out.append({"when": when(b["created_at"]), "clock": "demo", "what": f"Demo booked for {slot_text(datetime.fromisoformat(b['start_at']))} by the service; confirmation sent for {name(b['owner_id'])}"})
+        else:
+            out.append({"when": when(b["created_at"]), "clock": "demo", "what": f"Demo times offered, sent for {name(b['owner_id'])}"})
     for f in followups:
         if f["status"] == "sent":
             out.append({"when": when(f["sent_at"]), "clock": "demo", "what": f"{EMAIL_LABELS[f['step']]} sent for {name(f['owner_id'])}"})
@@ -208,6 +215,12 @@ def lead_detail(st, contact_id: str, draft: bool = False, call: bool = False) ->
         reply["when"] = when(reply["replied_at"])
         reply["word"] = REPLY_WORDS.get(reply["kind"], reply["kind"])
         reply["text"] = next((e.body for e in activity if e.id == reply["engagement_id"]), "")
+        reply["sent_when"] = when(reply["sent_at"]) if reply.get("sent_at") else None
+    booking = latest_booking(st.conn, contact_id)
+    if booking:
+        booking["when"] = when(booking["created_at"])
+        booking["start_text"] = slot_text(datetime.fromisoformat(booking["start_at"])) if booking["start_at"] else None
+        booking["offered_text"] = [slot_text(datetime.fromisoformat(s)) for s in booking["offered"]]
     stored = stored_draft(st.conn, contact_id)
     if stored:
         stored["when"] = when(stored["created_at"])
@@ -262,8 +275,8 @@ def lead_detail(st, contact_id: str, draft: bool = False, call: bool = False) ->
             "emails": _email_steps(activity, touch, no_draft, email, by_step), "calls": _call_steps(activity, first_touch),
             "followups": {"auto": followups_auto(st.conn), "rows": fups, "due": [f for f in fups if f["status"] == "due"],
                           "next": next((f for f in fups if f["status"] == "due"), None)},
-            "reply": reply, "demo_replies": [(k, v[0]) for k, v in DEMO_REPLIES.items()], "writeup": writeup,
+            "reply": reply, "demo_replies": [(k, v[0]) for k, v in DEMO_REPLIES.items()], "writeup": writeup, "booking": booking,
             "speed": speed_effect(st.conn),
             "late_factor": LATE_TOUCH_FACTOR if mock else None, "pace": speed_to_lead(st.conn), "watch": watch,
-            "enrichment": enrichment, "timeline": _timeline(c, score, routing, stored, first_touch, history, owners, fups),
+            "enrichment": enrichment, "timeline": _timeline(c, score, routing, stored, first_touch, history, owners, fups, booking_rows(st.conn, contact_id)),
             "last_read": when(get_setting(st.conn, TOUCHES_READ))}

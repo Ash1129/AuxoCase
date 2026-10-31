@@ -25,7 +25,7 @@
                  activity=activity, first_touch=first_touch, touch=touch, no_draft=no_draft, email=email, stored=stored,
                  mock=mock, enrollments=enrollments, seen=seen, owner=owner, owners=owners, assigned=assigned, tier2=tier2,
                  decision=decision, activity_rows=activity_rows, touched_in=touched_in, slot_next=slot_next,
-                 emails=emails, followups=followups, reply=reply, demo_replies=demo_replies, writeup=writeup, speed=speed, late_factor=late_factor, pace=pace, watch=watch, enrichment=enrichment,
+                 emails=emails, followups=followups, reply=reply, demo_replies=demo_replies, writeup=writeup, booking=booking, speed=speed, late_factor=late_factor, pace=pace, watch=watch, enrichment=enrichment,
                  timeline=timeline, last_read=last_read, call=call, dispositions=dispositions, calls=calls) -%}
 {%- set who = ld.first(c) -%}
 {%- set below = c.auxo_below_gate or c.lifecycle_stage == 'lead' -%}

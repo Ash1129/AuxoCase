@@ -53,6 +53,11 @@ class HubSpotClient(Protocol):
     def meetings_since(self, since: datetime) -> list[Meeting]: ...
     def deals_for_contact(self, contact_id: str) -> list[Deal]: ...
     def meetings_for_contact(self, contact_id: str) -> list[Meeting]: ...
+    def meetings_for_owner(self, owner_id: str, start_from: datetime) -> list[Meeting]:
+        """The owner's meetings starting at or after `start_from`: what the booking agent offers around."""
+    def create_meeting(self, owner_id: str, contact_id: str, start: datetime, end: datetime, title: str,
+                       created_at: Optional[datetime] = None) -> Meeting:
+        """Book a meeting on the owner with the contact: what outcome sync reads as the demo booked."""
 
     # --- activity: emails and calls logged on contacts ------------------
     def engagements_logged_since(self, since: datetime) -> list[Engagement]:

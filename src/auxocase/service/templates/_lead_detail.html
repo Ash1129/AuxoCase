@@ -223,13 +223,23 @@
 <section class="part{{ ' wide' if wide }}" id="draft-{{ c.id }}" aria-label="Reaching {{ first(c) }}">
   <div class="duo">
   {% if c.email -%}
+  {% if d.get('booking') and d.booking.status == 'booked' -%}
+  <div class="block" id="booking-{{ c.id }}">
+    <h3 class="kicker">Demo booked · {{ d.booking.start_text }}</h3>
+    <p class="small muted">Booked {{ d.booking.when }} from {{ first(c) }}'s reply: the meeting is on {{ 'your' if where == 'queue' else (d.owner.name ~ "'s" if d.owner else "the SDR's") }} HubSpot calendar and the confirmation went out. Nothing to send.</p>
+  </div>
+  {%- endif %}
   {% if d.get('reply') and (not d.touch or d.reply.kind == 'out_of_office') -%}
   {%- set r = d.reply -%}
   <div class="block" id="reply-{{ c.id }}">
     <h3 class="kicker">Replied {{ r.when }} · {{ r.word }}</h3>
     <p><b>{{ r.summary }}</b>{% if r.acted %} <span class="muted">· {{ r.acted }}</span>{% endif %}</p>
     {% if r.text %}<p class="draft-body small muted">“{{ r.text[:400] }}{{ '…' if r.text|length > 400 }}”</p>{% endif %}
-    {% if r.body -%}
+    {% if r.sent_when -%}
+    <p><span class="vh">Subject: </span><b>{{ r.subject }}</b></p>
+    <p class="draft-body">{{ r.body }}</p>
+    <p class="small muted">Sent for {{ 'you' if where == 'queue' else (d.owner.name if d.owner else 'the SDR') }} {{ r.sent_when }}{% if d.get('booking') and d.booking.status != 'booked' %}; waiting on {{ first(c) }} to pick one{% endif %}.</p>
+    {%- elif r.body -%}
     <p><span class="vh">Subject: </span><b>{{ r.subject }}</b></p>
     <p class="draft-body">{{ r.body }}</p>
     <div class="actions"><a class="btn primary" href="mailto:{{ c.email }}?subject={{ r.subject|urlencode }}&body={{ r.body|urlencode }}">Open the answer in your email app</a><span class="small muted">Drafted by {{ 'Claude' if r.source == 'llm' else 'the template' }}{% if r.rejected %}; Claude's answer was set aside: {{ r.rejected }}{% endif %}. Edit it before you send.</span></div>
