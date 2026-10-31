@@ -59,6 +59,7 @@ h1,h2,h3{margin:0}
 .info:hover,.info:focus-visible,.info-wrap:hover .info{border-color:var(--ink);color:var(--ink)}
 .info-box{position:absolute;left:0;right:0;top:calc(100% + 8px);z-index:5;padding:10px 12px;border:1px solid var(--line);border-radius:4px;background:var(--bg);color:var(--ink);box-shadow:0 6px 20px rgba(0,0,0,.14);font:400 14px/20px var(--body);letter-spacing:0;text-transform:none;text-align:left;white-space:normal;visibility:hidden;opacity:0;transition:opacity .12s}
 .info-wrap:hover .info-box,.info-wrap:focus-within .info-box{visibility:visible;opacity:1}
+.info-box .ln{display:block}.info-box .ln+.ln{margin-top:4px}.info-box .ln:empty{display:none}
 /* footnotes are numbered: a small superscript number in the text, the notes as a numbered list at the foot */
 .fn{font-size:11px;line-height:0;vertical-align:super;margin-left:1px}
 .fn a{color:var(--muted);text-decoration:none}.fn a:hover{color:var(--ink)}
