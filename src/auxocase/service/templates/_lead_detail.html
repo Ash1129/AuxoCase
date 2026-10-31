@@ -4,6 +4,9 @@
 {% from "_notes.html" import note %}
 
 {% macro css() -%}
+.mail{max-width:640px;overflow-x:auto;border-radius:6px;color-scheme:light}
+.mail table{width:auto;border-collapse:separate;border-spacing:0;margin:0}
+.mail td{border:0;padding:0;vertical-align:top;text-align:left}
 .head{display:flex;flex-direction:column;gap:8px}
 .head p{margin:0}
 .marks{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px}
@@ -178,6 +181,15 @@
 {#- Reach out, in two parts so a page can place them apart: reach_head is the address, the sequence's three emails
     and where they stand; reach_rest is the draft (or the link that drafts it), any page-only content (`extra`), and
     on the mock the buttons that stand in for HubSpot. reach() is both in a row, with a {% call %} as the extra. -#}
+{#- A draft as the lead will see it: BrightPath's header, colours and button (service/email_html.py). `copy` puts it on
+    the clipboard as rich text, for pasting into the message the email app opens. -#}
+{% macro mail(id, body, d) -%}
+<div class="mail" id="mail-{{ id }}">{{ email_html(body, d.owner.name if d.owner else '')|safe }}</div>
+{%- endmacro %}
+{% macro copy(id) -%}
+<button class="btn primary" type="button" data-copy="mail-{{ id }}" data-done="Copied · paste it into the email">Copy the branded email</button>
+{%- endmacro %}
+
 {% macro reach(d, draft_href, where, call_href='') -%}
 {{ reach_head(d, where) }}
 {{ reach_rest(d, draft_href, where, caller() if caller is defined else '', call_href=call_href) }}
@@ -237,12 +249,12 @@
     {% if r.text %}<p class="draft-body small muted">“{{ r.text[:400] }}{{ '…' if r.text|length > 400 }}”</p>{% endif %}
     {% if r.sent_when -%}
     <p><span class="vh">Subject: </span><b>{{ r.subject }}</b></p>
-    <p class="draft-body">{{ r.body }}</p>
+    {{ mail('reply-' ~ c.id, r.body, d) }}
     <p class="small muted">Sent for {{ 'you' if where == 'queue' else (d.owner.name if d.owner else 'the SDR') }} {{ r.sent_when }}{% if d.get('booking') and d.booking.status != 'booked' %}; waiting on {{ first(c) }} to pick one{% endif %}.</p>
     {%- elif r.body -%}
     <p><span class="vh">Subject: </span><b>{{ r.subject }}</b></p>
-    <p class="draft-body">{{ r.body }}</p>
-    <div class="actions"><a class="btn primary" href="mailto:{{ c.email }}?subject={{ r.subject|urlencode }}&body={{ r.body|urlencode }}">Open the answer in your email app</a><span class="small muted">Drafted by {{ 'Claude' if r.source == 'llm' else 'the template' }}{% if r.rejected %}; Claude's answer was set aside: {{ r.rejected }}{% endif %}. Edit it before you send.</span></div>
+    {{ mail('reply-' ~ c.id, r.body, d) }}
+    <div class="actions">{{ copy('reply-' ~ c.id) }}<a class="btn" href="mailto:{{ c.email }}?subject={{ r.subject|urlencode }}&body={{ r.body|urlencode }}">Open the answer in your email app</a><span class="small muted">Drafted by {{ 'Claude' if r.source == 'llm' else 'the template' }}{% if r.rejected %}; Claude's answer was set aside: {{ r.rejected }}{% endif %}. Edit it before you send.</span></div>
     {%- elif r.kind == 'out_of_office' -%}
     <p class="small muted">Not an answer: the sequence carries on once they are back.</p>
     {%- elif r.kind == 'other' -%}
@@ -267,8 +279,8 @@
   <div class="block">
     <h3 class="kicker">Draft: {{ labels[e.touch] }}{{ ref('draft', d) }}</h3>
     <p><span class="vh">Subject: </span><b>{{ e.subject }}</b></p>
-    <p class="draft-body">{{ e.body }}</p>
-    <div class="actions"><a class="btn primary" href="{{ e.mailto(c.email) }}">Open in your email app</a><a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">Draft it again</a></div>
+    {{ mail('email-' ~ c.id, e.body, d) }}
+    <div class="actions">{{ copy('email-' ~ c.id) }}<a class="btn" href="{{ e.mailto(c.email) }}">Open in your email app</a><a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">Draft it again</a><span class="small muted">Paste the copy into the message your email app opens, then edit it before you send.</span></div>
   </div>
   {%- else -%}
   <div class="block">
@@ -291,8 +303,8 @@
     <p class="small muted">Next: {{ w.next_word }}{% if w.next_when %} on {{ w.next_when }}{% endif %}. Written to HubSpot: {{ w.acted }}. {{ 'Claude' if w.source == 'llm' else 'The template' }} wrote it up{% if w.rejected %}; Claude's was set aside: {{ w.rejected }}{% endif %}.{% if w.notes %} From: “{{ w.notes[:200] }}{{ '…' if w.notes|length > 200 }}”{% endif %}</p>
     {% if w.body -%}
     <p><span class="vh">Subject: </span><b>{{ w.subject }}</b></p>
-    <p class="draft-body">{{ w.body }}</p>
-    <div class="actions"><a class="btn primary" href="mailto:{{ c.email }}?subject={{ w.subject|urlencode }}&body={{ w.body|urlencode }}">Open the follow-up in your email app</a><span class="small muted">Drafted from the call. Edit it before you send.</span></div>
+    {{ mail('call-' ~ c.id, w.body, d) }}
+    <div class="actions">{{ copy('call-' ~ c.id) }}<a class="btn" href="mailto:{{ c.email }}?subject={{ w.subject|urlencode }}&body={{ w.body|urlencode }}">Open the follow-up in your email app</a><span class="small muted">Drafted from the call. Edit it before you send.</span></div>
     {%- endif %}
   </div>
   {%- endif %}

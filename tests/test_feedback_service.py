@@ -130,6 +130,8 @@ def test_lead_page_offers_an_email_link_and_a_first_email_draft(db):
     assert "Open in your email app" in page and f"Hi {c.first_name}," in page
     assert "Drafted by the template" in page                          # tests run the offline reader
     assert f"mailto:{c.email}?subject=" in page
+    assert "Copy the branded email" in page and f'data-copy="mail-email-{c.id}"' in page and f'id="mail-email-{c.id}"' in page
+    assert "BrightPath Payroll</span>" in page and "#b68235" in page    # the preview carries the header and the colours
 
 
 def test_decisions_page_lists_model_and_lead_calls(db):

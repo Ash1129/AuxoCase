@@ -42,6 +42,7 @@ from ..storage.db import DEFAULT_DB, clock, clock_frozen, connect, dumps, get_se
 from . import tz
 from . import scheduler as sched
 from . import security
+from .email_html import branded
 from .security import approval_token, lead_token
 from .views.held import held_page
 from .views.lead import lead_detail
@@ -56,6 +57,7 @@ from .views.queue import queue_page
 from .views.stats import hit_rate
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
+TEMPLATES.env.globals["email_html"] = branded        # a draft as the lead will see it, the lead page's preview and copy
 MAX_RANK_MOVE = 5    # L12: a bounded override buys adoption without handing the queue back to gut feel
 
 
