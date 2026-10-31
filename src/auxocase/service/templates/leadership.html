@@ -11,9 +11,9 @@
 .ld-sec{display:flex;flex-direction:column;gap:12px;min-width:0}
 .ld-sec.first{gap:20px}
 .ld-sec h2.dash{border-top:1px dashed var(--line);padding-top:12px}
-.ld-figs{display:flex;flex-wrap:wrap;gap:24px 48px}
+.ld-figs{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:24px 48px}
 .ld-figs.top{gap:32px 48px}
-.ld-fig{flex:0 1 240px;display:flex;flex-direction:column;gap:4px;min-width:0}
+.ld-fig{display:flex;flex-direction:column;gap:4px;min-width:0}
 .ld-note{margin:0;font-size:14px;line-height:20px;color:var(--muted);max-width:760px}
 .ld-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(360px,100%),1fr));gap:32px 48px}
 .ld-grid.cards{gap:24px 48px}

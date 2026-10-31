@@ -5,7 +5,7 @@
 .hdr{display:flex;flex-direction:column;gap:8px}
 .mw{max-width:760px;margin:0}
 .sec{display:flex;flex-direction:column;gap:12px}
-.glance{display:flex;flex-wrap:wrap;gap:24px 48px}
+.glance{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(240px,100%),1fr));gap:24px 48px}
 .stat{display:flex;flex-direction:column;gap:4px}.stat .big{white-space:nowrap}
 .stat>span:not(.big){max-width:240px}.stat.lead-stat>span:not(.big){max-width:280px}
 .strong{font-weight:600}
