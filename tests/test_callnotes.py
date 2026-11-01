@@ -90,7 +90,7 @@ def test_a_call_with_notes_is_written_up_and_put_in_hubspot(world):
     client = TestClient(create_app(path, scheduler=False))
     page = client.get(f"/lead/{lead}").text
     assert "· written up</h3>" in page and "Learned: employees 40" in page and "Next: book the demo on" in page
-    assert "Open the follow-up in your email app" in page and "company size 40" in page
+    assert f'data-mail="mail-call-{lead}"' in page and "company size 40" in page              # the follow-up, editable in place
 
 
 def test_not_interested_closes_and_the_demo_button_carries_the_notes(world):

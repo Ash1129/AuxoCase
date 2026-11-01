@@ -216,6 +216,35 @@
 {% endif %}
 {%- endmacro %}
 
+{#- The demo's stand-in for HubSpot: the SDR's send (only while no mailbox is set; "Send to <the lead>" sends for real
+    otherwise) and call, and the lead's reply. On the queue's touched tab it sits at the top, since what the lead does
+    next is the point there; elsewhere at the end of the reach-out section. -#}
+{% macro demo(d, where) -%}
+{%- set c = d.c -%}{%- set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} -%}
+{%- set back = ('/queue/' ~ d.owner.id ~ '?lead=' ~ c.id) if where == 'queue' and d.owner else '' -%}
+  {%- set automated = d.get('tier2') and d.get('tier2').status == 'sent' and not c.hubspot_owner_id %}
+  {% if d.mock and (c.hubspot_owner_id or automated) -%}
+  <section class="demo" aria-labelledby="demo-{{ c.id }}">
+    <h3 class="kicker" id="demo-{{ c.id }}">Demo only · mock portal</h3>
+    {% if automated -%}
+    <p class="small muted"><b>Demo: the lead answers.</b> In the automated sequence (phase 3). On a real portal the reply lands in the sender's HubSpot inbox; AuxoCase sees it within a minute and hands the lead to that SDR.</p>
+    <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot"><input type="hidden" name="back" value="{{ back }}">
+      <input type="hidden" name="subject" value="{{ d.get('tier2').subject or '' }}">
+      <span class="outcome"><label class="vh" for="reply-kind-{{ c.id }}">What the lead says</label><select id="reply-kind-{{ c.id }}" name="reply">{% for k, v in d.demo_replies %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="reply">The lead replies</button></span>
+    </form>
+    {%- else -%}
+    <p class="small muted"><b>Demo: act in HubSpot.</b> On a real portal {{ d.owner.name if d.owner else 'the SDR' }} {{ 'logs the call' if smtp else 'sends the email or logs the call' }} there; AuxoCase sees it within a minute.{% if where == 'queue' %} Each button comes back here.{% endif %}</p>
+    <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot"><input type="hidden" name="back" value="{{ back }}">
+      <input type="hidden" name="subject" value="{{ d.email.subject if d.email else '' }}">
+      {% if not smtp %}<button class="btn" type="submit" name="kind" value="email">Send {{ 'this ' ~ labels[d.email.touch] if d.email else 'an email' }}</button>{% endif %}
+      <span class="outcome"><label class="vh" for="outcome-{{ c.id }}">Call outcome</label><select id="outcome-{{ c.id }}" name="disposition">{% for k, v in d.dispositions.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><input type="text" name="notes" placeholder="Rough notes, as you'd type them in HubSpot" aria-label="Rough call notes" maxlength="2000"><button class="btn" type="submit" name="kind" value="call">Log a call</button></span>
+      <span class="outcome"><label class="vh" for="reply-kind-{{ c.id }}">What the lead says</label><select id="reply-kind-{{ c.id }}" name="reply">{% for k, v in d.demo_replies %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="reply">The lead replies</button></span>
+    </form>
+    {%- endif %}
+  </section>
+  {%- endif %}
+{%- endmacro %}
+
 {% macro reach(d, draft_href, where, call_href='') -%}
 {{ reach_head(d, where) }}
 {{ reach_rest(d, draft_href, where, caller() if caller is defined else '', call_href=call_href) }}
@@ -355,27 +384,7 @@
   {%- endif %}
   </div>
   {{ extra }}
-  {%- set automated = d.get('tier2') and d.get('tier2').status == 'sent' and not c.hubspot_owner_id %}
-  {% if d.mock and (c.hubspot_owner_id or automated) -%}
-  <section class="demo" aria-labelledby="demo-{{ c.id }}">
-    <h3 class="kicker" id="demo-{{ c.id }}">Demo only · mock portal</h3>
-    {% if automated -%}
-    <p class="small muted"><b>Demo: the lead answers.</b> In the automated sequence (phase 3). On a real portal the reply lands in the sender's HubSpot inbox; AuxoCase sees it within a minute and hands the lead to that SDR.</p>
-    <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
-      <input type="hidden" name="subject" value="{{ d.get('tier2').subject or '' }}">
-      <span class="outcome"><label class="vh" for="reply-kind-{{ c.id }}">What the lead says</label><select id="reply-kind-{{ c.id }}" name="reply">{% for k, v in d.demo_replies %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="reply">The lead replies</button></span>
-    </form>
-    {%- else -%}
-    <p class="small muted"><b>Demo: act in HubSpot.</b> On a real portal {{ d.owner.name if d.owner else 'the SDR' }} sends the email or logs the call there; AuxoCase sees it within a minute.{% if where == 'queue' %} Each button then opens the lead page.{% endif %}</p>
-    <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot">
-      <input type="hidden" name="subject" value="{{ d.email.subject if d.email else '' }}">
-      <button class="btn" type="submit" name="kind" value="email">Send {{ 'this ' ~ labels[d.email.touch] if d.email else 'an email' }}</button>
-      <span class="outcome"><label class="vh" for="outcome-{{ c.id }}">Call outcome</label><select id="outcome-{{ c.id }}" name="disposition">{% for k, v in d.dispositions.items() %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><input type="text" name="notes" placeholder="Rough notes, as you'd type them in HubSpot" aria-label="Rough call notes" maxlength="2000"><button class="btn" type="submit" name="kind" value="call">Log a call</button></span>
-      <span class="outcome"><label class="vh" for="reply-kind-{{ c.id }}">What the lead says</label><select id="reply-kind-{{ c.id }}" name="reply">{% for k, v in d.demo_replies %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="reply">The lead replies</button></span>
-    </form>
-    {%- endif %}
-  </section>
-  {%- endif %}
+  {% if not (where == 'queue' and tab == 'touched') %}{{ demo(d, where) }}{% endif %}
 </section>
 {%- endmacro %}
 

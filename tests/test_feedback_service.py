@@ -248,7 +248,7 @@ def test_skipping_a_lead_frees_the_slot_without_making_it_a_label(db):
             conn.execute("UPDATE hs_owners SET capacity_limit=? WHERE id=?", (limit, oid))
 
 
-def test_the_queue_holds_only_what_auxocase_handed_out_and_still_needs_a_call(db):
+def test_the_queue_holds_only_what_auxocase_handed_out_and_still_needs_a_call(db, monkeypatch):
     """An SDR owns months of leads worked before AuxoCase; the queue is the waiting lead, the ones touched in HubSpot
     that need a call logged, and today's decisions, not all of those."""
     from auxocase.service.app import State
@@ -281,6 +281,40 @@ def test_the_queue_holds_only_what_auxocase_handed_out_and_still_needs_a_call(db
         assert queue_page(st, owner.id, lead=second.id)["tab"] == "touched"                          # a lead picks its tab
         html = TestClient(create_app(path)).get(f"/queue/{owner.id}?tab=touched").text
         assert 'aria-current="page">Touched · waiting to hear back' in html and "Also waiting · first touch due" not in html
+        # On the touched tab the demo panel (what the lead does next) sits above "Reach out"; on the untouched tab it
+        # stays at the end. Its own send is there only while no mailbox is set; the real send is "Send to <the lead>".
+        assert html.index("Demo only · mock portal") < html.index("Reach out") and html.count("Demo only · mock portal") == 1
+        assert f'value="/queue/{owner.id}?lead={second.id}"' in html and 'value="email">Send' in html
+        untouched = TestClient(create_app(path)).get(f"/queue/{owner.id}").text
+        assert untouched.index("Reach out") < untouched.index("Demo only · mock portal")
+        # The "at a glance" tab: a pie a group, a slice or legend row opening the list of the leads in it.
+        glance = queue_page(st, owner.id, tab="glance")
+        assert glance["tab"] == "glance" and glance["open"] is None
+        assert [(p["key"], p["n"]) for p in glance["glance"]["touched"]] == [("replied", 0), ("waiting", 1)]
+        assert sum(p["n"] for p in glance["glance"]["untouched"]) == len(glance["waiting"]) == 1
+        html = TestClient(create_app(path)).get(f"/queue/{owner.id}?tab=glance").text
+        assert 'aria-current="page">At a glance' in html and html.count('class="slice ') == 2                    # one full slice a pie
+        assert 'data-pie="list-touched-waiting"' in html and '<details id="list-touched-waiting" class="pie-list">' in html
+        assert f'href="/queue/{owner.id}?lead={second.id}"' in html.split('id="list-touched-waiting"')[1].split("</details>")[0]
+        assert "No one here right now." in html.split('id="list-touched-replied"')[1].split("</details>")[0]
+        assert "Reach out" not in html and "Mark worked" not in html
+        # A reply seen in HubSpot counts whether or not the triage switch is on (off here: no `replies` row is written).
+        hs.log_engagement(second.id, "EMAIL", "INCOMING", clock(conn), owner.id, subject="Re: Hello", body="Yes, let's talk")
+        glance = queue_page(st, owner.id, tab="glance")
+        assert glance["touched"][0]["heard"] and glance["touched"][0]["reply"] is None
+        assert [(p["key"], p["n"]) for p in glance["glance"]["touched"]] == [("replied", 1), ("waiting", 0)]
+        html = TestClient(create_app(path)).get(f"/queue/{owner.id}?tab=glance").text
+        assert "answer from HubSpot" in html.split('id="list-touched-replied"')[1].split("</details>")[0]
+        monkeypatch.setenv("AUXO_SMTP_USER", "sdr@example.com"); monkeypatch.setenv("AUXO_SMTP_PASS", "app-password")
+        with_mailbox = TestClient(create_app(path)).get(f"/queue/{owner.id}?tab=touched").text
+        assert 'value="email">Send' not in with_mailbox and 'value="call">Log a call' in with_mailbox and "logs the call there" in with_mailbox
+        monkeypatch.delenv("AUXO_SMTP_USER"); monkeypatch.delenv("AUXO_SMTP_PASS")
+        r = TestClient(create_app(path)).post(f"/lead/{second.id}/hubspot", data={"kind": "call", "disposition": "no_answer",
+                                                                                  "back": f"/queue/{owner.id}?lead={second.id}"}, follow_redirects=False)
+        assert r.headers["location"] == f"/queue/{owner.id}?lead={second.id}"                    # a demo action made on the queue comes back to it
+        r = TestClient(create_app(path)).post(f"/lead/{second.id}/hubspot", data={"kind": "call", "disposition": "no_answer", "back": "https://evil.example/"},
+                                             follow_redirects=False)
+        assert r.headers["location"] == f"/lead/{second.id}"
         TestClient(create_app(path)).post(f"/lead/{second.id}/action", data={
             "owner_id": owner.id, "action": "worked", "seen": _seen(conn, hs, second.id)})
         page = queue_page(st, owner.id)
@@ -320,3 +354,14 @@ def test_reasons_read_as_sentences():
     rows = driver_rows([("channel=website", -0.38), ("seniority=c_level", 0.14)])
     assert rows[0] == {"label": "Came in through the website", "better": False, "word": "worse", "effect": "−0.38", "bar": 136}
     assert rows[1]["word"] == "better" and rows[1]["bar"] == round(136 * 0.14 / 0.38)
+
+
+def test_a_pie_is_cut_clockwise_from_the_top_and_a_single_part_is_a_full_ring():
+    from auxocase.service.views.queue import pie
+    parts = pie([{"key": "a", "label": "A", "leads": [1, 2, 3]}, {"key": "b", "label": "B", "leads": [4]}])
+    assert [p["n"] for p in parts] == [3, 1] and [p["share"] for p in parts] == [0.75, 0.25]
+    assert parts[0]["d"].startswith("M50,50 L50.00,4.00 A46,46 0 1 1 4.00,50.00 Z")      # three quarters, the long way round
+    assert parts[1]["d"] == "M50,50 L4.00,50.00 A46,46 0 0 1 50.00,4.00 Z"               # the last quarter, back to the top
+    whole, none = pie([{"key": "a", "label": "A", "leads": [1]}, {"key": "b", "label": "B", "leads": []}])
+    assert whole["share"] == 1 and whole["d"].count("A46,46") == 2 and none["d"] == "" and none["share"] == 0
+    assert all(p["d"] == "" and p["share"] == 0 for p in pie([{"key": "a", "label": "A", "leads": []}]))

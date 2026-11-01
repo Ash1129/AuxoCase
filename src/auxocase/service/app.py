@@ -200,7 +200,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
 
     @app.post("/lead/{contact_id}/hubspot")
     def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form(""), reply: str = Form(""),
-                     notes: str = Form("")):
+                     notes: str = Form(""), back: str = Form("")):
         """Demo only: stand in for HubSpot, where the SDR sends the email or logs the call, then run the first-touch
         check at once (on a real portal the `touches` job polls HubSpot every minute)."""
         if not isinstance(st.hs, MockHubSpot):
@@ -216,7 +216,9 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         detect_replies(st.hs, st.conn)
         replies.triage_new(st.hs, st.conn, st.llm)
         callnotes.write_up_new(st.hs, st.conn, st.llm)
-        return RedirectResponse(f"/lead/{contact_id}", status_code=303)
+        if not re.fullmatch(r"/queue/[\w-]+\?lead=[\w-]+", back):
+            back = f"/lead/{contact_id}"                # from the queue, back to the queue with the lead open on its tab
+        return RedirectResponse(back, status_code=303)
 
     @app.post("/lead/{contact_id}/followups")
     def lead_followups(contact_id: str, what: str = Form(...)):

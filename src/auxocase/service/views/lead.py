@@ -40,7 +40,8 @@ def _span(hours: float) -> str:
         hours = 0
     if hours >= 48:
         return f"{int(hours // 24)}d {int(hours % 24)}h"
-    return f"{int(hours)}h {int(round((hours % 1) * 60)):02d}m"
+    minutes = int(round(hours * 60))                # whole minutes first, so 3.999 h is "4h 00m", never "3h 60m"
+    return f"{minutes // 60}h {minutes % 60:02d}m"
 
 
 def _join(words: list[str]) -> str:

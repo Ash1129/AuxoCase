@@ -46,6 +46,16 @@ HEADERS = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Refe
 APP_JS = """document.addEventListener('click', function (e) {
   var a = e.target.closest && e.target.closest('a[data-busy]');
   if (a) { a.textContent = a.dataset.busy; a.style.pointerEvents = 'none'; }
+  var slice = e.target.closest && e.target.closest('[data-pie]');
+  if (slice) {
+    // a pie slice, or its legend row, opens the list of the leads in it (a <details> below), and closes it again
+    var list = document.getElementById(slice.dataset.pie);
+    if (list) {
+      e.preventDefault();
+      list.open = !list.open;
+      if (list.open) list.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
   var b = e.target.closest && e.target.closest('button[type=submit][data-busy]');
   if (b && b.form) {
     // one send per click: the form goes with this click, then the button is out of play
@@ -78,6 +88,14 @@ APP_JS = """document.addEventListener('click', function (e) {
     }
   }
 });
+document.addEventListener('toggle', function (e) {
+  // the slice and legend row of an open list are marked, however the list was opened
+  var list = e.target;
+  if (!list.id || !list.classList || !list.classList.contains('pie-list')) return;
+  Array.prototype.forEach.call(document.querySelectorAll('[data-pie="' + list.id + '"]'), function (s) {
+    s.setAttribute('aria-pressed', list.open ? 'true' : 'false');
+  });
+}, true);
 (function () {
   var main = document.querySelector('main');
   if (!main) return;

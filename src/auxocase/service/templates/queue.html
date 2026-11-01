@@ -21,6 +21,28 @@
 .tabs a{display:inline-block;padding:12px 0 10px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
 .tabs a[aria-current]{color:var(--ink);border-bottom-color:var(--accent)}
 .tabs .n{color:var(--accentInk);font-variant-numeric:tabular-nums}
+/* the "at a glance" tab: a pie a group, its slices and legend rows opening the list of the leads in them */
+.pies{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px 48px}
+.pie{margin:0}
+.pie-row{display:flex;gap:24px;align-items:center;flex-wrap:wrap;margin-top:12px}
+.pie svg{width:150px;height:150px;flex:none}
+.pie .slice path{stroke:var(--bg);stroke-width:2;cursor:pointer;transition:opacity .15s}
+.pie .slice:hover path,.pie .slice:focus-visible path{opacity:.75}
+.pie .slice[aria-pressed=true] path{stroke:var(--ink);stroke-width:2.5}
+.pie .empty{fill:none;stroke:var(--line);stroke-width:2;stroke-dasharray:4 4}
+.replied path,.ontime path,.sw.replied,.sw.ontime{fill:var(--accent);background:var(--accent)}
+.waiting path,.sw.waiting{fill:var(--muted);background:var(--muted)}
+.late path,.sw.late{fill:var(--bad);background:var(--bad)}
+.legend{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.legend a{color:var(--ink);text-decoration:none}
+.legend a:hover,.legend a[aria-pressed=true]{text-decoration:underline;text-underline-offset:3px}
+.legend .n{color:var(--accentInk);font-variant-numeric:tabular-nums}
+.sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:8px;vertical-align:1px}
+.pie-list{border-top:1px solid var(--line);padding:12px 0}
+.pie-list summary{cursor:pointer;font-weight:500}
+.pie-list[open] summary{margin-bottom:10px}
+.pie-list td,.pie-list th{font-size:14px}
+.pie-list td.r,.pie-list th.r{padding-right:28px}
 {% endblock %}
 {% block body %}
 {%- set labels = {'worked': 'worked', 'junk': 'junk', 'skipped': 'skipped'} -%}
@@ -30,6 +52,7 @@
   <ul class="tabs">
     <li><a href="/queue/{{ owner.id }}?tab=untouched"{% if tab == 'untouched' %} aria-current="page"{% endif %}>Untouched · first touch due <span class="n">{{ waiting|length }}</span></a></li>
     <li><a href="/queue/{{ owner.id }}?tab=touched"{% if tab == 'touched' %} aria-current="page"{% endif %}>Touched · waiting to hear back <span class="n">{{ touched|length }}</span></a></li>
+    <li><a href="/queue/{{ owner.id }}?tab=glance"{% if tab == 'glance' %} aria-current="page"{% endif %}>At a glance</a></li>
   </ul>
 </nav>
 {{ ld.sent_notice(open, 'queue') }}
@@ -66,7 +89,7 @@
     <summary class="btn">Skip with a reason</summary>
     <form class="panel" method="post" action="/lead/{{ c.id }}/action">
       <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="action" value="skipped">
-      <p class="small muted">{% if open.first_touch %}The first touch already freed your slot; a skip takes {{ ld.first(c) }} off your list.{% else %}A skip frees your slot; routing fills it at once.{% endif %} The reason is kept with your call.</p>
+      <p class="small muted">{% if open.first_touch %}The first touch already freed your slot; a skip takes {{ ld.first(c) }} off your list.{% elif limit is none %}A skip takes {{ ld.first(c) }} off your list; routing hands out the next lead at once.{% else %}A skip frees your slot; routing fills it at once.{% endif %} The reason is kept with your call.</p>
       {% for r in ('wrong fit', 'already a customer', 'no contact details', 'timing', 'other') %}<button class="btn" type="submit" name="note" value="{{ r }}">{{ r|capitalize }}</button>
       {% endfor %}
     </form>
@@ -118,7 +141,7 @@
   <h2 class="kicker" id="q-touched">Also waiting to hear back · touch seen in HubSpot</h2>
   <ul class="list">
     {% for e in others_touched %}<li><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a>
-      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · {{ (e.seen_type or 'activity')|lower }} seen {{ e.seen_when }}{% if e.reply %} · <b>replied {{ e.reply.when }}, {{ e.reply.word }}</b>: {{ e.reply.summary }}{% if e.booked %} Demo booked for {{ e.booked }}{% elif e.reply.answer %} Answer drafted{% elif e.reply.sent %} Times sent for you{% endif %}{% else %}; log your call{% endif %}.</p>{{ ld.marks(e.c) }}</li>
+      <p class="small">{{ ld.odds(e.c.auxo_probability) }} · {{ (e.seen_type or 'activity')|lower }} seen {{ e.seen_when }}{% if e.reply %} · <b>replied {{ e.reply.when }}, {{ e.reply.word }}</b>: {{ e.reply.summary }}{% if e.booked %} Demo booked for {{ e.booked }}{% elif e.reply.answer %} Answer drafted{% elif e.reply.sent %} Times sent for you{% endif %}{% elif e.heard %} · <b>replied {{ e.heard }}</b>: answer from HubSpot{% else %}; log your call{% endif %}.</p>{{ ld.marks(e.c) }}</li>
     {% endfor %}
   </ul>
 </section>
