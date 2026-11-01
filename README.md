@@ -58,11 +58,11 @@ Step by step:
 | `python run.py train` | trains a candidate on 12 months of mature labels; prints precision@500, lift over the points model, AUC-PR, ECE, by channel |
 | `python run.py approve demo-v1 marketing "Name"` then `... sales "Name"` | the two-team approval; both → live |
 | `python run.py score [--all]` | scores changed leads from the change feed (or the whole pool) and writes `auxo_*` properties back |
-| `python run.py route` | fills free SDR slots with the leads worth most now, keeps an 8% exploration slice, creates tasks; strong leads unplaced after 24 h go to the manager |
+| `python run.py route` | hands the SDRs the leads worth most now, round robin, up to the team's reach in a week (no limit per SDR unless an owner's `capacity_limit` sets one), keeps an 8% exploration slice, creates tasks; strong leads unplaced after 24 h go to the manager |
 | `python run.py monitor` | the per-channel p-chart of observed vs predicted demo rate |
 | `python run.py losses` | reads new closed-lost reasons into fixed categories (quote checked) |
 | `python run.py simulate --months 3` | replays months in six-hour steps with the system in place: new leads, scoring, routing, SDR touches at the brief's capacity, outcomes, loss reasons, retrain |
-| `python run.py rebase` | moves the mock's demo-clock dates onto this year (whole years, so months stay aligned) and lets the clock run live: leads age, labels mature and SLAs run in real time. Wall-time logs stay; a `simulate` replay freezes the clock again |
+| `python run.py rebase [--exact]` | moves the mock's demo-clock dates onto this year (whole years, so months stay aligned; `--exact` shifts by the span from the newest lead to now, so every age is real) and lets the clock run live: leads age, labels mature and SLAs run in real time. Wall-time logs stay; a `simulate` replay freezes the clock again |
 | `python run.py eval` | writes `docs/evaluation.md` |
 | `python run.py below-gate [--explore 0.5] [--rank on\|off]` | phase 2: send part of the exploration slice below HubSpot's MQL gate, and rank there once enough of those leads have outcomes; prints what is known there |
 | `python run.py tier2 [--explore 0.2] [--band on\|off]` | phase 3: put a share of the leads below the capacity line in an automated sequence, the rest as the control arm; the band once enough of those have matured labels; prints the experiment so far |

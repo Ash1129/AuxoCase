@@ -40,10 +40,11 @@ from ..storage.db import set_setting, tx
 CONTACTS_PER_MONTH = 6000
 WORKED_PER_MONTH = 500
 OWNER_COUNT = 12
-# Open leads an SDR may hold. One, refilled by routing as soon as it is touched: on the simulator a deeper queue only
-# lets leads age past the day that halves their chance (answers 4 and 9; README has the comparison). The history
-# months ignore it: there, SDRs picked by gut feel.
-OPEN_LEAD_LIMIT = 1
+# Open leads an SDR may hold: None is no limit of their own, so routing hands out the team's reach round robin and
+# each queue shows its SDR's load. The queue-limit experiment (queue_limits.py) sets one, two and three a desk: on
+# the simulator a deeper queue only lets leads age past the day that halves their chance (answers 4 and 9; README has
+# the comparison). The history months ignore it: there, SDRs picked by gut feel.
+OPEN_LEAD_LIMIT: Optional[int] = None
 NEW_MONTHS = 1                      # trailing months left for the live scorer
 MATURITY_DAYS = 31 + 14 + 14 + 40   # month length + slowest first touch + demo + longest close: every deal settled
 

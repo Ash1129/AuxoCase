@@ -407,7 +407,7 @@ def _in_use(st) -> tuple:
     """(stale_lead_factor, capacity_limit) the router runs with now, to mark that row of the experiment; () when the
     SDRs' limits differ."""
     limits = {o.capacity_limit for o in st.hs.list_owners() if o.team == "sdr"}
-    if len(limits) != 1:
+    if len(limits) != 1 or None in limits:                # no limit a desk: no row of the experiment is the one in use
         return ()
     return (float(get_setting(st.conn, "stale_lead_factor") or 1.0), limits.pop())
 

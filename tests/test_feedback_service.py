@@ -365,3 +365,17 @@ def test_a_pie_is_cut_clockwise_from_the_top_and_a_single_part_is_a_full_ring():
     whole, none = pie([{"key": "a", "label": "A", "leads": [1]}, {"key": "b", "label": "B", "leads": []}])
     assert whole["share"] == 1 and whole["d"].count("A46,46") == 2 and none["d"] == "" and none["share"] == 0
     assert all(p["d"] == "" and p["share"] == 0 for p in pie([{"key": "a", "label": "A", "leads": []}]))
+
+
+def test_the_queue_page_says_how_many_wait_when_the_sdr_has_no_limit(db):
+    path, conn, hs = db
+    owner = hs.list_owners()[0]
+    limit = conn.execute("SELECT capacity_limit FROM hs_owners WHERE id=?", (owner.id,)).fetchone()[0]
+    try:
+        conn.execute("UPDATE hs_owners SET capacity_limit=NULL WHERE id=?", (owner.id,))
+        html = TestClient(create_app(path)).get(f"/queue/{owner.id}").text
+        head = html.split('<p class="kicker">')[1].split("</p>")[0]
+        assert f"{owner.name}'s queue · " in head and "waiting for a first touch" in head and "slot" not in head
+        assert TestClient(create_app(path)).get("/").status_code == 200 and TestClient(create_app(path)).get("/held").status_code == 200
+    finally:
+        conn.execute("UPDATE hs_owners SET capacity_limit=? WHERE id=?", (limit, owner.id))

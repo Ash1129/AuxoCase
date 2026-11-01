@@ -9,11 +9,13 @@ knowledge base asked for:
   line drawn for people to see is the probability at the rank the team can
   reach in the next week at its monthly capacity; it is what marketing and
   sales negotiate (L03, L10).
-- Small queues (BrightPath answers 4 and 9). An SDR holds one waiting lead
-  (`capacity_limit` on the owner, counted over leads not yet touched), and
-  routing refills the slot as soon as it is touched, so the best new lead takes the next free slot instead of
-  waiting behind a month of older ones. That is where faster follow-up
-  without more SDRs comes from.
+- The team's reach. Routing keeps the team as a whole holding at most its
+  reach in untouched leads: how many it works in the line horizon (a week)
+  at its monthly capacity, handed out round robin, so each SDR's queue shows
+  the load they carry and a touch or a decision makes room for the next lead.
+  An owner with `capacity_limit` set holds at most that many instead (the
+  queue-limit experiment, data/queue_limits.py, runs one, two and three a
+  desk: BrightPath answers 4 and 9); live, no SDR has one.
 - Freshness. When demand runs ahead of capacity, the pool keeps a backlog of
   good older leads; ranked on probability alone they crowd out the new ones.
   A lead past its fresh window is worth `stale_lead_factor` of what it was
@@ -126,10 +128,25 @@ class Router:
         rows.sort(key=lambda c: (c.id not in replied, -priority(self.conn, c.auxo_probability, c.createdate, now), c.createdate))
         return rows
 
+    def reach(self, owners: Optional[list[Owner]] = None) -> int:
+        """How many leads the team works in the line horizon (`capacity_line_days`, default a week) at its monthly
+        capacity: the place the capacity line is drawn at and, for SDRs with no limit of their own, how many untouched
+        leads routing keeps across the team."""
+        if owners is None:
+            owners = [o for o in self.hs.list_owners(active_only=True) if o.team == self.team]
+        per_month = touches_per_month(self.conn, len(owners))
+        days = float(get_setting(self.conn, "capacity_line_days") or DEFAULT_LINE_HORIZON_DAYS)
+        return max(1, int(round(per_month * days / 30.4)))
+
     def free_slots(self) -> tuple[dict[str, int], list[Owner], int]:
+        """(each SDR's untouched leads, the SDRs, how many more leads routing may hand out now). Capacity is untouched
+        leads, so a touch frees room. An SDR with a limit has room up to it; without one, the team has room up to
+        its reach, the SDRs' queues then showing the load each carries."""
         owners = [o for o in self.hs.list_owners(active_only=True) if o.team == self.team]
-        counts = self.hs.waiting_lead_counts()   # capacity is untouched leads, so a touch frees the slot
-        free = sum(max(0, o.capacity_limit - counts.get(o.id, 0)) for o in owners)
+        counts = self.hs.waiting_lead_counts()
+        free = sum(max(0, o.capacity_limit - counts.get(o.id, 0)) for o in owners if o.capacity_limit is not None)
+        if any(o.capacity_limit is None for o in owners):
+            free += max(0, self.reach(owners) - sum(counts.get(o.id, 0) for o in owners))
         return counts, owners, free
 
     # ---- one routing pass -----------------------------------------------------
@@ -155,8 +172,12 @@ class Router:
         self._skip_model = model if skips_auto(self.conn) else None
         budget = free if max_assignments is None else min(free, max_assignments)
         if budget <= 0:
-            # Nobody is free. Above-line leads that have waited past the hold time go to the manager's queue,
-            # bounded so the page stays readable; the rest wait for the next free slot.
+            # Nobody is free. With limits a desk, above-line leads that have waited past the hold time go to the
+            # manager's queue, bounded so the page stays readable; the rest wait for the next free slot. With no limit
+            # a desk the team is at its reach, and every lead waits, re-ranked each pass, for the next touch to make room.
+            if any(o.capacity_limit is None for o in owners):
+                set_setting(self.conn, "last_routing_run", now_iso())
+                return decisions
             held = {r["contact_id"] for r in self.conn.execute("SELECT contact_id FROM held_queue WHERE released_at IS NULL")}
             cutoff = now - timedelta(hours=self.hold_after_hours)
             waiting = [c for c in pool if c.id not in held and c.createdate <= cutoff
@@ -221,9 +242,7 @@ class Router:
 
     def _line_probability(self, pool: list[Contact], now: datetime) -> Optional[float]:
         """The value at the rank the team reaches in the line horizon at its monthly capacity."""
-        per_month = touches_per_month(self.conn, len(self.free_slots()[1]))
-        days = float(get_setting(self.conn, "capacity_line_days") or DEFAULT_LINE_HORIZON_DAYS)
-        k = max(1, int(round(per_month * days / 30.4)))
+        k = self.reach()
         c = pool[min(k, len(pool)) - 1]
         return priority(self.conn, c.auxo_probability, c.createdate, now)
 
@@ -238,10 +257,11 @@ class Router:
         return self._assign_one(contact, owners, counts, False, now, reason, prefer_owner_id)
 
     def _next_owner(self, owners: list[Owner], counts: dict[str, int], prefer: Optional[str] = None) -> Optional[Owner]:
-        """Round robin starting after the last assigned owner, skipping anyone at their limit. A preferred owner
-        with room comes first and leaves the rotation where it was."""
+        """Round robin starting after the last assigned owner, skipping anyone at their limit (an owner without one
+        always has room). A preferred owner with room comes first and leaves the rotation where it was."""
+        room = lambda o: o.capacity_limit is None or counts.get(o.id, 0) < o.capacity_limit
         for o in owners:
-            if prefer and o.id == prefer and counts.get(o.id, 0) < o.capacity_limit:
+            if prefer and o.id == prefer and room(o):
                 return o
         last = get_setting(self.conn, f"rotation:{self.team}")
         order = sorted(owners, key=lambda o: o.id)
@@ -252,7 +272,7 @@ class Router:
                 start = (ids.index(last) + 1) % len(order)
         for i in range(len(order)):
             o = order[(start + i) % len(order)]
-            if counts.get(o.id, 0) < o.capacity_limit:
+            if room(o):
                 return o
         return None
 

@@ -60,20 +60,75 @@
 {% if stale %}<p class="notice warn" role="status"><b>Not saved.</b> The lead changed after this page loaded (someone else acted, or HubSpot moved it), so your click was not saved. This is the queue now.</p>{% endif %}
 
 <header class="head">
-  <p class="kicker">{{ owner.name }}'s queue · {{ waiting_count }} of {{ limit }} slot{{ '' if limit == 1 else 's' }} waiting{{ ld.ref('hit', open) }}</p>
+  <p class="kicker">{{ owner.name }}'s queue · {% if limit is none %}{{ waiting_count }} waiting for a first touch{% else %}{{ waiting_count }} of {{ limit }} slot{{ '' if limit == 1 else 's' }} waiting{% endif %}{{ ld.ref('hit', open) }}</p>
   {% if open -%}
   <h1 class="title">{{ ld.name(open.c, open.co) }}</h1>
   <p class="muted">{{ ld.facts_line(open.c, open.co) }}</p>
   {{ ld.marks(open.c, true) }}
+  {%- elif tab == 'glance' -%}
+  <h1 class="title">At a glance</h1>
+  <p class="lede">Where your queue stands: of the leads touched, who has replied and who you are still to hear from; of the untouched, whose first day is running out. Click a slice for the names.</p>
   {%- elif tab == 'touched' -%}
   <h1 class="title">Nothing waiting to hear back</h1>
   <p class="lede">A lead comes here once its first touch is seen in HubSpot, and leaves when you mark it worked, skipped or junk.</p>
   {%- else -%}
   <h1 class="title">Nothing waiting for a first touch</h1>
-  <p class="lede">Routing fills a free slot with the best lead in the pool{% if scheduler == 'on' %}, every five minutes{% else %}; the scheduler is off, so on the next routing run{% endif %}.</p>
+  <p class="lede">{% if limit is none %}Routing hands you the best leads in the pool, up to the team's reach{% else %}Routing fills a free slot with the best lead in the pool{% endif %}{% if scheduler == 'on' %}, every five minutes{% else %}; the scheduler is off, so on the next routing run{% endif %}.</p>
   {%- endif %}
 </header>
 
+
+{% macro pie_fig(id, title, parts, total) -%}
+<figure class="pie" aria-labelledby="pie-{{ id }}">
+  <h2 class="kicker" id="pie-{{ id }}">{{ title }} · {{ total }}</h2>
+  <div class="pie-row">
+    <svg viewBox="0 0 100 100" role="img" aria-label="{{ title }}: {% for p in parts %}{{ p.n }} {{ p.label|lower }}{{ ', ' if not loop.last }}{% endfor %}">
+      {% if not total %}<circle class="empty" cx="50" cy="50" r="46"></circle>{% endif %}
+      {% for p in parts if p.n %}<a href="#list-{{ id }}-{{ p.key }}" class="slice {{ p.key }}" data-pie="list-{{ id }}-{{ p.key }}" role="button" aria-pressed="false" aria-label="{{ p.label }}: {{ p.n }} of {{ total }}; the list"><path d="{{ p.d }}"><title>{{ p.label }}: {{ p.n }} of {{ total }}. Click for the list.</title></path></a>{% endfor %}
+    </svg>
+    <ul class="legend">
+      {% for p in parts %}<li><a href="#list-{{ id }}-{{ p.key }}" data-pie="list-{{ id }}-{{ p.key }}" aria-pressed="false"><span class="sw {{ p.key }}"></span>{{ p.label }} <span class="n">{{ p.n }}</span>{% if total %} <span class="muted">· {{ (100 * p.share)|round|int }}%</span>{% endif %}</a></li>{% endfor %}
+    </ul>
+  </div>
+  <figcaption class="small muted">{% if total %}Click a slice, or its row, for the list.{% else %}Nothing here right now.{% endif %}</figcaption>
+</figure>
+{%- endmacro %}
+{% if tab == 'glance' -%}
+<hr class="rule">
+<div class="pies">
+  {{ pie_fig('touched', 'Touched · waiting to hear back', glance.touched, touched|length) }}
+  {{ pie_fig('untouched', 'Untouched · first touch due', glance.untouched, waiting|length) }}
+</div>
+<hr class="rule">
+{% for p in glance.touched %}
+<details id="list-touched-{{ p.key }}" class="pie-list">
+  <summary><span class="sw {{ p.key }}"></span>Touched · {{ p.label|lower }} · {{ p.n }}</summary>
+  {% if p.leads -%}
+  <div class="scroll"><table>
+    <thead><tr><th>Lead</th><th class="r">Odds</th><th>Touch seen</th><th>Reply</th></tr></thead>
+    <tbody>{% for e in p.leads %}
+      <tr><td><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a></td><td class="r num">{{ ld.odds(e.c.auxo_probability) }}</td><td>{{ (e.seen_type or 'activity')|capitalize }} {{ e.seen_when }}</td>
+        <td>{% if e.reply %}{{ e.reply.when|capitalize }}, {{ e.reply.word }}{% if e.booked %} · demo booked for {{ e.booked }}{% elif e.reply.answer %} · answer drafted{% elif e.reply.sent %} · times sent for you{% endif %}{% elif e.heard %}{{ e.heard }} · answer from HubSpot{% else %}<span class="muted">None yet; log your call</span>{% endif %}</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {%- else %}<p class="muted">No one here right now.</p>{% endif %}
+</details>
+{% endfor %}
+{% for p in glance.untouched %}
+<details id="list-untouched-{{ p.key }}" class="pie-list">
+  <summary><span class="sw {{ p.key }}"></span>Untouched · {{ p.label|lower }} · {{ p.n }}</summary>
+  {% if p.leads -%}
+  <div class="scroll"><table>
+    <thead><tr><th>Lead</th><th class="r">Odds</th><th>Touch by</th><th>Since arrival</th><th>Automated email</th></tr></thead>
+    <tbody>{% for e in p.leads %}
+      <tr><td><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a></td><td class="r num">{{ ld.odds(e.c.auxo_probability) }}</td><td>{{ e.clock.touch_by }}</td><td>{{ e.clock.age }}</td>
+        <td>{% if e.replied %}<b>Replied {{ e.replied }}</b>: answer this one first{% else %}<span class="muted">No reply</span>{% endif %}</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+  {%- else %}<p class="muted">No one here right now.</p>{% endif %}
+</details>
+{% endfor %}
+{%- endif %}
 
 {% if open -%}
 {%- set c = open.c -%}
@@ -110,6 +165,10 @@
   </details>
 </div>
 
+{% if tab == 'touched' %}
+<hr class="rule">
+{{ ld.demo(open, 'queue') }}
+{% endif %}
 <hr class="rule">
 <div class="pair">
   <div class="col">{{ ld.why(open) }}</div>

@@ -50,11 +50,12 @@ details[open]>summary .shut,details:not([open])>summary .opened{display:none}
 {% block body %}
 {%- set lim = limits -%}
 {%- macro leads_word(n) -%}{{ 'lead' if n == 1 else 'leads' }}{%- endmacro -%}
-{%- macro names(rs) -%}{% for r in rs[:3] %}{{ r.name }} ({{ r.waiting }} of {{ r.limit }}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 and rs|length <= 3 else ', ' }}{% endif %}{% endfor %}{% if rs|length > 3 %} and {{ rs|length - 3 }} more{% endif %}{%- endmacro -%}
+{%- macro names(rs) -%}{% for r in rs[:3] %}{{ r.name }} ({{ r.waiting }} waiting{% if r.limit is not none %} of {{ r.limit }}{% endif %}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 and rs|length <= 3 else ', ' }}{% endif %}{% endfor %}{% if rs|length > 3 %} and {{ rs|length - 3 }} more{% endif %}{%- endmacro -%}
 {%- set chooser = 'any SDR you choose' if other_owners else 'whoever you choose' -%}
 {%- set over_note -%}
 {%- if lim.all and lim.uniform -%}Every SDR is at their limit, so {{ chooser }} will have {{ lim.uniform.waiting + 1 }} leads waiting against a limit of {{ lim.uniform.limit }}.
 {%- elif lim.all -%}Every SDR is at their limit, so {{ chooser }} goes over theirs.
+{%- elif lim.none -%}No SDR has a limit: whoever you choose takes it on top of their queue.
 {%- elif lim.room -%}{{ names(lim.room) }} {{ 'has' if lim.room|length == 1 else 'have' }} room; any other SDR goes over their limit.
 {%- endif -%}
 {%- endset -%}
@@ -84,8 +85,8 @@ details[open]>summary .shut,details:not([open])>summary .opened{display:none}
         <label for="rel-{{ h.id }}-sdr">Assign {{ h.name }} to</label>
         <select id="rel-{{ h.id }}-sdr" name="owner_id" required>
           <option value="">Choose an SDR</option>
-          {% for o in owners %}<option value="{{ o.id }}">{{ o.name }} · {{ counts.get(o.id, 0) }} of {{ o.capacity_limit }} waiting</option>
-          {% endfor %}{% if other_owners %}<optgroup label="Other owners">{% for o in other_owners %}<option value="{{ o.id }}">{{ o.name }} · {{ counts.get(o.id, 0) }} of {{ o.capacity_limit }} waiting</option>{% endfor %}</optgroup>{% endif %}
+          {% for o in owners %}<option value="{{ o.id }}">{{ o.name }} · {{ counts.get(o.id, 0) }} waiting{% if o.capacity_limit is not none %} of {{ o.capacity_limit }}{% endif %}</option>
+          {% endfor %}{% if other_owners %}<optgroup label="Other owners">{% for o in other_owners %}<option value="{{ o.id }}">{{ o.name }} · {{ counts.get(o.id, 0) }} waiting{% if o.capacity_limit is not none %} of {{ o.capacity_limit }}{% endif %}</option>{% endfor %}</optgroup>{% endif %}
         </select>
       </div>
       <div class="field grow1">
@@ -140,7 +141,10 @@ details[open]>summary .shut,details:not([open])>summary .opened{display:none}
     <span>first {{ 'touch' if overdue|length == 1 else 'touches' }} overdue{% call note('late-note', 'What overdue means') %}Overdue: assigned over {{ sla_hours }} hours ago, nothing recorded since.{% endcall %}</span>
   </div>
   <div class="stat">
-    {% if lim.n %}
+    {% if lim.n and lim.none %}
+    <span class="big num">{{ lim.n }}</span>
+    <span>SDRs, no limit a desk{% call note('limit-note', 'How many the team holds') %}Routing keeps up to {{ reach }} untouched leads across the team, its reach in a week, handed out round robin: {% for r in lim.room[:3] %}{{ r.name }} {{ r.waiting }}{{ ', ' if not loop.last }}{% endfor %}{% if lim.room|length > 3 %} and {{ lim.room|length - 3 }} more{% endif %} waiting now.{% endcall %}</span>
+    {% elif lim.n %}
     <span class="big num">{{ lim.at_limit }} of {{ lim.n }}</span>
     <span>SDRs at their limit{% call note('limit-note', 'Where each SDR stands') %}{% if lim.uniform %}Each has {{ lim.uniform.waiting }} of {{ lim.uniform.limit }} {{ leads_word(lim.uniform.limit) }} waiting for a first touch.{% elif lim.room %}With room: {{ names(lim.room) }}.{% else %}Each is at or over their limit.{% endif %}{% endcall %}</span>
     {% else %}
@@ -160,6 +164,7 @@ details[open]>summary .shut,details:not([open])>summary .opened{display:none}
   <p class="lede">{{ top.name }} leads the held list{% if top.pct is not none %} at {{ top.pct }}%{% endif %}.
     {% if lim.all and lim.uniform %}Every SDR has {{ lim.uniform.waiting }} of {{ lim.uniform.limit }} {{ leads_word(lim.uniform.limit) }} waiting; placing any{{ ' with an SDR' if other_owners }} goes over a limit, on your name.
     {%- elif lim.all %}Every SDR is at their limit; placing any{{ ' with an SDR' if other_owners }} goes over a limit, on your name.
+    {%- elif lim.none %}No SDR has a limit; routing hands out the leads above the line at its next pass, up to the team's reach.
     {%- elif lim.room %}{{ lim.room|length }} of {{ lim.n }} SDRs {{ 'has' if lim.room|length == 1 else 'have' }} room; routing fills free slots at its next pass.
     {%- else %}No active SDR to place them with.{% endif %}</p>
 

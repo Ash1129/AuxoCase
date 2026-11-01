@@ -89,12 +89,14 @@ def _arrival(created: datetime, now: datetime) -> dict:
 
 def _limits(team: list, counts: dict) -> dict:
     """Where the SDRs stand against their limits: n, at_limit, uniform (every SDR has the same waiting/limit, as
-    {waiting, limit}, or None) and room (the SDRs with a free slot, as {name, waiting, limit})."""
+    {waiting, limit}, or None), room (the SDRs with a free slot, as {name, waiting, limit}; an SDR without a limit
+    (None) always has room) and none (no SDR has a limit: the team's reach bounds routing instead)."""
     pairs = {(counts.get(o.id, 0), o.capacity_limit) for o in team}
-    at_limit = [o for o in team if counts.get(o.id, 0) >= o.capacity_limit]
-    uniform = {"waiting": next(iter(pairs))[0], "limit": next(iter(pairs))[1]} if len(pairs) == 1 else None
+    at_limit = [o for o in team if o.capacity_limit is not None and counts.get(o.id, 0) >= o.capacity_limit]
+    uniform = {"waiting": next(iter(pairs))[0], "limit": next(iter(pairs))[1]} if len(pairs) == 1 and None not in next(iter(pairs)) else None
     room = [{"name": o.name, "waiting": counts.get(o.id, 0), "limit": o.capacity_limit} for o in team if o not in at_limit]
     return {"n": len(team), "at_limit": len(at_limit), "all": bool(team) and len(at_limit) == len(team),
+            "none": bool(team) and all(o.capacity_limit is None for o in team),
             "uniform": uniform, "room": room}
 
 
@@ -229,7 +231,7 @@ def held_page(st) -> dict:
                     "today": outs[0] == now.date()} if outs else None,
         "max_age_days": max_age,
         "owners": team, "other_owners": [o for o in active if o.team != router.team], "counts": counts,
-        "limits": _limits(team, counts), "task_due_hours": router.task_due_hours,
+        "limits": _limits(team, counts), "reach": router.reach(team) if team else 0, "task_due_hours": router.task_due_hours,
         "overdue": overdue, "upcoming": upcoming[:cut],
         "upcoming_rest": {"n": len(rest), "first": rest[0]["assigned"], "last": rest[-1]["assigned"]} if rest else None,
         "sla_hours": sla_hours, "sla_since": _when(now - timedelta(hours=sla_hours)), "hold_after_hours": router.hold_after_hours,

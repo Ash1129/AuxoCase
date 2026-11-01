@@ -22,7 +22,7 @@ HubSpot (mock in development, real API in production)
 ┌───────────────────────────── Job 2: route ─────────────────────────────┐
 │ pool = unowned MQLs created in the last 30 days (older: dispositioned)   │
 │ order by value now: probability × stale_lead_factor once past a day      │
-│ free SDR slots = Σ (limit − open leads); limit 1, refilled on each touch │
+│ room = team's reach (a week's touches) − untouched leads; no limit a desk│
 │ top of the pool fills (1 − e) of them; e = 8% drawn at random from below │
 │ the line (the exploration slice, marked auxo_holdout); runs as leads come│
 │ round robin skipping full SDRs; compare-and-set owner; task due in 4 h   │
@@ -31,7 +31,7 @@ HubSpot (mock in development, real API in production)
 │ on assignment: first email drafted, checked, booking link added;         │
 │ written to the lead and enrolled in the SDR's HubSpot sequence (step 1   │
 │ waits for the SDR to approve); follow-ups drafted from the activity      │
-│ first email or call logged in HubSpot → worked, slot refilled (1 min)    │
+│ first email or call logged in HubSpot → worked, room refilled (1 min)    │
 └──────────────────────────────────────────────────────────────────────────┘
    │ hubspot_owner_id + task; SDR works / skips / junks / nudges rank (logged)
    ▼

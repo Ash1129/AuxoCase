@@ -154,7 +154,9 @@ class Owner:
     name: str
     email: str
     active: bool = True
-    capacity_limit: int = 45       # assigned leads waiting for a first touch (WAITING_LEAD_STATUSES)
+    capacity_limit: Optional[int] = None   # the most assigned leads waiting for a first touch (WAITING_LEAD_STATUSES) the SDR
+                                          # holds; None, the default, is no limit of their own: routing keeps the team as a
+                                          # whole within its reach (routing/engine.py), each SDR's queue showing their load
     team: str = "sdr"
     meetings_link: str = ""        # the SDR's HubSpot meetings (booking) page, put in drafts so leads can pick a time
 

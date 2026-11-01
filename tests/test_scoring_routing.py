@@ -127,6 +127,30 @@ def test_held_queue_when_everyone_is_full(world):
     assert conn.execute("SELECT released_by FROM held_queue WHERE contact_id='no-such-lead'").fetchone()["released_by"] == "left the pool"
 
 
+def test_with_no_limit_a_desk_the_team_holds_its_reach_round_robin(world):
+    """No limit per SDR (the default): routing hands out the team's reach in untouched leads, spread round robin, so
+    each queue shows its SDR's load; at the reach nothing more goes out and nothing is held; a touch makes room."""
+    conn, hs = world
+    conn.execute("UPDATE hs_owners SET capacity_limit=NULL")
+    conn.execute("UPDATE hs_contacts SET hs_lead_status='IN_PROGRESS' WHERE hs_lead_status IN ('NEW','OPEN') AND hubspot_owner_id IS NOT NULL")  # desks cleared
+    router = Router(hs, conn, seed=4, exploration_share=0.0)
+    counts, owners, free = router.free_slots()
+    assert all(o.capacity_limit is None for o in owners) and free == router.reach() - sum(counts.values()) > 12
+    assigned = [d for d in router.run() if d.decision in ("assigned", "holdout_assigned")]
+    after = hs.waiting_lead_counts()
+    assert len(assigned) == free and sum(after.values()) == router.reach()
+    assert max(after.values()) - min(after.values()) <= 1                                   # round robin, nobody skipped
+    again = router.run()
+    assert not [d for d in again if d.decision in ("assigned", "holdout_assigned", "held")]   # at the reach: waits, no holds
+    hs.batch_update_contacts([(assigned[0].contact_id, {"hs_lead_status": "IN_PROGRESS"})])  # a touch
+    more = [d for d in router.run() if d.decision in ("assigned", "holdout_assigned")]
+    assert len(more) == 1
+    # A reply to the automated outreach still goes straight to the SDR it heard from, over the reach.
+    pool = router.pool()
+    d = router.assign_now(pool[0], "replied to automated outreach", prefer_owner_id=owners[0].id)
+    assert d.decision == "assigned" and d.owner_id == owners[0].id
+
+
 def test_the_test_months_are_held_out_and_the_live_model_is_the_one_measured(world):
     """Fit on the oldest months, choose and calibrate on the next, report the newest: no month in two roles, and no
     refit after the test, so the reported precision is what the deployed model does on those months."""

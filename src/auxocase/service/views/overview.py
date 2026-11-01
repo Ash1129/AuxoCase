@@ -190,7 +190,8 @@ def overview_page(st) -> dict:
     pool_size: leads in the ranked pool; pool_label 'MQLs' (or 'MQLs and plain leads' when the pool ranks below the
     gate) and pool_noun its singular; pool_days its age window; models: Counter of the model versions that scored
     it. held: leads in the manager's queue; hold_after: how long an above-line lead waits before it is held.
-    team: {sdrs, slots, waiting, free, at_limit, limit (the shared limit, or None when limits differ), overdue
+    team: {sdrs, slots (None when an SDR has no limit), waiting, free, at_limit, limit (the shared limit, or None
+    when limits differ or there is none), unlimited (an SDR without a limit), reach (the team's, routing/engine.py), overdue
     (leads still waiting on their SDR past the first-touch SLA: the Held & overdue page's overdue list, counted)}.
     per_month: the team's monthly capacity ('500'); horizon: the line's horizon in words ('a week'), horizon_work
     ("a week's work"). cap: the capacity line, or None when the pool is empty: {place (1-based: the engine's k, or
@@ -225,9 +226,12 @@ def overview_page(st) -> dict:
     limits = {o.capacity_limit for o in sdrs}
     overdue, _ = overdue_clocks(st, router, now, DEFAULT_FIRST_TOUCH_SLA_HOURS, {o.id: o for o in st.hs.list_owners(active_only=False)},
                          lambda c: "")
-    team = {"sdrs": len(sdrs), "slots": sum(o.capacity_limit for o in sdrs), "waiting": sum(counts.get(o.id, 0) for o in sdrs),
-            "free": free, "at_limit": sum(1 for o in sdrs if counts.get(o.id, 0) >= o.capacity_limit),
-            "limit": limits.pop() if len(limits) == 1 else None, "overdue": len(overdue)}
+    unlimited = any(o.capacity_limit is None for o in sdrs)
+    team = {"sdrs": len(sdrs), "slots": None if unlimited else sum(o.capacity_limit for o in sdrs),
+            "waiting": sum(counts.get(o.id, 0) for o in sdrs), "free": free,
+            "at_limit": sum(1 for o in sdrs if o.capacity_limit is not None and counts.get(o.id, 0) >= o.capacity_limit),
+            "limit": limits.pop() if len(limits) == 1 else None, "overdue": len(overdue),
+            "unlimited": unlimited, "reach": router.reach(sdrs) if sdrs else 0}
 
     # the jobs' latest runs; their times, and the times the ranks and the line were taken, are wall-clock UTC
     runs = _runs(st, mock)
@@ -276,7 +280,7 @@ def overview_page(st) -> dict:
     waiting = _waiting_by_owner(st, now)
     for o in sdrs:
         mine, n = waiting.get(o.id, []), counts.get(o.id, 0)
-        d = {"o": o, "waiting": n, "limit": o.capacity_limit, "marks": [i < n for i in range(min(o.capacity_limit, SLOT_MARKS))],
+        d = {"o": o, "waiting": n, "limit": o.capacity_limit, "marks": [i < n for i in range(min(n if o.capacity_limit is None else o.capacity_limit, SLOT_MARKS))],
              "lead": None, "more": max(0, len(mine) - 1), "href": f"/queue/{o.id}"}
         if mine:
             c = mine[0]
