@@ -206,14 +206,18 @@ def cmd_demo(a):
 
 
 def cmd_rebase(a):
-    """Move the mock's demo-clock dates onto this year and let the clock run live; wall-time logs stay."""
-    from auxocase.data.rebase import rebase, years_to_now
+    """Move the mock's demo-clock dates onto this year (or, --exact, so the newest lead arrived just now) and let the
+    clock run live; wall-time logs stay."""
+    from auxocase.data.rebase import rebase, span_to_now, years_to_now
     conn, hs = _ctx(a.db)
     years = a.years if a.years is not None else years_to_now(conn)
-    if not years and not a.live:
+    if a.exact and not span_to_now(conn):
+        print("the newest lead is already in the past; nothing to shift")
+        return
+    if not a.exact and not years and not a.live:
         print("the data clock is already in this year; nothing to shift")
         return
-    out = rebase(conn, years=years, evaluation=Path(a.evaluation) if a.evaluation else None, live=a.live)
+    out = rebase(conn, years=years, evaluation=Path(a.evaluation) if a.evaluation else None, live=a.live, exact=a.exact)
     print(json.dumps(out, indent=1))
 
 
@@ -239,6 +243,7 @@ def main(argv=None):
     s = sub.add_parser("tier2"); s.add_argument("--explore", type=float, default=None); s.add_argument("--band", choices=["on", "off"], default=None)
     s.add_argument("--force", action="store_true"); s.set_defaults(fn=cmd_tier2)
     s = sub.add_parser("rebase"); s.add_argument("--years", type=int, default=None, help="years to shift back (default: onto this year)")
+    s.add_argument("--exact", action="store_true", help="shift by the exact span from the newest lead to now, so every age is real (months no longer align)")
     s.add_argument("--evaluation", default="docs/evaluation.json"); s.add_argument("--no-live", dest="live", action="store_false"); s.set_defaults(fn=cmd_rebase)
     s = sub.add_parser("serve"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("demo"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_demo)

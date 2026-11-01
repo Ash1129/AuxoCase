@@ -11,3 +11,4 @@ outputs/
 data/*.db-shm
 data/*.db-wal
 data/models/
+data/backups/

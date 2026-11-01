@@ -1,10 +1,10 @@
 """Rebasing the mock onto the present: demo-clock dates move back whole years, wall-time logs stay, the clock runs live
 and a replayed month freezes it again."""
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from auxocase.data.generate import generate
-from auxocase.data.rebase import rebase, shift_text, wall_window, years_to_now
+from auxocase.data.rebase import rebase, shift_text, span_to_now, wall_window, years_to_now
 from auxocase.feedback import loop as fb
 from auxocase.hubspot.mock import MockHubSpot
 from auxocase.llm.client import Offline
@@ -84,3 +84,32 @@ def test_the_live_clock_shows_eastern_time_with_seconds_and_ticks(tmp_path, monk
     assert '<time data-clock datetime="' in t and 'data-tz="America/New_York" data-weekday>' in t and "</time> ET" in t
     assert "· live" in t and "UTC" not in t.split('id="ov-pool"')[0]
     assert "tick()" in client.get("/assets/app.js").text
+
+
+def test_an_exact_rebase_lands_the_newest_lead_on_now_and_keeps_the_services_rows():
+    by = timedelta(days=72, hours=9, minutes=1, seconds=41)
+    assert shift_text("2027-01-12T23:01:41", by) == "2026-11-01T14:00:00" and shift_text("2027-01-12T23:01:41.500000", by) == "2026-11-01T14:00:00.500000"
+    assert shift_text("2027-01-12", by) == "2026-11-01" and shift_text("2027-01", by) == "2026-10" and shift_text("words", by) == "words"
+
+
+def test_an_exact_rebase_on_a_mock_the_simulator_ran_ahead(tmp_path):
+    conn = connect(tmp_path / "x.db")
+    hs = MockHubSpot(conn, faithful_delivery=True)
+    hs.ensure_properties()
+    generate(conn, months=3, seed=5)
+    fb.sync_outcomes(hs, conn)
+    Scorer(hs, conn, None, Offline()).rescore_pool()                   # the service's wall-time rows start here
+    now = datetime.utcnow().replace(microsecond=0)
+    newest = conn.execute("SELECT MAX(createdate) FROM hs_contacts").fetchone()[0]
+    ahead = now + timedelta(days=72, hours=9)                           # as if the simulator ran months past the wall clock
+    conn.execute("UPDATE hs_contacts SET createdate=? WHERE createdate=?", (ahead.isoformat(timespec="seconds"), newest))
+    conn.execute("INSERT INTO routing_log(contact_id, owner_id, decision, reason, created_at) VALUES('x', '900', 'assigned', 'wall', ?)",
+                 (now.isoformat(timespec="seconds"),))                  # written by the service on the live clock: stays
+    conn.commit()
+    span = span_to_now(conn, now)
+    assert span == timedelta(days=72, hours=9)
+    out = rebase(conn, exact=True, now=now)
+    assert out["years"] is None and out["span"] == str(span) and out["clock_live"] and out["rows"]["hs_contacts.createdate"] > 0
+    assert conn.execute("SELECT MAX(createdate) FROM hs_contacts").fetchone()[0] == now.isoformat(timespec="seconds")
+    assert conn.execute("SELECT created_at FROM routing_log WHERE contact_id='x'").fetchone()[0] == now.isoformat(timespec="seconds")
+    assert span_to_now(conn, now) == timedelta(0) and not clock_frozen(conn)
