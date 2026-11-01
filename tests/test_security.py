@@ -116,6 +116,11 @@ def test_a_stale_lead_action_is_refused_not_applied(world):
     seen = lead_token(conn, hs.get_contact("1"))
     hs.batch_update_contacts([("1", {"auxo_rank": 3, "auxo_score": 61.0})])
     assert seen == lead_token(conn, hs.get_contact("1"))
+    # A call made on the touched tab comes back to the touched tab; a stale one too.
+    r = client.post("/lead/1/action", data={"owner_id": "900", "action": "worked", "seen": seen, "tab": "touched"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/queue/900?tab=touched" and _overrides(conn) == 2
+    r = client.post("/lead/1/action", data={"owner_id": "900", "action": "worked", "seen": seen, "tab": "touched"}, follow_redirects=False)
+    assert r.headers["location"] == "/queue/900?tab=touched&stale=1" and _overrides(conn) == 2
 
 
 def test_a_stale_approval_is_refused_not_applied(world):

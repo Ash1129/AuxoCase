@@ -59,26 +59,26 @@
 
 <div class="decide" role="group" aria-label="Your call on {{ ld.first(c) }}">
   <form method="post" action="/lead/{{ c.id }}/action">
-    <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}">
+    <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="tab" value="{{ tab }}">
     <button class="btn primary" type="submit" name="action" value="worked">Mark worked</button>
   </form>
   <details>
     <summary class="btn">Skip with a reason</summary>
     <form class="panel" method="post" action="/lead/{{ c.id }}/action">
-      <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="action" value="skipped">
+      <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="action" value="skipped">
       <p class="small muted">{% if open.first_touch %}The first touch already freed your slot; a skip takes {{ ld.first(c) }} off your list.{% else %}A skip frees your slot; routing fills it at once.{% endif %} The reason is kept with your call.</p>
       {% for r in ('wrong fit', 'already a customer', 'no contact details', 'timing', 'other') %}<button class="btn" type="submit" name="note" value="{{ r }}">{{ r|capitalize }}</button>
       {% endfor %}
     </form>
   </details>
   <form method="post" action="/lead/{{ c.id }}/action">
-    <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}">
+    <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="tab" value="{{ tab }}">
     <button class="btn" type="submit" name="action" value="junk">Junk</button>
   </form>
   <details>
     <summary class="btn">Move it a few places</summary>
     <form class="panel" method="post" action="/lead/{{ c.id }}/action">
-      <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="move" value="3">
+      <input type="hidden" name="owner_id" value="{{ owner.id }}"><input type="hidden" name="seen" value="{{ open.seen }}"><input type="hidden" name="tab" value="{{ tab }}"><input type="hidden" name="move" value="3">
       <p class="small muted">Moves its rank three places and flags it for review, with your reason.</p>
       <div class="field"><label for="why-move">Why move it</label><input id="why-move" name="note" autocomplete="off"></div>
       <button class="btn" type="submit" name="action" value="promote">Up 3 places</button>

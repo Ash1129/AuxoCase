@@ -55,7 +55,7 @@ from .views.phases import phases_page, throw_switches
 from ..capacity import set_assumptions
 from ..llm.replies import DEMO_REPLIES
 from ..routing import callnotes, followups, replies
-from .views.queue import queue_page
+from .views.queue import TABS as QUEUE_TABS, queue_page
 from .views.stats import hit_rate
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -234,7 +234,8 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
 
     @app.post("/lead/{contact_id}/action")
     def lead_action(contact_id: str, owner_id: str = Form(...), action: str = Form(...), note: str = Form(""), move: int = Form(0),
-                    seen: str = Form("")):
+                    seen: str = Form(""), tab: str = Form("")):
+        """The SDR's call on a lead, from the queue; `tab` is the queue tab it was made on, which the page comes back to."""
         c = st.hs.get_contact(contact_id)
         if not c:
             raise HTTPException(404)
@@ -242,9 +243,11 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             raise HTTPException(400, "unknown action")
         if not seen:
             raise HTTPException(400, "the form is missing the lead's version; reload the page")
+        back = f"/queue/{owner_id}" + (f"?tab={tab}" if tab in QUEUE_TABS else "")
+        sep = "&" if "?" in back else "?"
         if seen != lead_token(st.conn, c):
             # Someone else acted on it, or HubSpot moved it on, since this page was loaded: say so instead of acting twice.
-            return RedirectResponse(f"/queue/{owner_id}?stale={contact_id}", status_code=303)
+            return RedirectResponse(f"{back}{sep}stale={contact_id}", status_code=303)
         move = max(-MAX_RANK_MOVE, min(MAX_RANK_MOVE, move))
         st.conn.execute("INSERT INTO overrides(contact_id, owner_id, action, note, score_at_time, rank_at_time, created_at) VALUES(?,?,?,?,?,?,?)",
                         (contact_id, owner_id, action, note, c.auxo_score, c.auxo_rank, now_iso()))
@@ -265,7 +268,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         if action in ("worked", "junk", "skipped"):
             # The lead no longer waits on the SDR, so the slot is free: refill it now rather than at the next scheduled pass.
             st.router().run()
-        return RedirectResponse(f"/queue/{owner_id}", status_code=303)
+        return RedirectResponse(back, status_code=303)
 
     @app.get("/held", response_class=HTMLResponse)
     def held(request: Request):
