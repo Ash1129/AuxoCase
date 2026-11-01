@@ -46,23 +46,11 @@ HEADERS = {"X-Content-Type-Options": "nosniff", "X-Frame-Options": "DENY", "Refe
 APP_JS = """document.addEventListener('click', function (e) {
   var a = e.target.closest && e.target.closest('a[data-busy]');
   if (a) { a.textContent = a.dataset.busy; a.style.pointerEvents = 'none'; }
-  var b = e.target.closest && e.target.closest('button[data-copy]');
-  if (!b) return;
-  var el = document.getElementById(b.dataset.copy);
-  if (!el) return;
-  var done = function () { b.textContent = b.dataset.done || 'Copied'; };
-  var select = function () {
-    var r = document.createRange(), s = window.getSelection();
-    r.selectNodeContents(el); s.removeAllRanges(); s.addRange(r);
-    try { document.execCommand('copy'); done(); } catch (_) {}
-    s.removeAllRanges();
-  };
-  if (navigator.clipboard && window.ClipboardItem) {
-    navigator.clipboard.write([new ClipboardItem({
-      'text/html': new Blob([el.innerHTML], { type: 'text/html' }),
-      'text/plain': new Blob([el.innerText], { type: 'text/plain' })
-    })]).then(done, select);
-  } else { select(); }
+  var b = e.target.closest && e.target.closest('button[type=submit][data-busy]');
+  if (b && b.form) {
+    // one send per click: the form goes with this click, then the button is out of play
+    setTimeout(function () { b.textContent = b.dataset.busy; b.disabled = true; }, 0);
+  }
 });
 (function () {
   var main = document.querySelector('main');

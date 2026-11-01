@@ -16,6 +16,7 @@ run standalone against the mock.
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import threading
 from contextlib import asynccontextmanager
@@ -42,7 +43,8 @@ from ..storage.db import DEFAULT_DB, clock, clock_frozen, connect, dumps, get_se
 from . import tz
 from . import scheduler as sched
 from . import security
-from .email_html import branded
+from .email_html import BRAND, branded
+from .mailer import Mailer, SignInRefused
 from .security import approval_token, lead_token
 from .views.held import held_page
 from .views.lead import lead_detail
@@ -57,7 +59,7 @@ from .views.queue import queue_page
 from .views.stats import hit_rate
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
-TEMPLATES.env.globals["email_html"] = branded        # a draft as the lead will see it, the lead page's preview and copy
+TEMPLATES.env.globals["email_html"] = branded        # a draft as the lead will see it: the lead page's preview, and what is sent
 MAX_RANK_MOVE = 5    # L12: a bounded override buys adoption without handing the queue back to gut feel
 
 
@@ -69,6 +71,7 @@ class State:
             self.hs.ensure_properties()      # a demo database from before a new auxo_* property gets it; the real portal: go-live step 1
         self.llm = make_llm(conn=self.conn)
         self.model = load_live_model(self.conn)
+        self.mailer = Mailer.from_env()          # "Send to <the lead>" on the lead page; nothing sends until AUXO_SMTP_* are set
 
     def scorer(self) -> Scorer:
         self.model = load_live_model(self.conn)
@@ -115,7 +118,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         mock = isinstance(st.hs, MockHubSpot)
         frozen, now = clock_frozen(st.conn), clock(st.conn)
         base = {"request": request, "live": live, "llm": st.llm.name, "scheduler": "on" if runner and runner.running else "off",
-                "line": loads(get_setting(st.conn, "capacity_line_probability")), "nav": "",
+                "line": loads(get_setting(st.conn, "capacity_line_probability")), "nav": "", "smtp": st.mailer.configured,
                 "held_count": st.conn.execute("SELECT COUNT(*) n FROM held_queue WHERE released_at IS NULL").fetchone()["n"],
                 "candidates": st.conn.execute("SELECT COUNT(*) n FROM model_registry WHERE status='candidate'").fetchone()["n"],
                 "queue_owner": last if any(o.id == last for o in owners) else (owners[0].id if owners else None),
@@ -130,18 +133,54 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "home.html", ctx(request, nav="overview", **overview_page(st)))
 
     @app.get("/queue/{owner_id}", response_class=HTMLResponse)
-    def queue(request: Request, owner_id: str, stale: str = "", lead: str = "", draft: int = 0, call: int = 0):
+    def queue(request: Request, owner_id: str, stale: str = "", lead: str = "", draft: int = 0, call: int = 0, mail_sent: str = "", mail_failed: str = ""):
         page = queue_page(st, owner_id, lead or None, bool(draft), bool(call))
         if page is None:
             raise HTTPException(404)
-        return TEMPLATES.TemplateResponse(request, "queue.html", ctx(request, nav="queues", **page, hit=_hit_rate(st.conn), stale=stale))
+        return TEMPLATES.TemplateResponse(request, "queue.html", ctx(request, nav="queues", **page, hit=_hit_rate(st.conn), stale=stale,
+                                                                    mail_sent=mail_sent, mail_failed=mail_failed))
 
     @app.get("/lead/{contact_id}", response_class=HTMLResponse)
-    def lead(request: Request, contact_id: str, draft: int = 0, call: int = 0):
+    def lead(request: Request, contact_id: str, draft: int = 0, call: int = 0, mail_sent: str = "", mail_failed: str = ""):
         detail = lead_detail(st, contact_id, bool(draft), bool(call))
         if detail is None:
             raise HTTPException(404)
-        return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, nav="queues", **detail))
+        return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, nav="queues", **detail, mail_sent=mail_sent, mail_failed=mail_failed))
+
+    @app.post("/lead/{contact_id}/send")
+    def lead_send(contact_id: str, subject: str = Form(""), body: str = Form(""), back: str = Form("")):
+        """Send a draft to the lead from here, branded (email_html.py), over SMTP (mailer.py), with the SDR's name on
+        the From line. On the mock the send is logged in HubSpot as the SDR's, so the first-touch check sees it; on a
+        real portal HubSpot logs it from the BCC address (AUXO_SMTP_BCC). Back to the page it came from, with a notice."""
+        c = st.hs.get_contact(contact_id)
+        if not c:
+            raise HTTPException(404)
+        if not re.fullmatch(r"/(lead|queue)/[\w-]+(\?[\w=&-]*)?", back):
+            back = f"/lead/{contact_id}"
+        sep = "&" if "?" in back else "?"
+
+        def failed(why: str):
+            return RedirectResponse(f"{back}{sep}mail_failed={quote(why[:200])}#draft-{contact_id}", status_code=303)
+        subject, body = subject.strip(), body.strip()
+        if not c.email:
+            return failed("the lead has no email address")
+        if not subject or not body:
+            return failed("the draft is empty")
+        if not st.mailer.configured:
+            return failed("sending is not set up: AUXO_SMTP_USER and AUXO_SMTP_PASS (a Gmail app password) in the server's environment")
+        owner = next((o for o in st.hs.list_owners(active_only=False) if o.id == c.hubspot_owner_id), None)
+        from_name = owner.name if owner else BRAND
+        try:
+            out = st.mailer.send(c.email, subject, body, branded(body, from_name), from_name)
+        except SignInRefused as e:
+            return failed(str(e))
+        except Exception as e:                      # the mailbox could not be reached, or refused the message
+            return failed(f"the mailbox refused it: {type(e).__name__}: {e}")
+        if isinstance(st.hs, MockHubSpot):
+            st.hs.log_engagement(contact_id, "EMAIL", "OUTGOING", clock(st.conn), c.hubspot_owner_id, subject=subject, body=body)
+            detect_first_touches(st.hs, st.conn)
+            detect_replies(st.hs, st.conn)
+        return RedirectResponse(f"{back}{sep}mail_sent={quote(out['to'])}#draft-{contact_id}", status_code=303)
 
     @app.post("/lead/{contact_id}/hubspot")
     def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form(""), reply: str = Form(""),
