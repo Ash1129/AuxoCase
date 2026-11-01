@@ -92,7 +92,7 @@ def test_an_interested_reply_is_answered_and_comes_first_in_the_queue(world):
     assert [f["reason"] for f in followups.rows_for(conn, lead)] == ["the lead replied"] * 2
     client = TestClient(create_app(path, scheduler=False))
     page = client.get(f"/lead/{lead}").text
-    assert "· interested</h3>" in page and "Wants to talk." in page and "Open the answer in your email app" in page and "Draft the" not in page
+    assert "· interested</h3>" in page and "Wants to talk." in page and f'data-mail="mail-reply-{lead}"' in page and "Draft the" not in page
     assert "answer from HubSpot" not in page
     page = client.get(f"/queue/{owner.id}").text
     assert "interested" in page

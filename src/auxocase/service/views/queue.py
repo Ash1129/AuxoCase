@@ -71,15 +71,29 @@ def queue_groups(st, owner_id: str) -> dict:
     return {"waiting": waiting, "touched": touched, "done": done_rows[:DONE_SHOWN], "done_total": len(done_rows)}
 
 
-def queue_page(st, owner_id: str, lead: Optional[str] = None, draft: bool = False, call: bool = False) -> Optional[dict]:
-    """owner, the groups above, and `open`: the lead_detail of the lead in view (`lead` if it is in this queue, else
-    the first waiting lead, else the first touched one), or None when the queue is empty. waiting_count/limit: the
-    SDR's slot use."""
+TABS = ("untouched", "touched")
+
+
+def queue_page(st, owner_id: str, lead: Optional[str] = None, draft: bool = False, call: bool = False, tab: str = "") -> Optional[dict]:
+    """owner, the groups above, `tab` (the queue's two tabs: "untouched", the waiting group, and "touched", the leads
+    waiting to hear back) and `open`: the lead_detail of the lead in view, or None when the tab is empty. `lead`
+    picks the lead and its tab; otherwise `tab` picks the tab and its first lead, and no tab asked for means the
+    untouched one while it has a lead, else the touched one. replies_waiting: touched leads whose reply has an answer
+    drafted and not sent, for the untouched tab to point at. waiting_count/limit: the SDR's slot use."""
     owner = next((o for o in st.hs.list_owners() if o.id == owner_id), None)
     if not owner:
         return None
     g = queue_groups(st, owner_id)
-    in_queue = [e["c"].id for e in g["waiting"] + g["touched"]]
-    chosen = lead if lead in in_queue else (in_queue[0] if in_queue else None)
-    return {"owner": owner, **g, "open": lead_detail(st, chosen, draft, call) if chosen else None,
-            "waiting_count": len(g["waiting"]), "limit": owner.capacity_limit}
+    waiting_ids, touched_ids = [e["c"].id for e in g["waiting"]], [e["c"].id for e in g["touched"]]
+    if lead in waiting_ids:
+        tab, chosen = "untouched", lead
+    elif lead in touched_ids:
+        tab, chosen = "touched", lead
+    else:
+        if tab not in TABS:
+            tab = "untouched" if waiting_ids or not touched_ids else "touched"
+        ids = waiting_ids if tab == "untouched" else touched_ids
+        chosen = ids[0] if ids else None
+    replies_waiting = sum(1 for e in g["touched"] if e["reply"] and e["reply"].get("answer") and not e["reply"].get("sent"))
+    return {"owner": owner, **g, "tab": tab, "open": lead_detail(st, chosen, draft, call) if chosen else None,
+            "replies_waiting": replies_waiting, "waiting_count": len(g["waiting"]), "limit": owner.capacity_limit}

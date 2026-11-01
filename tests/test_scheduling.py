@@ -99,7 +99,7 @@ def test_an_interested_reply_gets_times_and_the_pick_books_the_demo(world):
     assert b["status"] == "offered" and len(b["offered"]) == 3 and hs.meetings_for_contact(lead) == []
     client = TestClient(create_app(path, scheduler=False))
     page = client.get(f"/lead/{lead}").text
-    assert "Sent for " in page and "waiting on " in page and "Open the answer in your email app" not in page
+    assert "Sent for " in page and "waiting on " in page and f'action="/lead/{lead}/send"' not in page       # sent: nothing left to send
     assert "Sent for you" in client.get(f"/queue/{owner.id}").text                                      # the queue opens it in full
     # The pick: booked on the SDR's calendar, confirmed, the follow-ups stopped, the demo counted.
     freeze_clock(conn, (MON + timedelta(hours=2)).isoformat(timespec="seconds"))

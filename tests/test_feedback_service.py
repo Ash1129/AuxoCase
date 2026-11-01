@@ -276,6 +276,11 @@ def test_the_queue_holds_only_what_auxocase_handed_out_and_still_needs_a_call(db
         detect_first_touches(hs, conn, refill=False)
         page = queue_page(st, owner.id)
         assert [e["c"].id for e in page["touched"]] == [second.id] and second.id not in [e["c"].id for e in page["waiting"]]
+        assert page["tab"] == "untouched" and page["open"]["c"].id == first.id                       # the untouched tab while it has a lead
+        assert queue_page(st, owner.id, tab="touched")["open"]["c"].id == second.id                  # the touched tab opens its first lead
+        assert queue_page(st, owner.id, lead=second.id)["tab"] == "touched"                          # a lead picks its tab
+        html = TestClient(create_app(path)).get(f"/queue/{owner.id}?tab=touched").text
+        assert 'aria-current="page">Touched · waiting to hear back' in html and "Also waiting · first touch due" not in html
         TestClient(create_app(path)).post(f"/lead/{second.id}/action", data={
             "owner_id": owner.id, "action": "worked", "seen": _seen(conn, hs, second.id)})
         page = queue_page(st, owner.id)

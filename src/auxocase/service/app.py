@@ -134,8 +134,8 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
 
     @app.get("/queue/{owner_id}", response_class=HTMLResponse)
     def queue(request: Request, owner_id: str, stale: str = "", lead: str = "", draft: int = 0, call: int = 0, mail_sent: str = "",
-              mail_failed: str = "", mail_for: str = "", mail_lead: str = ""):
-        page = queue_page(st, owner_id, lead or None, bool(draft), bool(call))
+              mail_failed: str = "", mail_for: str = "", mail_lead: str = "", tab: str = ""):
+        page = queue_page(st, owner_id, lead or None, bool(draft), bool(call), tab=tab)
         if page is None:
             raise HTTPException(404)
         return TEMPLATES.TemplateResponse(request, "queue.html", ctx(request, nav="queues", **page, hit=_hit_rate(st.conn), stale=stale,

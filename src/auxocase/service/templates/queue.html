@@ -16,12 +16,24 @@
 .pair{display:grid;grid-template-columns:minmax(0,1fr);gap:32px}
 .pair .col{display:flex;flex-direction:column;gap:32px;min-width:0}
 .pair .col+.col{border-top:1px solid var(--line);padding-top:32px}
+/* the queue's two tabs: the leads waiting for a first touch, and the ones touched and waiting to hear back */
+.tabs{display:flex;flex-wrap:wrap;gap:0 28px;margin:0;padding:0;list-style:none;border-bottom:1px solid var(--line)}
+.tabs a{display:inline-block;padding:12px 0 10px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
+.tabs a[aria-current]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs .n{color:var(--accentInk);font-variant-numeric:tabular-nums}
 {% endblock %}
 {% block body %}
 {%- set labels = {'worked': 'worked', 'junk': 'junk', 'skipped': 'skipped'} -%}
 {%- set others_waiting = waiting|rejectattr('c.id', 'equalto', open.c.id if open else none)|list -%}
 {%- set others_touched = touched|rejectattr('c.id', 'equalto', open.c.id if open else none)|list -%}
+<nav aria-label="{{ owner.name }}'s queue">
+  <ul class="tabs">
+    <li><a href="/queue/{{ owner.id }}?tab=untouched"{% if tab == 'untouched' %} aria-current="page"{% endif %}>Untouched · first touch due <span class="n">{{ waiting|length }}</span></a></li>
+    <li><a href="/queue/{{ owner.id }}?tab=touched"{% if tab == 'touched' %} aria-current="page"{% endif %}>Touched · waiting to hear back <span class="n">{{ touched|length }}</span></a></li>
+  </ul>
+</nav>
 {{ ld.sent_notice(open, 'queue') }}
+{% if tab == 'untouched' and replies_waiting %}<p class="notice" role="status"><b>{{ replies_waiting }} repl{{ 'y' if replies_waiting == 1 else 'ies' }} waiting.</b> The answer{{ '' if replies_waiting == 1 else 's' }} drafted, on the <a href="/queue/{{ owner.id }}?tab=touched">touched tab</a>.</p>{% endif %}
 {% if stale %}<p class="notice warn" role="status"><b>Not saved.</b> The lead changed after this page loaded (someone else acted, or HubSpot moved it), so your click was not saved. This is the queue now.</p>{% endif %}
 
 <header class="head">
@@ -30,6 +42,9 @@
   <h1 class="title">{{ ld.name(open.c, open.co) }}</h1>
   <p class="muted">{{ ld.facts_line(open.c, open.co) }}</p>
   {{ ld.marks(open.c, true) }}
+  {%- elif tab == 'touched' -%}
+  <h1 class="title">Nothing waiting to hear back</h1>
+  <p class="lede">A lead comes here once its first touch is seen in HubSpot, and leaves when you mark it worked, skipped or junk.</p>
   {%- else -%}
   <h1 class="title">Nothing waiting for a first touch</h1>
   <p class="lede">Routing fills a free slot with the best lead in the pool{% if scheduler == 'on' %}, every five minutes{% else %}; the scheduler is off, so on the next routing run{% endif %}.</p>
@@ -85,7 +100,7 @@
 {{ ld.reach_rest(open, '/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&draft=1', 'queue', wide=true, call_href='/queue/' ~ owner.id ~ '?lead=' ~ c.id ~ '&call=1') }}
 {%- endif %}
 
-{% if others_waiting -%}
+{% if tab == 'untouched' and others_waiting -%}
 <hr class="rule">
 <section class="part" aria-labelledby="q-waiting">
   <h2 class="kicker" id="q-waiting">Also waiting · first touch due</h2>
@@ -97,10 +112,10 @@
 </section>
 {%- endif %}
 
-{% if others_touched -%}
+{% if tab == 'touched' and others_touched -%}
 <hr class="rule">
 <section class="part" aria-labelledby="q-touched">
-  <h2 class="kicker" id="q-touched">{{ 'Also yours · ' if open else '' }}touch seen in HubSpot · log your call</h2>
+  <h2 class="kicker" id="q-touched">Also waiting to hear back · touch seen in HubSpot</h2>
   <ul class="list">
     {% for e in others_touched %}<li><a href="/queue/{{ owner.id }}?lead={{ e.c.id }}">{{ ld.name(e.c, e.co) }}</a>
       <p class="small">{{ ld.odds(e.c.auxo_probability) }} · {{ (e.seen_type or 'activity')|lower }} seen {{ e.seen_when }}{% if e.reply %} · <b>replied {{ e.reply.when }}, {{ e.reply.word }}</b>: {{ e.reply.summary }}{% if e.booked %} Demo booked for {{ e.booked }}{% elif e.reply.answer %} Answer drafted{% elif e.reply.sent %} Times sent for you{% endif %}{% else %}; log your call{% endif %}.</p>{{ ld.marks(e.c) }}</li>
