@@ -125,11 +125,11 @@ def test_lead_page_offers_an_email_link_and_a_first_email_draft(db):
     c = next(c for c in hs.list_contacts() if c.email and c.first_name)
     page = client.get(f"/lead/{c.id}").text
     assert f'href="mailto:{c.email}"' in page and f"/lead/{c.id}?draft=1" in page
-    assert "Open in your email app" not in page                       # no draft until asked for
+    assert f'data-mail="mail-email-{c.id}"' not in page               # no draft until asked for
     page = client.get(f"/lead/{c.id}?draft=1").text
-    assert "Open in your email app" in page and f"Hi {c.first_name}," in page
+    assert f'data-mail="mail-email-{c.id}"' in page and f"Hi {c.first_name}," in page
     assert "Drafted by the template" in page                          # tests run the offline reader
-    assert f"mailto:{c.email}?subject=" in page
+    assert 'name="body"' in page and 'data-edit>Edit</button>' in page and f'data-preview="/lead/{c.id}/preview"' in page
     assert f"Send to {c.email}" in page and f'id="mail-email-{c.id}"' in page
     assert "BrightPath Payroll</span>" in page and "#b68235" in page    # the preview carries the header and the colours
     assert 'type="button" disabled' in page                            # no mailbox in the test environment: the button is off

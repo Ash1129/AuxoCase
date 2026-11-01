@@ -147,6 +147,15 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             raise HTTPException(404)
         return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, nav="queues", **detail, mail_sent=mail_sent, mail_failed=mail_failed))
 
+    @app.post("/lead/{contact_id}/preview", response_class=HTMLResponse)
+    def lead_preview(contact_id: str, body: str = Form("")):
+        """The edited draft as the lead will see it, for the page's Preview button (email_html.py)."""
+        c = st.hs.get_contact(contact_id)
+        if not c:
+            raise HTTPException(404)
+        owner = next((o for o in st.hs.list_owners(active_only=False) if o.id == c.hubspot_owner_id), None)
+        return HTMLResponse(branded(body.strip(), owner.name if owner else BRAND))
+
     @app.post("/lead/{contact_id}/send")
     def lead_send(contact_id: str, subject: str = Form(""), body: str = Form(""), back: str = Form("")):
         """Send a draft to the lead from here, branded (email_html.py), over SMTP (mailer.py), with the SDR's name on

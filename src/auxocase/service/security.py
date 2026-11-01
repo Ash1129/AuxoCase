@@ -51,6 +51,32 @@ APP_JS = """document.addEventListener('click', function (e) {
     // one send per click: the form goes with this click, then the button is out of play
     setTimeout(function () { b.textContent = b.dataset.busy; b.disabled = true; }, 0);
   }
+  var ed = e.target.closest && e.target.closest('button[data-edit]');
+  if (ed && ed.form) {
+    // Edit opens the draft's subject and words for editing in place of the branded rendering; Preview sends the
+    // edit to the server for the rendering of it and shows that again. Send sends whatever the editor holds.
+    var form = ed.form, editor = form.querySelector('.editor'), mail = document.getElementById(form.dataset.mail);
+    var shown = form.querySelector('.draft-subject b');
+    if (editor.hidden) {
+      editor.hidden = false;
+      if (mail) mail.hidden = true;
+      ed.textContent = 'Preview';
+      var ta = editor.querySelector('textarea');
+      if (ta) ta.focus();
+    } else {
+      ed.disabled = true;
+      fetch(form.dataset.preview, { method: 'POST', body: new URLSearchParams(new FormData(form)), credentials: 'same-origin' })
+        .then(function (r) { return r.ok ? r.text() : Promise.reject(r.status); })
+        .then(function (html) {
+          if (mail) { mail.innerHTML = html; mail.hidden = false; }
+          if (shown) shown.textContent = form.querySelector('[name=subject]').value;
+          editor.hidden = true;
+          ed.textContent = 'Edit';
+        })
+        .catch(function () { ed.textContent = 'Preview'; })
+        .then(function () { ed.disabled = false; });
+    }
+  }
 });
 (function () {
   var main = document.querySelector('main');

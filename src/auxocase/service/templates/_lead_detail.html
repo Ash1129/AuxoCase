@@ -5,6 +5,10 @@
 
 {% macro css() -%}
 .mail{max-width:640px;overflow-x:auto;border-radius:6px;color-scheme:light}
+.draft{display:flex;flex-direction:column;gap:12px}.draft .draft-subject{margin:0}
+.editor{display:flex;flex-direction:column;gap:12px;max-width:640px}.editor[hidden],.mail[hidden]{display:none}
+.editor label{display:flex;flex-direction:column;gap:4px;font-size:14px;line-height:20px;color:var(--muted)}
+.editor input,.editor textarea{width:100%;box-sizing:border-box;font-size:15px}.editor textarea{line-height:1.6;resize:vertical}
 .mail table{width:auto;border-collapse:separate;border-spacing:0;margin:0}
 .mail td{border:0;padding:0;vertical-align:top;text-align:left}
 .head{display:flex;flex-direction:column;gap:8px}
@@ -181,14 +185,30 @@
 {#- Reach out, in two parts so a page can place them apart: reach_head is the address, the sequence's three emails
     and where they stand; reach_rest is the draft (or the link that drafts it), any page-only content (`extra`), and
     on the mock the buttons that stand in for HubSpot. reach() is both in a row, with a {% call %} as the extra. -#}
-{#- A draft as the lead will see it: BrightPath's header, colours and button (service/email_html.py). `send` is the form
-    that sends it from the service, branded, over SMTP (service/mailer.py), back to the page it is on. -#}
+{#- A draft as the lead will see it: BrightPath's header, colours and button (service/email_html.py). `draft_form` is
+    the draft on the page: the subject, that rendering, an editor for the subject and the words (Edit opens it, Preview
+    shows the edit branded again through /lead/{id}/preview), and Send, which sends what is in the editor from the
+    service, branded, over SMTP (service/mailer.py), back to the page it is on. -#}
 {% macro mail(id, body, d) -%}
 <div class="mail" id="mail-{{ id }}">{{ email_html(body, d.owner.name if d.owner else '')|safe }}</div>
 {%- endmacro %}
-{% macro send(subject, body, d, where) -%}
+{% macro draft_form(id, subject, body, d, where, note='', again='') -%}
 {%- set back = ('/queue/' ~ d.owner.id ~ '?lead=' ~ d.c.id) if where == 'queue' and d.owner else ('/lead/' ~ d.c.id) -%}
-<form method="post" action="/lead/{{ d.c.id }}/send"><input type="hidden" name="subject" value="{{ subject }}"><textarea name="body" hidden>{{ body }}</textarea><input type="hidden" name="back" value="{{ back }}">{% if smtp %}<button class="btn primary" type="submit" data-busy="Sending…">Send to {{ d.c.email }}</button>{% else %}<button class="btn primary" type="button" disabled title="Sending from here is not set up">Send to {{ d.c.email }}</button>{% endif %}</form>
+<form method="post" action="/lead/{{ d.c.id }}/send" class="draft" data-mail="mail-{{ id }}" data-preview="/lead/{{ d.c.id }}/preview">
+  <p class="draft-subject"><span class="vh">Subject: </span><b>{{ subject }}</b></p>
+  {{ mail(id, body, d) }}
+  <div class="editor" hidden>
+    <label>Subject <input name="subject" value="{{ subject }}" maxlength="200" required></label>
+    <label>Email <textarea name="body" rows="14" required>{{ body }}</textarea></label>
+  </div>
+  <input type="hidden" name="back" value="{{ back }}">
+  <div class="actions">
+    {% if smtp %}<button class="btn primary" type="submit" data-busy="Sending…">Send to {{ d.c.email }}</button>{% else %}<button class="btn primary" type="button" disabled title="Sending from here is not set up">Send to {{ d.c.email }}</button>{% endif %}
+    <button class="btn" type="button" data-edit>Edit</button>
+    {% if again %}<a class="btn" href="{{ again }}" data-busy="Drafting… this takes a few seconds">Draft it again</a>{% endif %}
+    {% if note %}<span class="small muted">{{ note }}</span>{% endif %}
+  </div>
+</form>
 {%- endmacro %}
 {% macro sent_notice(d, where) -%}
 {% if mail_sent %}<p class="notice" role="status"><b>Sent.</b> The branded email went to {{ mail_sent }}{% if d.mock %}, and HubSpot has it as {{ 'your' if where == 'queue' else "the SDR's" }} send{% endif %}.</p>
@@ -259,9 +279,8 @@
     {{ mail('reply-' ~ c.id, r.body, d) }}
     <p class="small muted">Sent for {{ 'you' if where == 'queue' else (d.owner.name if d.owner else 'the SDR') }} {{ r.sent_when }}{% if d.get('booking') and d.booking.status != 'booked' %}; waiting on {{ first(c) }} to pick one{% endif %}.</p>
     {%- elif r.body -%}
-    <p><span class="vh">Subject: </span><b>{{ r.subject }}</b></p>
-    {{ mail('reply-' ~ c.id, r.body, d) }}
-    <div class="actions">{{ send(r.subject, r.body, d, where) }}<a class="btn" href="mailto:{{ c.email }}?subject={{ r.subject|urlencode }}&body={{ r.body|urlencode }}">Open the answer in your email app</a><span class="small muted">Drafted by {{ 'Claude' if r.source == 'llm' else 'the template' }}{% if r.rejected %}; Claude's answer was set aside: {{ r.rejected }}{% endif %}. Edit it before you send.</span></div>
+    {% set note %}Drafted by {{ 'Claude' if r.source == 'llm' else 'the template' }}{% if r.rejected %}; Claude's answer was set aside: {{ r.rejected }}{% endif %}. Edit what you like, then send.{% endset %}
+    {{ draft_form('reply-' ~ c.id, r.subject, r.body, d, where, note=note) }}
     {%- elif r.kind == 'out_of_office' -%}
     <p class="small muted">Not an answer: the sequence carries on once they are back.</p>
     {%- elif r.kind == 'other' -%}
@@ -285,9 +304,8 @@
   {%- set e = d.email -%}
   <div class="block">
     <h3 class="kicker">Draft: {{ labels[e.touch] }}{{ ref('draft', d) }}</h3>
-    <p><span class="vh">Subject: </span><b>{{ e.subject }}</b></p>
-    {{ mail('email-' ~ c.id, e.body, d) }}
-    <div class="actions">{{ send(e.subject, e.body, d, where) }}<a class="btn" href="{{ e.mailto(c.email) }}">Open in your email app</a><a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">Draft it again</a><span class="small muted">{% if smtp %}Sent from here as shown, with {{ 'your' if where == 'queue' else "the SDR's" }} name on it; or open it in your email app, where it goes plain.{% else %}Sending from here is not set up: AUXO_SMTP_USER and AUXO_SMTP_PASS (a Gmail app password) in the server's environment.{% endif %}</span></div>
+    {% set note %}{% if smtp %}Sent from here as shown, with {{ 'your' if where == 'queue' else "the SDR's" }} name on it, after any edits.{% else %}Sending from here is not set up: AUXO_SMTP_USER and AUXO_SMTP_PASS (a Gmail app password) in the server's environment.{% endif %}{% endset %}
+    {{ draft_form('email-' ~ c.id, e.subject, e.body, d, where, note=note, again=draft_href) }}
   </div>
   {%- else -%}
   <div class="block">
@@ -295,7 +313,7 @@
     <div class="placeholder">
       <span class="muted"><b>[{{ labels[d.touch]|upper }} DRAFTED ON REQUEST]</b></span>
       <span class="small muted">Not stored. With Claude on it is a model call of a few seconds, so drafted on request.</span>
-      <div class="actions"><a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">Draft the {{ labels[d.touch] }}</a><span class="small muted">{% if smtp %}Once drafted, it is sent from here, branded, or from your email app.{% else %}Edit it before you send. Nothing is sent from here.{% endif %}</span></div>
+      <div class="actions"><a class="btn" href="{{ draft_href }}" data-busy="Drafting… this takes a few seconds">Draft the {{ labels[d.touch] }}</a><span class="small muted">{% if smtp %}Once drafted, edit what you like and send it from here, branded.{% else %}Edit it before you send. Nothing is sent from here.{% endif %}</span></div>
     </div>
   </div>
   {%- endif %}
@@ -309,9 +327,7 @@
     {% if w.facts %}<p class="small">Learned: {% for k, v in w.facts.items() %}{{ k.replace('_', ' ') }} {{ v }}{{ '; ' if not loop.last }}{% endfor %}.</p>{% endif %}
     <p class="small muted">Next: {{ w.next_word }}{% if w.next_when %} on {{ w.next_when }}{% endif %}. Written to HubSpot: {{ w.acted }}. {{ 'Claude' if w.source == 'llm' else 'The template' }} wrote it up{% if w.rejected %}; Claude's was set aside: {{ w.rejected }}{% endif %}.{% if w.notes %} From: “{{ w.notes[:200] }}{{ '…' if w.notes|length > 200 }}”{% endif %}</p>
     {% if w.body -%}
-    <p><span class="vh">Subject: </span><b>{{ w.subject }}</b></p>
-    {{ mail('call-' ~ c.id, w.body, d) }}
-    <div class="actions">{{ send(w.subject, w.body, d, where) }}<a class="btn" href="mailto:{{ c.email }}?subject={{ w.subject|urlencode }}&body={{ w.body|urlencode }}">Open the follow-up in your email app</a><span class="small muted">Drafted from the call.</span></div>
+    {{ draft_form('call-' ~ c.id, w.subject, w.body, d, where, note='Drafted from the call. Edit what you like, then send.') }}
     {%- endif %}
   </div>
   {%- endif %}
@@ -376,7 +392,7 @@ Team hit rate, leads handed out in the last {{ hit.days }} days and worked since
     {% if env == 'mock' %}<li id="fn-sim">Simulated · synthetic data. Booked counts come from the mock generator; on a real portal, from HubSpot's meetings and deals.</li>{% endif %}
     {% if env == 'mock' and d is not none and d.late_factor and d.speed.factor is defined %}<li id="fn-speed">Mock first-day effect: the generator's factor of {{ d.late_factor }}; outcomes show {{ d.speed.factor }} ({{ pct(d.speed.rate_fast) }} of {{ '{:,}'.format(d.speed.n_fast) }} touched within a day booked, against {{ pct(d.speed.rate_slow) }} of {{ '{:,}'.format(d.speed.n_slow) }} later). On a real portal it is measured.</li>{% endif %}
     {% if hit is defined and hit %}<li id="fn-hit">{{ hit_text() }}</li>{% endif %}
-    {% if d is not none and d.touch and d.email %}{% set e = d.email %}<li id="fn-draft">Drafted by {{ 'Claude' if e.source == 'llm' else 'the template' }}{% if e.rejected %} · Claude's draft was set aside: {{ e.rejected }}{% endif %}. {% if e.touch == 1 and d.stored and d.stored.status == 'enrolled' %}Edit it in HubSpot before you send{% else %}Edit it before you send{% endif %}; nothing is sent from here.</li>{% endif %}
+    {% if d is not none and d.touch and d.email %}{% set e = d.email %}<li id="fn-draft">Drafted by {{ 'Claude' if e.source == 'llm' else 'the template' }}{% if e.rejected %} · Claude's draft was set aside: {{ e.rejected }}{% endif %}. {% if smtp %}Edit what you like on the page, then send it from here, branded{% if e.touch == 1 and d.stored and d.stored.status == 'enrolled' %}, or from HubSpot's sequence, plain{% endif %}.{% else %}{% if e.touch == 1 and d.stored and d.stored.status == 'enrolled' %}Edit it in HubSpot before you send{% else %}Edit it before you send{% endif %}; nothing is sent from here.{% endif %}</li>{% endif %}
     {% if d is not none and d.get('call') %}{% set b = d.get('call') %}<li id="fn-brief">Prepared by {{ 'Claude' if b.source == 'llm' else 'the template' }}{% if b.rejected %} · Claude's brief was set aside: {{ b.rejected }}{% endif %}. Questions from what moved the score; the objection from deals lost at this company size. Read it, don't recite it.</li>{% endif %}
     {% if frozen and timeline is defined %}<li id="fn-clocks">Mock clocks: HubSpot activity and routing run on the demo clock, frozen at {{ clock_text }}; AuxoCase's own logs keep wall time. History is in the order things happened.</li>{% endif %}
   </ol>

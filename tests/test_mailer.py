@@ -120,3 +120,12 @@ def test_gmail_dropping_the_line_at_sign_in_names_the_app_password(smtp, monkeyp
     with pytest.raises(SignInRefused, match="app password"):
         Mailer.from_env().send("laura@granite.io", "Payroll", "Hi", "<p>Hi</p>")
     assert not smtp.sent
+
+
+def test_preview_renders_the_edited_draft_branded(db):
+    path, conn, hs = db
+    client = TestClient(create_app(path))
+    c = next(c for c in hs.list_contacts() if c.email and c.hubspot_owner_id)
+    r = client.post(f"/lead/{c.id}/preview", data={"subject": "Payroll", "body": "Hi Laura,\n\nMy own words here.\n\nBest,\nSam"})
+    assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
+    assert "BrightPath Payroll</span>" in r.text and "My own words here." in r.text and "<script" not in r.text
