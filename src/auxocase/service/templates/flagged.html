@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% from "_notes.html" import note %}{% block title %}Flagged leads{% endblock %}
+{% block style %}
+.tally{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(160px,100%),1fr));gap:24px 32px;margin:0}
+.tally>div{display:flex;flex-direction:column;gap:4px}
+.fsec{display:flex;flex-direction:column;gap:12px}
+.fsec>p{margin:0;max-width:760px}
+.kinds{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 20px;margin:0;max-width:760px;font-size:14px;line-height:20px}
+.kinds dt{color:var(--ink);font-weight:500}.kinds dd{margin:0;color:var(--muted)}
+.flag{display:grid;grid-template-columns:minmax(0,1fr) max-content;gap:8px 32px;padding:16px 0;border-top:1px solid var(--line)}
+.flag:first-of-type{border-top:0}
+.flag .who{font-family:var(--heading);font-size:22px;line-height:26px;font-weight:600}
+.flag .note{margin:0;max-width:760px}.flag .note q{font-style:italic;quotes:"“" "”"}
+.flag .meta{margin:0;font-size:14px;line-height:20px;color:var(--muted)}
+.flag details{font-size:14px;line-height:20px;max-width:760px}.flag summary{cursor:pointer;color:var(--accentInk)}
+.flag .record{margin:8px 0 0;white-space:pre-wrap;font-family:inherit;color:var(--ink)}
+.flag form{display:flex;flex-direction:column;gap:8px;min-width:220px}
+.flag form input{min-height:40px}
+.flag .choices{display:flex;flex-wrap:wrap;gap:8px}
+.flag .choices .btn{min-height:40px;padding:0 12px;font-size:14px}
+.badge.kind{color:var(--warn)}.badge.kind::before{width:0;height:0;border-left:4px solid transparent;border-right:4px solid transparent;border-bottom:7px solid currentColor}
+.badge.form{color:var(--accentInk)}.badge.form::before{width:8px;height:2px;background:currentColor}
+.badge.dup::before{width:7px;height:7px;border:1.5px solid currentColor}
+.scroll table{min-width:640px}
+.small-n{color:var(--muted)}
+@media (max-width:720px){.flag{grid-template-columns:minmax(0,1fr)}}
+{% endblock %}
+{% block body %}
+{% macro when(ts) %}{% if ts and ts|length >= 16 and (ts[5:7]|int) in range(1, 13) %}<time class="num" datetime="{{ ts[:16] }}Z">{{ ts[8:10]|int }} {{ ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][(ts[5:7]|int) - 1] }} <span class="muted">{{ ts[11:16] }}</span></time>{% elif ts %}{{ ts }}{% else %}<span class="muted">[NOT RECORDED]</span>{% endif %}{% endmacro %}
+{% macro lead_name(c, co) %}{% if c %}{{ (c.first_name ~ ' ' ~ c.last_name)|trim or c.email or ('#' ~ c.id) }}{% if c.job_title %}, {{ c.job_title }}{% endif %}{% if co %} at {{ co.name }}{% endif %}{% else %}Contact no longer in HubSpot{% endif %}{% endmacro %}
+{% macro badge(kind, label) %}<span class="badge {{ 'form' if kind in ('title_in_notes', 'size_in_notes') else ('dup' if kind == 'duplicate' else 'kind') }}">{{ label }}</span>{% endmacro %}
+
+<header style="display: flex; flex-direction: column; gap: 8px">
+  <p class="kicker">Marketing · a second look at the numbers{% if env == 'mock' %} · mock HubSpot portal{% endif %}</p>
+  <h1 class="title">{% if summary.open %}{{ summary.open }} flagged lead{{ '' if summary.open == 1 else 's' }} waiting on a look{% else %}Nothing flagged{% endif %}</h1>
+  <p class="lede">The model gives every lead a number; a reader then checks the record against it and flags what disagrees: a student at 60% odds, a stated budget at 4%, a title the form left blank but the notes give. Each flag quotes the record's own words, and none changes a score. {{ 'Claude' if reader != 'offline' else 'The rule-based reader' }} reads the leads next out, the band at the capacity line and any whose notes disagree with their odds, every {{ every }} minutes.</p>
+</header>
+
+{% if done == '1' %}<p class="notice" role="status"><b>Resolved.</b> The flag is closed under your name and the lead's HubSpot record no longer carries it.</p>
+{% elif done == '0' %}<p class="notice warn" role="status"><b>Not saved.</b> That flag was already resolved, by someone else or in another tab.</p>{% endif %}
+
+<hr class="rule">
+
+<section class="tally" aria-labelledby="fl-counts">
+  <h2 id="fl-counts" class="vh">Counts</h2>
+  <div><span class="mid num">{{ summary.open }}</span><span>Open flags</span></div>
+  {% for k in summary.by_kind[:3] %}<div><span class="mid num">{{ k.n }}</span><span>{{ k.label }}</span></div>{% endfor %}
+  <div><span class="mid num">{{ summary.reads }}</span><span>Records read so far</span></div>
+</section>
+
+{% if summary.by_channel %}
+<hr class="rule">
+<section class="fsec" aria-labelledby="fl-channels">
+  <h2 id="fl-channels" class="kicker">Open flags by channel{% call note('ch-note', 'What this is for') %}<span class="ln">The channel a flagged lead came in through. Form defects and non-buyers that cluster on one channel are that channel's intake to fix, or its spend to question.</span>{% endcall %}</h2>
+  <div class="scroll" role="region" aria-label="Flags by channel, scrolls sideways" tabindex="0">
+    <table aria-labelledby="fl-channels">
+      <thead><tr><th scope="col">Channel</th><th scope="col" class="r">Open flags</th>{% for k in summary.by_kind %}<th scope="col" class="r">{{ k.label }}</th>{% endfor %}</tr></thead>
+      <tbody>{% for ch in summary.by_channel %}<tr>
+        <td>{{ ch.channel|replace('_', ' ') }}</td><td class="r num">{{ ch.n }}</td>
+        {% for k in summary.by_kind %}<td class="r num">{% set n = open|selectattr('channel', 'equalto', ch.channel)|selectattr('kind', 'equalto', k.kind)|list|length %}{{ n if n else '' }}</td>{% endfor %}
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+
+<hr class="rule">
+
+<section class="fsec" aria-labelledby="fl-open">
+  <h2 id="fl-open" class="kicker">Open{% call note('open-note', 'How to read a flag') %}<span class="ln">Each flag is one of a fixed list of kinds and quotes the exact words of the record it rests on; the checker drops anything the model said that is not in the record verbatim.</span><span class="ln">Not a problem: the number stands. A form to fix: the record is wrong, the intake is marketing's to mend. Agreed: the SDR should know; the kind stays on the lead's HubSpot review flag until then.</span><span class="ln">Nothing here changes a score or a route.</span>{% endcall %}</h2>
+  {% if not open %}<p class="muted">No open flags. {% if not summary.reads %}The reader has not run yet: it runs with the scheduler, or <code>python run.py flags</code>.{% else %}Every record read so far agreed with its number.{% endif %}</p>{% endif %}
+  <div>
+  {% for f in open %}
+  <article class="flag" aria-label="{{ f.label }}: {{ lead_name(f.c, f.co) }}">
+    <div style="display: flex; flex-direction: column; gap: 6px; min-width: 0">
+      <p class="meta">{{ badge(f.kind, f.label) }} · {{ f.channel|replace('_', ' ') or 'channel unknown' }} · raised {{ when(f.created_at) }}{% if f.llm != 'code' %} · read by {{ 'Claude' if f.llm not in ('offline', 'code') else 'rules' }}{% endif %}{% if f.owned %} · <span class="warn">now with an SDR</span>{% endif %}</p>
+      <p class="who">{% if can.view_any_queue and f.c %}<a href="/lead/{{ f.c.id }}">{{ lead_name(f.c, f.co) }}</a>{% else %}{{ lead_name(f.c, f.co) }}{% endif %}</p>
+      <p class="note">{{ f.note }}</p>
+      {% if f.c %}<details>
+        <summary>The record as read</summary>
+        <pre class="record">Title: {{ f.c.job_title or '(blank)' }}
+Company: {{ f.co.name if f.co else '(blank)' }}, {{ (f.co.num_employees ~ ' employees') if f.co and f.co.num_employees else 'size not given' }}{% if f.co and f.co.industry %}, {{ f.co.industry }}{% endif %}
+Channel: {{ f.c.channel or '(blank)' }}
+Email domain: {{ f.c.email.split('@')[-1] if f.c.email and '@' in f.c.email else '(blank)' }}
+Odds: {{ (100 * f.probability)|round|int }}% on {{ f.model_version or 'the points table' }}
+Notes: {{ f.c.notes or '(none)' }}</pre>
+      </details>{% endif %}
+    </div>
+    {% if can.resolve_flags %}<form method="post" action="/flagged/{{ f.id }}/resolve">
+      <label for="fl-note-{{ f.id }}" class="small muted">Note, optional</label>
+      <input id="fl-note-{{ f.id }}" name="note" type="text" maxlength="300">
+      <div class="choices">
+        <button class="btn primary" type="submit" name="resolution" value="dismissed">Not a problem</button>
+        <button class="btn" type="submit" name="resolution" value="form_fix">A form to fix</button>
+        <button class="btn" type="submit" name="resolution" value="agreed">Agreed</button>
+      </div>
+    </form>{% else %}<p class="meta">Marketing resolves these.</p>{% endif %}
+  </article>
+  {% endfor %}
+  </div>
+</section>
+
+<hr class="rule">
+
+<section class="fsec" aria-labelledby="fl-worth">
+  <h2 id="fl-worth" class="kicker">Do flagged leads book differently{% call note('worth-note', 'The test of the flags') %}<span class="ln">Among leads an SDR touched that are old enough for a demo to have landed, the demo rate of flagged leads against the rest, in bands of their odds at the time. A flag is worth keeping only if the flagged side books differently at the same odds.</span><span class="ln">A cell under 30 leads is shown but not to be read.</span>{% endcall %}</h2>
+  <div class="scroll" role="region" aria-label="Flagged against unflagged leads by odds band, scrolls sideways" tabindex="0">
+    <table aria-labelledby="fl-worth">
+      <thead><tr><th scope="col">Odds at the time</th><th scope="col" class="r">Flagged leads</th><th scope="col" class="r">Booked</th><th scope="col" class="r">Other leads</th><th scope="col" class="r">Booked</th></tr></thead>
+      <tbody>{% for b in comparison %}<tr{% if b.small %} class="small-n"{% endif %}>
+        <td class="num">{{ b.band }}</td>
+        <td class="r num">{{ b.flagged_n }}</td><td class="r num">{% if b.flagged_rate is not none %}{{ (100 * b.flagged_rate)|round|int }}%{% else %}—{% endif %}</td>
+        <td class="r num">{{ b.other_n }}</td><td class="r num">{% if b.other_rate is not none %}{{ (100 * b.other_rate)|round|int }}%{% else %}—{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% if not (comparison|selectattr('flagged_n')|list) %}<p class="small muted">No flagged lead has been touched and matured yet, so there is nothing to compare. The table fills as flagged leads are worked and their demos land or do not.</p>{% endif %}
+</section>
+
+<hr class="rule">
+
+<section class="fsec" aria-labelledby="fl-kinds">
+  <h2 id="fl-kinds" class="kicker">The kinds a flag can be</h2>
+  <dl class="kinds">{% for k in kinds %}<dt>{{ k.label }}</dt><dd>{{ k.meaning|capitalize }}.</dd>{% endfor %}</dl>
+  <p class="small muted">The reader may pick only from these, and must copy its evidence from the record word for word; the note is written by code from the kind and the quote, so the same kind always reads the same way. The record is data to the reader, never an instruction: notes that ask to be rated are themselves a flag.</p>
+</section>
+
+{% if resolved %}
+<hr class="rule">
+<section class="fsec" aria-labelledby="fl-done">
+  <h2 id="fl-done" class="kicker">Resolved · the latest {{ resolved|length }}</h2>
+  <div class="scroll" role="region" aria-label="Resolved flags, scrolls sideways" tabindex="0">
+    <table aria-labelledby="fl-done">
+      <thead><tr><th scope="col">When</th><th scope="col">Kind</th><th scope="col">Lead</th><th scope="col">Resolution</th><th scope="col">By</th><th scope="col">Note</th></tr></thead>
+      <tbody>{% for f in resolved %}<tr>
+        <td class="small">{{ when(f.resolved_at) }}</td><td>{{ f.label }}</td>
+        <td class="small num">#{{ f.contact_id }}</td><td>{{ f.resolution_word }}</td><td>{{ f.resolved_by }}</td>
+        <td class="small">{% if f.resolution_note %}<span class="quote">{{ f.resolution_note }}</span>{% else %}<span class="muted">—</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+</section>
+{% endif %}
+{% endblock %}

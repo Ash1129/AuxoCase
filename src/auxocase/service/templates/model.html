@@ -70,17 +70,16 @@ details[open]>summary{margin-bottom:8px}
     {% else %}<span class="serif slot">Not signed yet</span>{% endif %}
   </div>{% endfor %}
 </div>
-<form class="signoff" method="post" action="/model/{{ r.version }}/approve">
+{% if can.approve_marketing or can.approve_sales %}<form class="signoff" method="post" action="/model/{{ r.version }}/approve">
   <input type="hidden" name="seen" value="{{ r.token }}">
   <div class="fields">
-    <div class="field">
+    {% if me.role == 'admin' %}<div class="field">
       <label for="team-{{ r.version }}">Team</label>
       <select id="team-{{ r.version }}" name="team">{% for t in ['marketing', 'sales'] %}<option value="{{ t }}"{% if t == pick %} selected{% endif %}>{{ t|capitalize }}</option>{% endfor %}</select>
-    </div>
-    <div class="field">
-      <label for="name-{{ r.version }}">Your name</label>
-      <input id="name-{{ r.version }}" name="approver" type="text" required autocomplete="name">
-    </div>
+    </div>{% else %}<div class="field">
+      <span class="small muted">Signing for</span>
+      <span class="serif slot">{{ 'marketing' if can.approve_marketing else 'sales' }} · {{ me.name }}</span>
+    </div>{% endif %}
     <div class="field">
       <label for="note-{{ r.version }}">Note, optional</label>
       <input id="note-{{ r.version }}" name="note" type="text">
@@ -90,7 +89,7 @@ details[open]>summary{margin-bottom:8px}
     <button class="btn primary" type="submit" name="decision" value="approve">Approve {{ r.version }}</button>
     <button class="btn" type="submit" name="decision" value="send_back">Send back</button>
   </div>
-</form>
+</form>{% else %}<p class="small muted">Marketing and the sales manager sign a version off; your role reads.</p>{% endif %}
 {% endmacro %}
 
 <header class="mhead">

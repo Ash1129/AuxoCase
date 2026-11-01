@@ -34,6 +34,8 @@ a{color:var(--accentInk)}a:hover{color:var(--ink)}
 .nav[aria-current="page"]{background:var(--accentSoft)}
 .system{margin:auto 0 0;padding:24px 12px 0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 12px;font-size:14px;line-height:20px}
 .system dt{color:var(--muted)}.system dd{margin:0}
+.who{padding:0 12px 12px;font-size:14px;line-height:20px;border-bottom:1px solid var(--line);margin-bottom:6px}
+.who b{font-weight:600;display:block}.who form{display:inline}.who button{border:0;background:none;padding:0;color:var(--accentInk);font:inherit;cursor:pointer;text-decoration:underline}.who button:hover{color:var(--ink)}
 .theme{padding:16px 12px 0;display:flex;flex-direction:column;gap:6px;font-size:14px}
 .theme fieldset{border:0;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:4px 12px}
 .theme legend{color:var(--muted);padding:0 0 4px}
@@ -134,17 +136,20 @@ h2.kicker[id]{scroll-margin-top:24px}
 <body>
 <div class="shell">
   <nav class="side" aria-label="Main">
-    <a class="brand" href="/">AuxoCase</a>
-    <p class="glabel">Work</p>
-    <a class="nav" href="/"{% if nav == 'overview' %} aria-current="page"{% endif %}>Overview</a>
-    <a class="nav" href="{{ '/queue/' ~ queue_owner if queue_owner else '/' }}"{% if nav == 'queues' %} aria-current="page"{% endif %}>Queues</a>
-    <a class="nav" href="/held"{% if nav == 'held' %} aria-current="page"{% endif %}>Held &amp; overdue{% if held_count %} <span class="warn num">{{ held_count }}</span>{% endif %}</a>
-    <p class="glabel">Results</p>
-    <a class="nav" href="/leadership"{% if nav == 'leadership' %} aria-current="page"{% endif %}>Leadership</a>
-    <a class="nav" href="/decisions"{% if nav == 'decisions' %} aria-current="page"{% endif %}>Decisions</a>
-    <p class="glabel">Model</p>
-    <a class="nav" href="/model"{% if nav == 'model' %} aria-current="page"{% endif %}>Model &amp; approvals{% if candidates %} <span class="num" style="color: var(--accentInk)">{{ candidates }}</span>{% endif %}</a>
-    <a class="nav" href="/phases"{% if nav == 'phases' %} aria-current="page"{% endif %}>Next phases</a>
+    <a class="brand" href="{{ me.home }}">AuxoCase</a>
+    <div class="who"><b>{{ me.name }}</b>{{ me.role_word }} · <form method="post" action="/logout"><button type="submit">Log out</button></form></div>
+    {% set queue_ok = queue_owner and (can.view_any_queue or can.view_own_queue) %}
+    {% if can.view_overview or queue_ok or can.view_held %}<p class="glabel">Work</p>{% endif %}
+    {% if can.view_overview %}<a class="nav" href="/"{% if nav == 'overview' %} aria-current="page"{% endif %}>Overview</a>{% endif %}
+    {% if queue_ok %}<a class="nav" href="/queue/{{ queue_owner }}"{% if nav == 'queues' %} aria-current="page"{% endif %}>{{ 'My queue' if me.role == 'sdr' else 'Queues' }}</a>{% endif %}
+    {% if can.view_held %}<a class="nav" href="/held"{% if nav == 'held' %} aria-current="page"{% endif %}>Held &amp; overdue{% if held_count %} <span class="warn num">{{ held_count }}</span>{% endif %}</a>{% endif %}
+    {% if can.view_leadership or can.view_decisions %}<p class="glabel">Results</p>{% endif %}
+    {% if can.view_leadership %}<a class="nav" href="/leadership"{% if nav == 'leadership' %} aria-current="page"{% endif %}>Leadership</a>{% endif %}
+    {% if can.view_decisions %}<a class="nav" href="/decisions"{% if nav == 'decisions' %} aria-current="page"{% endif %}>Decisions</a>{% endif %}
+    {% if can.view_model or can.view_phases or can.view_flags %}<p class="glabel">Model</p>{% endif %}
+    {% if can.view_model %}<a class="nav" href="/model"{% if nav == 'model' %} aria-current="page"{% endif %}>Model &amp; approvals{% if candidates %} <span class="num" style="color: var(--accentInk)">{{ candidates }}</span>{% endif %}</a>{% endif %}
+    {% if can.view_flags %}<a class="nav" href="/flagged"{% if nav == 'flagged' %} aria-current="page"{% endif %}>Flagged leads{% if flags_open %} <span class="warn num">{{ flags_open }}</span>{% endif %}</a>{% endif %}
+    {% if can.view_phases %}<a class="nav" href="/phases"{% if nav == 'phases' %} aria-current="page"{% endif %}>Next phases</a>{% endif %}
     <dl class="system" data-scheduler="{{ scheduler }}">
       <dt>Live model</dt><dd>{{ live.version if live else 'points table' }}</dd>
       <dt>Reader</dt><dd>{{ 'Claude' if llm != 'offline' else 'rules' }}</dd>

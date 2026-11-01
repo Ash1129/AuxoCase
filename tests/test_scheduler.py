@@ -47,11 +47,11 @@ def test_first_start_runs_score_and_route_then_each_job_on_its_interval(db):
     assert [j for j, _ in s.run_due(T0 + timedelta(minutes=1))] == ["rescore", "touches", "outreach"]
     assert [j for j, _ in s.run_due(T0 + timedelta(minutes=5))] == every5
     hour = s.run_due(T0 + timedelta(minutes=61))
-    assert [j for j, _ in hour] == every5 + ["remind", "sync"] and all(st == "ok" for j, st in hour if j != "followups")
+    assert [j for j, _ in hour] == every5 + ["flags", "remind", "sync"] and all(st == "ok" for j, st in hour if j != "followups")
     assert dict(hour)["followups"] == "skipped"
-    assert [j for j, _ in s.run_due(T0 + timedelta(days=1, minutes=1))] == every5 + ["remind", "sync", "monitor"]
+    assert [j for j, _ in s.run_due(T0 + timedelta(days=1, minutes=1))] == every5 + ["flags", "remind", "sync", "monitor"]
     assert _log(s.conn)[:2] == [("scheduled.score", "ok"), ("scheduled.rescore", "ok")]
-    assert len(_log(s.conn)) == 5 + 3 + 6 + 8 + 9                              # the follow-ups job on its 5 minutes, from the second pass
+    assert len(_log(s.conn)) == 5 + 3 + 6 + 9 + 10                             # the follow-ups job on its 5 minutes, from the second pass; flags on its 10
 
 
 def test_a_restart_does_not_rerun_jobs_that_ran_recently(db):

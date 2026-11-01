@@ -89,17 +89,13 @@ details[open]>summary .shut,details:not([open])>summary .opened{display:none}
           {% endfor %}{% if other_owners %}<optgroup label="Other owners">{% for o in other_owners %}<option value="{{ o.id }}">{{ o.name }} · {{ counts.get(o.id, 0) }} waiting{% if o.capacity_limit is not none %} of {{ o.capacity_limit }}{% endif %}</option>{% endfor %}</optgroup>{% endif %}
         </select>
       </div>
-      <div class="field grow1">
-        <label for="rel-{{ h.id }}-by">Your name</label>
-        <input id="rel-{{ h.id }}-by" name="released_by" type="text" autocomplete="name" required>
-      </div>
       <div class="field grow2">
         <label for="rel-{{ h.id }}-note">Reason <span class="muted opt">(optional)</span></label>
         <input id="rel-{{ h.id }}-note" name="note" type="text">
       </div>
       <div class="actions"><button class="btn primary" type="submit">Assign<span class="vh"> {{ h.name }}</span></button></div>
     </form>
-    <p class="small muted mw">{% if over_note %}{{ over_note }} {% endif %}Your name goes in the routing log; your reason on the SDR's HubSpot task, due in {{ task_due_hours }} hours.</p>
+    <p class="small muted mw">{% if over_note %}{{ over_note }} {% endif %}Your name ({{ me.name }}) goes in the routing log; your reason on the SDR's HubSpot task, due in {{ task_due_hours }} hours.</p>
   </details>
   {% else %}
   <p class="small muted gone">{{ 'No longer in HubSpot' if not h.c else 'No longer in the pool: aged out or found an owner' }}; the next routing pass removes it.</p>

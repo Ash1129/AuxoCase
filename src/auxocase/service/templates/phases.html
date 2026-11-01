@@ -52,7 +52,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {% endmacro %}
 {% macro switches(phase, p, second, second_help) %}
 {% set k = notice.keep if notice.phase == phase and notice.refused else {} %}
-<form class="switches" method="post" action="/phases/{{ phase }}">
+{% if can.throw_switches %}<form class="switches" method="post" action="/phases/{{ phase }}">
   <div class="fields">
     <div class="field">
       <label for="{{ phase }}-explore">{% if phase == 'gate' %}Share of the exploration slice drawn from below the gate{% else %}Share of the leads below the line that get the email sequence{% endif %}</label>
@@ -70,10 +70,6 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
       </select>
     </div>
     <div class="field">
-      <label for="{{ phase }}-who">Your name</label>
-      <input id="{{ phase }}-who" name="who" type="text" required autocomplete="name" value="{{ k.who or '' }}">
-    </div>
-    <div class="field">
       <label for="{{ phase }}-note">Note, optional</label>
       <input id="{{ phase }}-note" name="note" type="text" value="{{ k.note or '' }}">
     </div>
@@ -82,7 +78,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
     <button class="btn primary" type="submit">Set the switches</button>
     {% if not p.ready %}<label class="force"><input type="checkbox" name="force" value="1"{% if k.force %} checked{% endif %}> {{ second_help }}</label>{% endif %}
   </div>
-</form>
+</form>{% else %}<p class="small muted">Leadership and marketing throw these switches; your role reads them.</p>{% endif %}
 {% endmacro %}
 
 <header class="ph-head">

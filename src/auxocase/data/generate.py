@@ -32,6 +32,7 @@ from typing import Any, Optional
 
 import numpy as np
 
+from ..auth import seed_demo_accounts
 from ..hubspot.mock import MockHubSpot
 from ..hubspot.models import Company, Contact, Owner
 from ..storage.db import set_setting, tx
@@ -534,6 +535,7 @@ def generate(conn: sqlite3.Connection, months: int = 14, seed: int = 7, start: d
     with tx(conn):
         for o in owners:
             hs.add_owner(o)
+        seed_demo_accounts(conn, owners)        # a login an SDR, and one each for the manager, marketing, leadership and the admin
 
     channels = list(CHANNEL_SHARES)
     per_channel: Counter = Counter()

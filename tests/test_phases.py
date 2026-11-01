@@ -76,9 +76,9 @@ def test_switches_thrown_from_the_page_are_set_recorded_and_refused_when_not_rea
     assert r.status_code == 303 and r.headers["location"] == "/phases?phase=gate&set=1#ph-gate-log"
     assert get_setting(conn, "explore_below_gate_share") == "0.5"
     rows = conn.execute("SELECT * FROM phase_decisions").fetchall()
-    assert len(rows) == 1 and (rows[0]["phase"], rows[0]["switch"], rows[0]["value"], rows[0]["who"]) == ("gate", "explore", "0.5", "Dana from sales")
+    assert len(rows) == 1 and (rows[0]["phase"], rows[0]["switch"], rows[0]["value"], rows[0]["who"]) == ("gate", "explore", "0.5", "Test Admin")     # thrown by the person logged in
     t = client.get("/phases").text
-    assert "phase 2 exploring" in t and "Half of the exploration slice sent below the gate" in t and "Dana from sales" in t
+    assert "phase 2 exploring" in t and "Half of the exploration slice sent below the gate" in t and "Test Admin" in t
     assert "see what is down there" in t and "Leave as is (50%)" in t
     # Ranking on is refused before the labels are in: a notice, nothing set, nothing recorded.
     r = client.post("/phases/gate", data={"who": "Dana from sales", "switch": "on"}, follow_redirects=False)
@@ -87,7 +87,7 @@ def test_switches_thrown_from_the_page_are_set_recorded_and_refused_when_not_rea
     t = client.get(r.headers["location"]).text
     assert "Not set." in t and "0 of 100 worked leads from below the gate have matured labels" in t
     assert t.index('id="ph-gate-log"') < t.index("Not set.") < t.index('id="ph-line"')    # under the phase's "Thrown so far"
-    assert '<option value="on" selected>On</option>' in t and 'value="Dana from sales"' in t   # the choices kept in the form
+    assert '<option value="on" selected>On</option>' in t   # the choices kept in the form
     assert t.count(" selected") == 1 and 'name="force" value="1" checked' not in t
     # Forced on: recorded as such, and the waiting plain leads are marked for scoring.
     r = client.post("/phases/gate", data={"who": "Dana from sales", "switch": "on", "force": "1"}, follow_redirects=False)
@@ -106,11 +106,13 @@ def test_switches_thrown_from_the_page_are_set_recorded_and_refused_when_not_rea
     r = client.post("/phases/line", data={"who": "Mo from marketing", "explore": "0.2"}, follow_redirects=False)
     assert r.status_code == 303 and tier2.explore_share(conn) == 0.2
     t = client.get("/phases").text
-    assert "phase 3 exploring" in t and "A fifth of the leads below the line put in the sequence" in t and "Mo from marketing" in t
+    assert "phase 3 exploring" in t and "A fifth of the leads below the line put in the sequence" in t and "Test Admin" in t
     r = client.post("/phases/line", data={"who": "Mo from marketing", "switch": "on"}, follow_redirects=False)
     assert "refused=" in r.headers["location"] and not tier2.band_on(conn)
     assert client.post("/phases/other", data={"who": "x"}).status_code == 404
-    assert client.post("/phases/gate", data={"note": "no name"}).status_code == 422
+    # No one typed a name: the switch is recorded as thrown by the person logged in, and nobody logged in throws none.
+    client.post("/logout", follow_redirects=False)
+    assert client.post("/phases/gate", data={"explore": "0.5"}).status_code == 401
 
 
 def test_leadership_points_at_next_phases(world, tmp_path, monkeypatch):

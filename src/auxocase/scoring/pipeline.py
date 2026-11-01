@@ -137,6 +137,10 @@ class Scorer:
             flags.append("near the capacity line")
         if c.channel == "referral" and company and company.num_employees and company.num_employees >= 300:
             flags.append("large partner referral")
+        kinds = [r["kind"] for r in self.conn.execute("SELECT kind FROM flags WHERE contact_id=? AND resolved_at IS NULL", (c.id,))]
+        if kinds:                                        # marketing's open flags (flags.py) stay on the record through a rescore
+            from ..llm.flags import FLAG_KINDS
+            flags.append("flagged: " + ", ".join(FLAG_KINDS[k][0].lower() for k in kinds if k in FLAG_KINDS))
         return "; ".join(flags)
 
     # ---- a batch -----------------------------------------------------------------

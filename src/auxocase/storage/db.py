@@ -183,6 +183,22 @@ CREATE TABLE IF NOT EXISTS phase_decisions (
   id INTEGER PRIMARY KEY AUTOINCREMENT, phase TEXT, switch TEXT, value TEXT, forced INTEGER DEFAULT 0, who TEXT, note TEXT, created_at TEXT
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+-- A second look at scored leads for marketing (flags.py, llm/flags.py): every read, so a record is read once an input, and the flags.
+CREATE TABLE IF NOT EXISTS flag_reads (
+  contact_id TEXT, input_hash TEXT, llm TEXT, reading TEXT, created_at TEXT, PRIMARY KEY (contact_id, input_hash, llm)
+);
+CREATE TABLE IF NOT EXISTS flags (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, contact_id TEXT, kind TEXT, quote TEXT, note TEXT, probability REAL, model_version TEXT,
+  channel TEXT, llm TEXT, created_at TEXT, resolved_at TEXT, resolution TEXT, resolved_by TEXT, resolution_note TEXT
+);
+CREATE INDEX IF NOT EXISTS flags_contact ON flags(contact_id);
+-- Who may open the pages (auth.py): accounts with a role, and the sessions their logins opened (a hash of each token).
+CREATE TABLE IF NOT EXISTS staff (
+  username TEXT PRIMARY KEY, name TEXT, role TEXT NOT NULL, owner_id TEXT, pw_hash TEXT NOT NULL, created_at REAL,
+  disabled INTEGER DEFAULT 0, failed INTEGER DEFAULT 0, locked_until REAL
+);
+CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, username TEXT NOT NULL, created_at REAL, last_seen REAL);
+CREATE INDEX IF NOT EXISTS sessions_user ON sessions(username);
 """
 
 
@@ -203,6 +219,7 @@ def connect(path: Path | str = DEFAULT_DB) -> sqlite3.Connection:
 _ADDED_COLUMNS = {"hs_deals": {"closed_lost_reason": "TEXT"}, "outcomes": {"lead_created_at": "TEXT"},
                   "hs_owners": {"meetings_link": "TEXT"}, "hs_engagements": {"disposition": "TEXT", "body": "TEXT"},
                   "routing_log": {"probability": "REAL", "below_gate": "INTEGER"}, "replies": {"sent_at": "TEXT"},
+                  "overrides": {"actor": "TEXT"},
                   "hs_contacts": {"auxo_email_subject": "TEXT", "auxo_email_body": "TEXT", "auxo_below_gate": "INTEGER"}}
 
 

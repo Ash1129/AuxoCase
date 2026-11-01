@@ -1,13 +1,16 @@
 """The web service: a HubSpot-shaped webhook receiver, a JSON API, and the pages people use.
 
-Who sees what:
-- SDRs: their queue, best first, each lead with its probability, rank, the
+Who sees what (each logs in; auth.py has the roles):
+- SDRs: their own queue, best first, each lead with its probability, rank, the
   plain-English reason and the signals' quoted words; actions are bounded
   (worked / skipped with a reason / junk / promote or demote by a few places)
   and every action is logged with the explanation that was on screen (L12).
-- Sales manager: the held queue and the stale-assignment list (speed to lead).
-- Marketing and sales leads: the model page (live vs candidate metrics, the
-  calibration table, the channel p-chart) and the two-team approval.
+- Sales manager: the overview, every queue, the held queue and the
+  stale-assignment list (speed to lead), the decisions, the jobs, and the
+  sales sign-off on a model.
+- Marketing: the model page (live vs candidate metrics, the calibration table,
+  the channel p-chart) and the marketing sign-off; leadership: the capacity
+  inputs and the phase switches. Both read the leadership page and the log.
 
 In production HubSpot calls `/webhooks/hubspot` (signature checked, H04) and
 the SDR pages would be embedded as a HubSpot CRM card; here the same pages
@@ -29,6 +32,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
+from .. import auth, flags
 from ..feedback import loop as fb
 from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
@@ -45,7 +49,8 @@ from . import scheduler as sched
 from . import security
 from .email_html import BRAND, branded
 from .mailer import Mailer, SignInRefused
-from .security import approval_token, lead_token
+from .security import SESSION_COOKIE, approval_token, clear_session_cookie, lead_token, safe_next, set_session_cookie
+from .views.flagged import flagged_page
 from .views.held import held_page
 from .views.lead import lead_detail
 from .views.leadership import leadership_page
@@ -72,6 +77,7 @@ class State:
         self.llm = make_llm(conn=self.conn)
         self.model = load_live_model(self.conn)
         self.mailer = Mailer.from_env()          # "Send to <the lead>" on the lead page; nothing sends until AUXO_SMTP_* are set
+        auth.bootstrap_from_env(self.conn)       # the first admin, from AUXO_ADMIN_USER and AUXO_ADMIN_PASSWORD, on an empty staff table
 
     def scorer(self) -> Scorer:
         self.model = load_live_model(self.conn)
@@ -106,35 +112,109 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
                 runner.stop()
 
     app = FastAPI(title="AuxoCase", lifespan=lifespan)
-    app.middleware("http")(security.guard)       # host and origin checks on every request, security headers on every reply
+    app.middleware("http")(security.login_guard)  # the session cookie becomes request.state.me; no session, no page and no write
+    app.middleware("http")(security.guard)       # host and origin checks on every request, security headers on every reply (runs first)
     app.state.st = st
     app.state.scheduler = runner
+
+    @app.exception_handler(HTTPException)
+    async def refused(request: Request, exc: HTTPException):
+        """A page someone's role may not open comes back as a short page with the way to their own, not bare JSON."""
+        me = getattr(request.state, "me", None)
+        if exc.status_code == 403 and me is not None and "text/html" in request.headers.get("accept", ""):
+            return TEMPLATES.TemplateResponse(request, "refused.html", {"request": request, "why": exc.detail, "home": me.home, "name": me.name,
+                                                                        "role": me.role_word, "theme": request.cookies.get("auxo_theme", "system")},
+                                              status_code=403)
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
     def ctx(request: Request, **kw):
         """What every page's shell shows: navigation counts, the system block and the theme."""
         live = fb.live_version(st.conn)
         owners = st.hs.list_owners()
-        last = request.cookies.get("auxo_owner")
+        me: auth.Principal = request.state.me
+        last = me.owner_id if me.role == "sdr" else request.cookies.get("auxo_owner")
         mock = isinstance(st.hs, MockHubSpot)
         frozen, now = clock_frozen(st.conn), clock(st.conn)
         base = {"request": request, "live": live, "llm": st.llm.name, "scheduler": "on" if runner and runner.running else "off",
                 "line": loads(get_setting(st.conn, "capacity_line_probability")), "nav": "", "smtp": st.mailer.configured,
                 "held_count": st.conn.execute("SELECT COUNT(*) n FROM held_queue WHERE released_at IS NULL").fetchone()["n"],
                 "candidates": st.conn.execute("SELECT COUNT(*) n FROM model_registry WHERE status='candidate'").fetchone()["n"],
+                "flags_open": st.conn.execute("SELECT COUNT(*) n FROM flags WHERE resolved_at IS NULL").fetchone()["n"],
                 "queue_owner": last if any(o.id == last for o in owners) else (owners[0].id if owners else None),
                 "env": "mock" if mock else "hubspot", "frozen": frozen, "tz": tz.ZONE, "tz_label": tz.LABEL,
                 "clock_text": now.strftime("%d %b %Y %H:%M") if frozen else tz.clock_text(now), "clock_iso": tz.clock_iso(now),
-                "theme": request.cookies.get("auxo_theme", "system")}
+                "theme": request.cookies.get("auxo_theme", "system"), "me": me, "can": {p: me.can(p) for p in auth.PERMISSIONS}}
         return {**base, **kw}
+
+    def me_of(request: Request) -> auth.Principal:
+        return request.state.me
+
+    def allow(request: Request, permission: str) -> auth.Principal:
+        """The person behind the request, if their role has the permission; 403 otherwise."""
+        me = me_of(request)
+        if not me.can(permission):
+            raise HTTPException(403, f"your role ({me.role_word}) cannot do this")
+        return me
+
+    def lead_for(request: Request, contact_id: str):
+        """The lead, if the person may see it: a manager any lead, an SDR only one on their own queue."""
+        c = st.hs.get_contact(contact_id)
+        if not c:
+            raise HTTPException(404)
+        if not me_of(request).owns(c.hubspot_owner_id):
+            raise HTTPException(403, "that lead is not on your queue")
+        return c
+
+    # ---------------- logging in ----------------
+    @app.get("/login", response_class=HTMLResponse)
+    def login_page(request: Request, next: str = "/"):
+        """Logging in while logged in is fine: the new session replaces the old (the demo switches people this way)."""
+        mock = isinstance(st.hs, MockHubSpot)
+        return TEMPLATES.TemplateResponse(request, "login.html", {"request": request, "next": safe_next(next), "env": "mock" if mock else "hubspot",
+                                                                  "demo": auth.demo_logins(st.conn) if mock else [], "demo_password": auth.DEMO_PASSWORD,
+                                                                  "no_staff": not auth.staff_count(st.conn), "theme": request.cookies.get("auxo_theme", "system"),
+                                                                  "error": ""})
+
+    @app.post("/login")
+    def login(request: Request, username: str = Form(""), password: str = Form(""), next: str = Form("/")):
+        me = auth.authenticate(st.conn, username, password)
+        if me is None:
+            mock = isinstance(st.hs, MockHubSpot)
+            return TEMPLATES.TemplateResponse(request, "login.html", {"request": request, "next": safe_next(next), "env": "mock" if mock else "hubspot",
+                                                                      "demo": auth.demo_logins(st.conn) if mock else [], "demo_password": auth.DEMO_PASSWORD,
+                                                                      "no_staff": not auth.staff_count(st.conn), "theme": request.cookies.get("auxo_theme", "system"),
+                                                                      "error": "That username and password do not match an active account "
+                                                                               "(after five wrong tries an account is locked for fifteen minutes)."},
+                                              status_code=401)
+        auth.end_session(st.conn, request.cookies.get(SESSION_COOKIE))
+        target = safe_next(next)
+        response = RedirectResponse(me.home if target == "/" else target, status_code=303)
+        set_session_cookie(response, request, auth.start_session(st.conn, me))
+        return response
+
+    @app.post("/logout")
+    def logout(request: Request):
+        auth.end_session(st.conn, request.cookies.get(SESSION_COOKIE))
+        response = RedirectResponse("/login", status_code=303)
+        clear_session_cookie(response)
+        return response
 
     # ---------------- pages ----------------
     @app.get("/", response_class=HTMLResponse)
     def home(request: Request):
+        me = me_of(request)
+        if not me.can("view_overview"):
+            return RedirectResponse(me.home, status_code=303)       # an SDR's front page is their queue, marketing's the model page
         return TEMPLATES.TemplateResponse(request, "home.html", ctx(request, nav="overview", **overview_page(st)))
 
     @app.get("/queue/{owner_id}", response_class=HTMLResponse)
     def queue(request: Request, owner_id: str, stale: str = "", lead: str = "", draft: int = 0, call: int = 0, mail_sent: str = "",
               mail_failed: str = "", mail_for: str = "", mail_lead: str = "", tab: str = ""):
+        me = me_of(request)
+        if not me.owns(owner_id):
+            if me.role == "sdr" and me.owner_id:
+                return RedirectResponse(f"/queue/{me.owner_id}", status_code=303)    # another SDR's queue: back to their own
+            raise HTTPException(403, "your role has no queue")
         page = queue_page(st, owner_id, lead or None, bool(draft), bool(call), tab=tab)
         if page is None:
             raise HTTPException(404)
@@ -143,30 +223,28 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
 
     @app.get("/lead/{contact_id}", response_class=HTMLResponse)
     def lead(request: Request, contact_id: str, draft: int = 0, call: int = 0, mail_sent: str = "", mail_failed: str = ""):
+        lead_for(request, contact_id)
         detail = lead_detail(st, contact_id, bool(draft), bool(call))
         if detail is None:
             raise HTTPException(404)
         return TEMPLATES.TemplateResponse(request, "lead.html", ctx(request, nav="queues", **detail, mail_sent=mail_sent, mail_failed=mail_failed))
 
     @app.post("/lead/{contact_id}/preview", response_class=HTMLResponse)
-    def lead_preview(contact_id: str, body: str = Form("")):
+    def lead_preview(request: Request, contact_id: str, body: str = Form("")):
         """The edited draft as the lead will see it, for the page's Preview button (email_html.py)."""
-        c = st.hs.get_contact(contact_id)
-        if not c:
-            raise HTTPException(404)
+        c = lead_for(request, contact_id)
         owner = next((o for o in st.hs.list_owners(active_only=False) if o.id == c.hubspot_owner_id), None)
         return HTMLResponse(branded(body.strip(), owner.name if owner else BRAND))
 
     @app.post("/lead/{contact_id}/send")
-    def lead_send(contact_id: str, subject: str = Form(""), body: str = Form(""), back: str = Form("")):
+    def lead_send(request: Request, contact_id: str, subject: str = Form(""), body: str = Form(""), back: str = Form("")):
         """Send a draft to the lead from here, branded (email_html.py), over SMTP (mailer.py), with the SDR's name on
         the From line. On the mock the send is logged in HubSpot as the SDR's, so the first-touch check sees it and
         refills the slot; on a real portal HubSpot logs it from the BCC address (AUXO_SMTP_BCC). A reply is not
         coming this minute, so a sent lead is left in the touched group and the SDR's queue opens on the next lead;
         a failure comes back to the page it came from. Either way with a notice."""
-        c = st.hs.get_contact(contact_id)
-        if not c:
-            raise HTTPException(404)
+        allow(request, "act_on_leads")
+        c = lead_for(request, contact_id)
         if not re.fullmatch(r"/(lead|queue)/[\w-]+(\?[\w=&-]*)?", back):
             back = f"/lead/{contact_id}"
         sep = "&" if "?" in back else "?"
@@ -199,12 +277,14 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return RedirectResponse(f"{back}{sep}{sent}#draft-{contact_id}", status_code=303)
 
     @app.post("/lead/{contact_id}/hubspot")
-    def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form(""), reply: str = Form(""),
-                     notes: str = Form(""), back: str = Form("")):
+    def hubspot_demo(request: Request, contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form(""),
+                     reply: str = Form(""), notes: str = Form(""), back: str = Form("")):
         """Demo only: stand in for HubSpot, where the SDR sends the email or logs the call, then run the first-touch
         check at once (on a real portal the `touches` job polls HubSpot every minute)."""
         if not isinstance(st.hs, MockHubSpot):
             raise HTTPException(404)
+        allow(request, "act_on_leads")
+        lead_for(request, contact_id)
         try:
             log_demo_activity(st.hs, st.conn, contact_id, kind, subject, disposition,
                               body=DEMO_REPLIES[reply][1] if kind == "reply" and reply in DEMO_REPLIES else notes[:2000].strip())
@@ -221,11 +301,11 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return RedirectResponse(back, status_code=303)
 
     @app.post("/lead/{contact_id}/followups")
-    def lead_followups(contact_id: str, what: str = Form(...)):
+    def lead_followups(request: Request, contact_id: str, what: str = Form(...)):
         """The SDR's say over the automatic emails: 'stop' ends them for this lead; 'now' (demo only) sends the next one
         without waiting for its day."""
-        if st.hs.get_contact(contact_id) is None:
-            raise HTTPException(404)
+        allow(request, "act_on_leads")
+        lead_for(request, contact_id)
         if what == "stop":
             followups.stop(st.conn, contact_id)
         elif what == "now" and isinstance(st.hs, MockHubSpot):
@@ -235,12 +315,14 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return RedirectResponse(f"/lead/{contact_id}#reach-{contact_id}", status_code=303)
 
     @app.post("/lead/{contact_id}/action")
-    def lead_action(contact_id: str, owner_id: str = Form(...), action: str = Form(...), note: str = Form(""), move: int = Form(0),
-                    seen: str = Form(""), tab: str = Form("")):
-        """The SDR's call on a lead, from the queue; `tab` is the queue tab it was made on, which the page comes back to."""
-        c = st.hs.get_contact(contact_id)
-        if not c:
-            raise HTTPException(404)
+    def lead_action(request: Request, contact_id: str, owner_id: str = Form(...), action: str = Form(...), note: str = Form(""),
+                    move: int = Form(0), seen: str = Form(""), tab: str = Form("")):
+        """The SDR's call on a lead, from the queue; `tab` is the queue tab it was made on, which the page comes back to.
+        `owner_id` is the queue it was made on: an SDR's own, or any for a manager; the person is recorded as the actor."""
+        me = allow(request, "act_on_leads")
+        c = lead_for(request, contact_id)
+        if not me.owns(owner_id):
+            raise HTTPException(403, "that queue is not yours")
         if action not in ("worked", "skipped", "junk", "promote", "demote"):
             raise HTTPException(400, "unknown action")
         if not seen:
@@ -251,8 +333,8 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             # Someone else acted on it, or HubSpot moved it on, since this page was loaded: say so instead of acting twice.
             return RedirectResponse(f"{back}{sep}stale={contact_id}", status_code=303)
         move = max(-MAX_RANK_MOVE, min(MAX_RANK_MOVE, move))
-        st.conn.execute("INSERT INTO overrides(contact_id, owner_id, action, note, score_at_time, rank_at_time, created_at) VALUES(?,?,?,?,?,?,?)",
-                        (contact_id, owner_id, action, note, c.auxo_score, c.auxo_rank, now_iso()))
+        st.conn.execute("INSERT INTO overrides(contact_id, owner_id, action, note, score_at_time, rank_at_time, created_at, actor) VALUES(?,?,?,?,?,?,?,?)",
+                        (contact_id, owner_id, action, note, c.auxo_score, c.auxo_rank, now_iso(), me.username))
         if action == "worked":
             st.hs.batch_update_contacts([(contact_id, {"hs_lead_status": "IN_PROGRESS"})])
             st.conn.execute("INSERT INTO outcomes(contact_id, worked, first_touch_at, updated_at) VALUES(?,?,?,?) ON CONFLICT(contact_id) DO UPDATE SET worked=1, first_touch_at=COALESCE(outcomes.first_touch_at, excluded.first_touch_at), updated_at=excluded.updated_at",
@@ -274,29 +356,48 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
 
     @app.get("/held", response_class=HTMLResponse)
     def held(request: Request):
+        allow(request, "view_held")
         return TEMPLATES.TemplateResponse(request, "held.html", ctx(request, nav="held", **held_page(st)))
 
     @app.post("/held/{contact_id}/release")
-    def release(contact_id: str, owner_id: str = Form(...), released_by: str = Form(...), note: str = Form("")):
+    def release(request: Request, contact_id: str, owner_id: str = Form(...), note: str = Form("")):
+        me = allow(request, "release_held")
         if not any(o.id == owner_id for o in st.hs.list_owners()):
             raise HTTPException(400, "pick an active SDR")
-        ok = st.router().release_held(contact_id, owner_id, released_by, note)
+        ok = st.router().release_held(contact_id, owner_id, me.name, note)
         if not ok:
             raise HTTPException(409, "lead already has an owner")
         return RedirectResponse("/held", status_code=303)
 
     @app.get("/model", response_class=HTMLResponse)
     def model(request: Request, stale: str = ""):
+        allow(request, "view_model")
         return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, nav="model", **model_page(st), stale=stale))
+
+    @app.get("/flagged", response_class=HTMLResponse)
+    def flagged(request: Request, done: str = ""):
+        """Marketing's second look: the flags the reader raised, each with the record's own words, to resolve."""
+        allow(request, "view_flags")
+        return TEMPLATES.TemplateResponse(request, "flagged.html", ctx(request, nav="flagged", **flagged_page(st), done=done[:3]))
+
+    @app.post("/flagged/{flag_id}/resolve")
+    def flag_resolve(request: Request, flag_id: int, resolution: str = Form(...), note: str = Form("")):
+        me = allow(request, "resolve_flags")
+        try:
+            ok = flags.resolve(st.hs, st.conn, flag_id, resolution, me.name, note)
+        except ValueError as e:
+            raise HTTPException(400, str(e))
+        return RedirectResponse(f"/flagged?done={1 if ok else 0}#fl-open", status_code=303)
 
     @app.get("/leadership", response_class=HTMLResponse)
     def leadership(request: Request, set: str = "", refused: str = ""):
         """`set`: how many capacity inputs the last submit changed (0: none); `refused`: why one was not set."""
+        allow(request, "view_leadership")
         notice = {"set": set[:3], "refused": refused[:300]}
         return TEMPLATES.TemplateResponse(request, "leadership.html", ctx(request, nav="leadership", notice=notice, **leadership_page(st)))
 
     @app.post("/leadership/capacity")
-    def capacity_set(minutes_touch: str = Form(""), minutes_followup: str = Form(""), minutes_reply: str = Form(""), hours: str = Form(""),
+    def capacity_set(request: Request, minutes_touch: str = Form(""), minutes_followup: str = Form(""), minutes_reply: str = Form(""), hours: str = Form(""),
                      followups: str = Form(""), minutes_reply_triaged: str = Form(""), replies: str = Form(""),
                      minutes_call_log: str = Form(""), minutes_call_log_auto: str = Form(""), call_notes: str = Form(""),
                      minutes_skip: str = Form(""), skips: str = Form(""), minutes_booking: str = Form(""),
@@ -304,6 +405,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         """The capacity inputs: minutes a cold touch, a follow-up and a reply, hours an SDR gives leads a month, and who
         sends the follow-ups ('auto' or 'sdr'). Blank leaves one as it is; a value out of range is refused and nothing
         is set."""
+        allow(request, "set_capacity")
         try:
             given = {k: (float(v) if v.strip() else None) for k, v in (("minutes_touch", minutes_touch), ("minutes_followup", minutes_followup),
                                                                       ("minutes_reply", minutes_reply), ("minutes_reply_triaged", minutes_reply_triaged),
@@ -323,24 +425,27 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         """Phase 2 and phase 3: their switches, readiness and results in one place. After a post, `phase` names the
         section the notice belongs in: `refused` a switch's refusal, `set` how many switches changed (0: none). After a
         refusal the rest carry the choices back into that phase's form, so a refused submit is not a blank form."""
+        allow(request, "view_phases")
         notice = {"phase": phase if phase in ("gate", "line") else "", "refused": refused[:300], "set": set[:3],
                   "keep": {"explore": explore[:8], "switch": switch[:3], "force": force[:1], "who": who[:80], "note": note[:200]}}
         return TEMPLATES.TemplateResponse(request, "phases.html", ctx(request, nav="phases", **phases_page(st), notice=notice))
 
     @app.post("/phases/{phase}")
-    def phase_switch(phase: str, who: str = Form(...), note: str = Form(""), explore: str = Form(""), switch: str = Form(""),
+    def phase_switch(request: Request, phase: str, note: str = Form(""), explore: str = Form(""), switch: str = Form(""),
                      force: str = Form("")):
         """Throw a phase's switches: `explore` a share (blank leaves it), `switch` on/off for the second switch (blank
-        leaves it), `force` to pass the readiness check. A refusal comes back to the page as a notice, nothing set."""
+        leaves it), `force` to pass the readiness check. A refusal comes back to the page as a notice, nothing set.
+        The switch is recorded as thrown by the person logged in."""
         if phase not in ("gate", "line"):
             raise HTTPException(404)
+        who = allow(request, "throw_switches").name
         try:
             share = float(explore) if explore.strip() else None
             on = {"on": True, "off": False}.get(switch.strip().lower()) if switch.strip() else None
             changed = throw_switches(st.conn, phase, share, on, bool(force), who.strip(), note.strip())
         except ValueError as e:
             keep = "".join(f"&{k}={quote(v.strip()[:200])}" for k, v in
-                           (("explore", explore), ("switch", switch), ("force", force), ("who", who), ("note", note)) if v.strip())
+                           (("explore", explore), ("switch", switch), ("force", force), ("note", note)) if v.strip())
             return RedirectResponse(f"/phases?phase={phase}&refused={quote(str(e))}{keep}#ph-{phase}-log", status_code=303)
         if phase == "gate" and any(c["switch"] == "on" and c["value"] == "on" for c in changed) and not (runner and runner.running):
             # Plain leads already waiting were never scored. With the scheduler on, its rescore job scores them within
@@ -352,6 +457,7 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
     @app.get("/decisions", response_class=HTMLResponse)
     def decisions(request: Request, limit: int = 500):
         """One place for every human call: model approvals and send-backs, and leads SDRs worked or turned down."""
+        allow(request, "view_decisions")
         limit = max(1, min(limit, 5000))
         models = [dict(r) for r in st.conn.execute(
             "SELECT a.*, m.status FROM approvals a LEFT JOIN model_registry m ON m.version = a.version ORDER BY a.created_at DESC, a.id DESC").fetchall()]
@@ -363,16 +469,28 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             if r["k"] in counts:
                 counts[r["k"]] += r["n"]
         owners = {o.id: o.name for o in st.hs.list_owners(active_only=False)}
+        staff = {s["username"]: s["name"] for s in auth.list_staff(st.conn)}
         titles = {}
         for cid in {o["contact_id"] for o in leads}:
             c = st.hs.get_contact(cid)
             titles[cid] = c.job_title if c else None
         return TEMPLATES.TemplateResponse(request, "decisions.html", ctx(request, nav="decisions", models=models, leads=leads, counts=counts,
-                                                                          owners=owners, titles=titles, limit=limit))
+                                                                          owners=owners, staff=staff, titles=titles, limit=limit))
 
     @app.post("/model/{version}/approve")
-    def approve(version: str, team: str = Form(...), approver: str = Form(...), decision: str = Form(...), note: str = Form(""),
-                seen: str = Form("")):
+    def approve(request: Request, version: str, decision: str = Form(...), note: str = Form(""), seen: str = Form(""), team: str = Form("")):
+        """A sign-off or a send-back, for the team the person's role speaks for (an admin picks the team); the approver
+        is the person logged in."""
+        me = me_of(request)
+        if me.role == "admin":
+            team = team or "sales"
+        elif me.can("approve_marketing"):
+            team = "marketing"
+        elif me.can("approve_sales"):
+            team = "sales"
+        else:
+            raise HTTPException(403, f"your role ({me.role_word}) does not sign models off")
+        approver = me.name
         if not seen:
             raise HTTPException(400, "the form is missing the model's version state; reload the page")
         if seen != approval_token(st.conn, version):
@@ -390,13 +508,15 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
 
     # ---------------- jobs (the three Blueprint jobs, callable from the UI, the CLI or a scheduler) ----------------
     @app.post("/jobs/score")
-    def job_score(mode: str = "events"):
+    def job_score(request: Request, mode: str = "events"):
+        allow(request, "run_jobs")
         sc = st.scorer()
         res = sc.process_events() if mode == "events" else sc.rescore_pool()
         return {"scored": len(res), "model_version": sc.model_version}
 
     @app.post("/jobs/route")
-    def job_route():
+    def job_route(request: Request):
+        allow(request, "run_jobs")
         d = st.router().run()
         out = {"decisions": {k: sum(1 for x in d if x.decision == k) for k in {x.decision for x in d}}}
         t2 = run_tier2(st.hs, st.conn, st.llm)
@@ -405,16 +525,19 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return out
 
     @app.post("/jobs/sync")
-    def job_sync():
+    def job_sync(request: Request):
+        allow(request, "run_jobs")
         return fb.sync_outcomes(st.hs, st.conn)
 
     @app.post("/jobs/monitor")
-    def job_monitor():
+    def job_monitor(request: Request):
+        allow(request, "run_jobs")
         pts = fb.channel_monitor(st.hs, st.conn)
         return {"points": [p.__dict__ for p in pts]}
 
     @app.post("/jobs/train")
-    def job_train(notes: str = ""):
+    def job_train(request: Request, notes: str = ""):
+        allow(request, "run_jobs")
         try:
             model, m = fb.train_candidate(st.hs, st.conn, notes=notes)
         except ValueError as e:
@@ -422,15 +545,23 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return {"version": model.version, "family": model.family, "metrics": m.to_dict()}
 
     @app.post("/jobs/touches")
-    def job_touches():
+    def job_touches(request: Request):
+        allow(request, "run_jobs")
         return detect_first_touches(st.hs, st.conn)
 
     @app.post("/jobs/outreach")
-    def job_outreach(limit: int = 10):
+    def job_outreach(request: Request, limit: int = 10):
+        allow(request, "run_jobs")
         return prepare_outreach(st.hs, st.conn, st.llm, limit=limit)
 
+    @app.post("/jobs/flags")
+    def job_flags(request: Request, limit: int = 25):
+        allow(request, "run_jobs")
+        return flags.run(st.hs, st.conn, st.llm, limit=limit)
+
     @app.post("/jobs/realert")
-    def job_realert():
+    def job_realert(request: Request):
+        allow(request, "run_jobs")
         return {"reminders": st.router().re_alert_stale()}
 
     @app.post("/theme")

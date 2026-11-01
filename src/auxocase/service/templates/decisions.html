@@ -73,7 +73,7 @@
       <tbody>
       {% for o in leads %}<tr>
         <td class="small">{{ when(o.created_at) }}</td>
-        <td>{{ owners.get(o.owner_id) or o.owner_id or nr() }}</td>
+        <td>{{ owners.get(o.owner_id) or o.owner_id or nr() }}{% if o.actor and staff.get(o.actor) and staff.get(o.actor) != owners.get(o.owner_id) %} <span class="small muted">by {{ staff.get(o.actor) }}</span>{% endif %}</td>
         <td><a href="/lead/{{ o.contact_id }}">{{ titles.get(o.contact_id) or 'Contact' }}</a> <span class="muted small num">#{{ o.contact_id }}</span></td>
         <td>{% if o.action == 'worked' %}<span class="badge yes">Worked</span>{% elif o.action == 'junk' %}<span class="badge no">Junk</span>{% else %}<span class="badge skip">Skipped</span>{% endif %}</td>
         <td class="small">{% if o.note %}<span class="quote">{{ o.note }}</span>{% else %}{{ none_given('No reason given') }}{% endif %}</td>

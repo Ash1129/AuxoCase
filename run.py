@@ -17,9 +17,11 @@
 from __future__ import annotations
 
 import argparse
+import getpass
 import json
 import os
 import sys
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -221,6 +223,39 @@ def cmd_rebase(a):
     print(json.dumps(out, indent=1))
 
 
+def cmd_flags(a):
+    """Marketing's second look at scored leads (src/auxocase/flags.py): read the candidates' records and raise flags."""
+    from auxocase import flags
+    conn, hs = _ctx(a.db)
+    print(json.dumps(flags.run(hs, conn, make_llm(conn=conn), limit=a.limit), indent=1))
+
+
+def cmd_staff(a):
+    """Accounts for the pages (src/auxocase/auth.py): add one, list them, set a password, disable or enable one, or
+    seed the mock portal's demo logins."""
+    from auxocase import auth
+    conn, hs = _ctx(a.db)
+    if a.what == "list":
+        for s in auth.list_staff(conn):
+            state = "disabled" if s["disabled"] else ("locked" if s["locked_until"] and s["locked_until"] > time.time() else "active")
+            print(f"{s['username']:<16} {s['role']:<11} {s['name']:<24} {('owner ' + s['owner_id']) if s['owner_id'] else '':<10} {state}")
+        return
+    if a.what == "demo":
+        made = auth.seed_demo_accounts(conn, hs.list_owners(active_only=False))
+        print(f"{len(made)} demo account(s) added; every demo password is {auth.DEMO_PASSWORD!r}")
+        return
+    if a.what == "add":
+        password = a.password or getpass.getpass("Password (8 characters or more): ")
+        u = auth.create_staff(conn, a.username, password, a.role, name=a.name or a.username, owner_id=a.owner)
+        print(f"added {u} ({a.role})")
+    elif a.what == "password":
+        auth.set_password(conn, a.username, a.password or getpass.getpass("New password: "))
+        print(f"password set for {a.username}; their sessions are ended")
+    elif a.what in ("disable", "enable"):
+        auth.set_disabled(conn, a.username, a.what == "disable")
+        print(f"{a.username} {a.what}d")
+
+
 def main(argv=None):
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--db", default=str(DEFAULT_DB))
@@ -245,6 +280,12 @@ def main(argv=None):
     s = sub.add_parser("rebase"); s.add_argument("--years", type=int, default=None, help="years to shift back (default: onto this year)")
     s.add_argument("--exact", action="store_true", help="shift by the exact span from the newest lead to now, so every age is real (months no longer align)")
     s.add_argument("--evaluation", default="docs/evaluation.json"); s.add_argument("--no-live", dest="live", action="store_false"); s.set_defaults(fn=cmd_rebase)
+    s = sub.add_parser("flags", help="read scored leads' records for marketing's flags"); s.add_argument("--limit", type=int, default=25); s.set_defaults(fn=cmd_flags)
+    s = sub.add_parser("staff", help="accounts for the pages: add | list | password | disable | enable | demo")
+    s.add_argument("what", choices=["add", "list", "password", "disable", "enable", "demo"]); s.add_argument("username", nargs="?", default="")
+    s.add_argument("--role", choices=["sdr", "manager", "marketing", "leadership", "admin"], default="sdr"); s.add_argument("--name", default="")
+    s.add_argument("--owner", default=None, help="an SDR's HubSpot owner id"); s.add_argument("--password", default=None, help="prompted for when not given")
+    s.set_defaults(fn=cmd_staff)
     s = sub.add_parser("serve"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)
     s = sub.add_parser("demo"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_demo)
     a = p.parse_args(argv)

@@ -150,7 +150,7 @@ def test_decisions_page_lists_model_and_lead_calls(db):
     page = client.get("/decisions")
     assert page.status_code == 200
     text = page.text
-    assert "Sent back" in text and "Dana from sales" in text and "wait for more referral data" in text
+    assert "Sent back" in text and "Test Admin" in text and "wait for more referral data" in text    # the person logged in
     assert "Approved" in text                                         # the fixture's two approvals of the live model
     assert "already a customer" in text and owner.name in text
     for c in leads:

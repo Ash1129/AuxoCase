@@ -18,6 +18,11 @@ where it came from:
   the person saw; if the lead or the model changed since (someone else acted,
   HubSpot moved the lead on), the write is refused and the page shows why,
   instead of two people's actions both landing.
+- Login. Every page and write but the login page itself, the script, the
+  theme and the webhook needs a session (auth.py): a page without one goes
+  to the login page and comes back after; a write without one is refused.
+  The session is an HttpOnly cookie; who it stands for is on
+  `request.state.me`, and each route checks the role's permission.
 """
 from __future__ import annotations
 
@@ -27,14 +32,20 @@ import sqlite3
 from typing import Optional
 
 from starlette.requests import Request
-from starlette.responses import PlainTextResponse, Response
+from urllib.parse import quote
 
+from starlette.responses import PlainTextResponse, RedirectResponse, Response
+
+from .. import auth
 from ..hubspot.models import Contact
 
 DEFAULT_HOSTS = ("127.0.0.1", "localhost", "[::1]", "testserver")
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 SIGNED_PATHS = ("/webhooks/hubspot",)          # server-to-server: verified by HubSpot's signature, not by origin
 UNPOLICED_PATHS = ("/docs", "/redoc")          # FastAPI's API docs load their scripts from a CDN
+SESSION_COOKIE = "auxo_session"
+OPEN_PATHS = ("/login", "/logout", "/theme", "/favicon.ico")   # reachable without a session
+OPEN_PREFIXES = ("/assets/", "/webhooks/")
 CSP = ("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
        "font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; form-action 'self'; base-uri 'none'; "
        "frame-ancestors 'none'")
@@ -218,6 +229,34 @@ async def guard(request: Request, call_next) -> Response:
     if not request.url.path.startswith(UNPOLICED_PATHS):
         response.headers.setdefault("Content-Security-Policy", CSP)
     return response
+
+
+def set_session_cookie(response: Response, request: Request, token: str) -> None:
+    response.set_cookie(SESSION_COOKIE, token, max_age=auth.MAX_SECONDS, httponly=True, samesite="lax", path="/",
+                        secure=request.url.scheme == "https")
+
+
+def clear_session_cookie(response: Response) -> None:
+    response.delete_cookie(SESSION_COOKIE, path="/")
+
+
+def safe_next(path: str) -> str:
+    """A path on this service to come back to after logging in; anything else is the front page."""
+    return path if path.startswith("/") and not path.startswith("//") and "\\" not in path else "/"
+
+
+async def login_guard(request: Request, call_next) -> Response:
+    """Turn the session cookie into `request.state.me`; without one, a page goes to the login page and a write is refused."""
+    conn = request.app.state.st.conn
+    me = auth.load_session(conn, request.cookies.get(SESSION_COOKIE))
+    request.state.me = me
+    path = request.url.path
+    if me is None and path not in OPEN_PATHS and not path.startswith(OPEN_PREFIXES):
+        if request.method == "GET":
+            back = path + (f"?{request.url.query}" if request.url.query else "")
+            return RedirectResponse(f"/login?next={quote(back, safe='')}", status_code=303)
+        return PlainTextResponse("Log in first.", status_code=401)
+    return await call_next(request)
 
 
 def _token(*parts) -> str:

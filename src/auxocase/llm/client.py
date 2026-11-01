@@ -135,6 +135,9 @@ class Offline:
         if user.startswith("TASK: loss_reason"):
             from .loss_reasons import offline_loss_reason
             return offline_loss_reason(user)
+        if user.startswith("TASK: flags"):
+            from .flags import offline_flags
+            return offline_flags(user)
         return "{}"
 
 

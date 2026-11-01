@@ -53,6 +53,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Callable, Optional
 
+from .. import flags
 from ..feedback import loop as fb
 from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
@@ -88,6 +89,7 @@ DEFAULT_JOBS = (
     Job("touches", 1, run_on_first_start=True),
     Job("outreach", 1, run_on_first_start=True),
     Job("followups", 5),
+    Job("flags", 10),
     Job("remind", 60),
     Job("sync", 60),
     Job("monitor", 24 * 60),
@@ -129,7 +131,7 @@ class Scheduler:
         self._thread: Optional[threading.Thread] = None
         self.actions: dict[str, Callable[[], dict]] = {
             "score": self._score, "rescore": self._rescore, "route": self._route, "touches": self._touches, "outreach": self._outreach, "followups": self._followups, "remind": self._remind,
-            "sync": self._sync, "monitor": self._monitor, "train": self._train,
+            "sync": self._sync, "monitor": self._monitor, "train": self._train, "flags": self._flags,
         }
 
     # ---- the jobs ------------------------------------------------------------------
@@ -170,6 +172,9 @@ class Scheduler:
 
     def _outreach(self) -> dict:
         return prepare_outreach(self.hs, self.conn, self.llm, limit=self.outreach_batch)
+
+    def _flags(self) -> dict:
+        return flags.run(self.hs, self.conn, self.llm, limit=self.outreach_batch)       # marketing's second look (flags.py)
 
     def _followups(self) -> dict:
         out = followups.run(self.hs, self.conn, self.llm, limit=self.outreach_batch)
