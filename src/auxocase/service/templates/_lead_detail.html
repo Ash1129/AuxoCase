@@ -211,7 +211,7 @@
 </form>
 {%- endmacro %}
 {% macro sent_notice(d, where) -%}
-{% if mail_sent %}<p class="notice" role="status"><b>Sent.</b> The branded email went to {{ mail_sent }}{% if d.mock %}, and HubSpot has it as {{ 'your' if where == 'queue' else "the SDR's" }} send{% endif %}.</p>
+{% if mail_sent %}<p class="notice" role="status"><b>Sent.</b> The branded email{% if mail_for %} for {{ mail_for }}{% endif %} went to {{ mail_sent }}{% if d and d.mock %}, and HubSpot has it as {{ 'your' if where == 'queue' else "the SDR's" }} send{% endif %}.{% if where == 'queue' and mail_for %}{% if d and d.c.id != mail_lead %} {{ mail_for.split(' ')[0] }} waits in the touched group below until something comes back; this is the next lead.{% elif d %} Nothing else is waiting in the queue yet, so it stays open here.{% else %} Nothing is waiting in the queue right now.{% endif %}{% endif %}</p>
 {% elif mail_failed %}<p class="notice warn" role="status"><b>Not sent.</b> {{ mail_failed[:1]|upper }}{{ mail_failed[1:] }}.</p>
 {% endif %}
 {%- endmacro %}
@@ -259,7 +259,7 @@
 {%- set c = d.c -%}{%- set labels = {1: 'first email', 2: 'follow-up', 3: 'last email'} -%}
 {%- set tasks = 'your' if where == 'queue' else ((d.owner.name ~ "'s") if d.owner else "the SDR's") -%}
 <section class="part{{ ' wide' if wide }}" id="draft-{{ c.id }}" aria-label="Reaching {{ first(c) }}">
-  {{ sent_notice(d, where) }}
+  {% if where != 'queue' %}{{ sent_notice(d, where) }}{% endif %}
   <div class="duo">
   {% if c.email -%}
   {% if d.get('booking') and d.booking.status == 'booked' -%}

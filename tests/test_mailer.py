@@ -91,7 +91,8 @@ def test_lead_page_sends_the_branded_draft_and_logs_it(db, smtp):
     before = len(hs.engagements_for_contact(c.id))
     r = client.post(f"/lead/{c.id}/send", data={"subject": "Payroll at Granite", "body": f"Hi {c.first_name},\n\nA short call?\n\nBest,\nSam",
                                               "back": f"/lead/{c.id}"}, follow_redirects=False)
-    assert r.status_code == 303 and r.headers["location"] == f"/lead/{c.id}?mail_sent={quote(c.email)}#draft-{c.id}"
+    name = quote(f"{c.first_name} {c.last_name}".strip())
+    assert r.status_code == 303 and r.headers["location"] == f"/queue/{c.hubspot_owner_id}?mail_sent={quote(c.email)}&mail_for={name}&mail_lead={c.id}"
     sent = smtp.sent[0]
     owner = next(o for o in hs.list_owners(active_only=False) if o.id == c.hubspot_owner_id)
     assert sent["To"] == c.email and sent["From"].startswith(owner.name)
@@ -99,8 +100,9 @@ def test_lead_page_sends_the_branded_draft_and_logs_it(db, smtp):
     assert "BrightPath Payroll</span>" in html and f"Hi {c.first_name}," in html
     after = hs.engagements_for_contact(c.id)
     assert len(after) == before + 1 and after[-1].type == "EMAIL" and after[-1].direction == "OUTGOING" and after[-1].subject == "Payroll at Granite"
-    page = client.get(f"/lead/{c.id}?mail_sent={c.email}").text
-    assert "<b>Sent.</b>" in page and f"went to {c.email}" in page
+    page = client.get(r.headers["location"]).text
+    assert "<b>Sent.</b>" in page and f"for {c.first_name} {c.last_name}".strip() in page and f"went to {c.email}" in page
+    assert "waits in the touched group below" in page or "Nothing else is waiting" in page or "Nothing is waiting in the queue" in page
 
 
 def test_send_refuses_an_empty_draft_and_a_strange_back_link(db, smtp):

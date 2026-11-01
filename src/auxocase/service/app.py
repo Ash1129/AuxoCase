@@ -133,12 +133,13 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return TEMPLATES.TemplateResponse(request, "home.html", ctx(request, nav="overview", **overview_page(st)))
 
     @app.get("/queue/{owner_id}", response_class=HTMLResponse)
-    def queue(request: Request, owner_id: str, stale: str = "", lead: str = "", draft: int = 0, call: int = 0, mail_sent: str = "", mail_failed: str = ""):
+    def queue(request: Request, owner_id: str, stale: str = "", lead: str = "", draft: int = 0, call: int = 0, mail_sent: str = "",
+              mail_failed: str = "", mail_for: str = "", mail_lead: str = ""):
         page = queue_page(st, owner_id, lead or None, bool(draft), bool(call))
         if page is None:
             raise HTTPException(404)
         return TEMPLATES.TemplateResponse(request, "queue.html", ctx(request, nav="queues", **page, hit=_hit_rate(st.conn), stale=stale,
-                                                                    mail_sent=mail_sent, mail_failed=mail_failed))
+                                                                    mail_sent=mail_sent, mail_failed=mail_failed, mail_for=mail_for, mail_lead=mail_lead))
 
     @app.get("/lead/{contact_id}", response_class=HTMLResponse)
     def lead(request: Request, contact_id: str, draft: int = 0, call: int = 0, mail_sent: str = "", mail_failed: str = ""):
@@ -159,8 +160,10 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
     @app.post("/lead/{contact_id}/send")
     def lead_send(contact_id: str, subject: str = Form(""), body: str = Form(""), back: str = Form("")):
         """Send a draft to the lead from here, branded (email_html.py), over SMTP (mailer.py), with the SDR's name on
-        the From line. On the mock the send is logged in HubSpot as the SDR's, so the first-touch check sees it; on a
-        real portal HubSpot logs it from the BCC address (AUXO_SMTP_BCC). Back to the page it came from, with a notice."""
+        the From line. On the mock the send is logged in HubSpot as the SDR's, so the first-touch check sees it and
+        refills the slot; on a real portal HubSpot logs it from the BCC address (AUXO_SMTP_BCC). A reply is not
+        coming this minute, so a sent lead is left in the touched group and the SDR's queue opens on the next lead;
+        a failure comes back to the page it came from. Either way with a notice."""
         c = st.hs.get_contact(contact_id)
         if not c:
             raise HTTPException(404)
@@ -187,9 +190,13 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             return failed(f"the mailbox refused it: {type(e).__name__}: {e}")
         if isinstance(st.hs, MockHubSpot):
             st.hs.log_engagement(contact_id, "EMAIL", "OUTGOING", clock(st.conn), c.hubspot_owner_id, subject=subject, body=body)
-            detect_first_touches(st.hs, st.conn)
+            detect_first_touches(st.hs, st.conn)           # the touch frees the slot and routing refills it at once
             detect_replies(st.hs, st.conn)
-        return RedirectResponse(f"{back}{sep}mail_sent={quote(out['to'])}#draft-{contact_id}", status_code=303)
+        name = f"{c.first_name} {c.last_name}".strip() or c.email
+        sent = f"mail_sent={quote(out['to'])}&mail_for={quote(name)}&mail_lead={contact_id}"
+        if c.hubspot_owner_id:
+            return RedirectResponse(f"/queue/{c.hubspot_owner_id}?{sent}", status_code=303)
+        return RedirectResponse(f"{back}{sep}{sent}#draft-{contact_id}", status_code=303)
 
     @app.post("/lead/{contact_id}/hubspot")
     def hubspot_demo(contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form(""), reply: str = Form(""),

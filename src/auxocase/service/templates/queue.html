@@ -21,6 +21,7 @@
 {%- set labels = {'worked': 'worked', 'junk': 'junk', 'skipped': 'skipped'} -%}
 {%- set others_waiting = waiting|rejectattr('c.id', 'equalto', open.c.id if open else none)|list -%}
 {%- set others_touched = touched|rejectattr('c.id', 'equalto', open.c.id if open else none)|list -%}
+{{ ld.sent_notice(open, 'queue') }}
 {% if stale %}<p class="notice warn" role="status"><b>Not saved.</b> The lead changed after this page loaded (someone else acted, or HubSpot moved it), so your click was not saved. This is the queue now.</p>{% endif %}
 
 <header class="head">
