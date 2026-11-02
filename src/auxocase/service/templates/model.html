@@ -234,7 +234,7 @@ details[open]>summary{margin-bottom:8px}
 {% else %}
 
 <section class="msec" aria-labelledby="md-mon">
-  <h2 id="md-mon" class="kicker">Channel monitor{% if monitor %} · {{ monitor.period }}{% endif %}, worked leads {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}{{ dg() }}{% if monitor %}{% call note('mon-note', 'How the limits work') %}<span class="ln">Share booked against the leads' average score, limits three standard errors either side: inside is noise, outside a real shift.</span><span class="ln">Under {{ min_group }} worked leads in a month: held, not judged.</span><span class="ln">{% if monitor.earlier %}Earlier months in the run: {{ monitor.earlier|join(' ') }} {% endif %}Run {{ when(monitor.run) }} log time.</span>{% endcall %}{% endif %}</h2>
+  <h2 id="md-mon" class="kicker">Channel monitor{% if monitor %} · {{ monitor.period }}{% endif %}, worked leads {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}{{ dg() }}{% if monitor %}{% call note('mon-note', 'How the limits work') %}<span class="ln">Share booked against the leads' average score, limits three standard errors either side: inside is noise, outside a real shift.</span><span class="ln">Under {{ min_group }} worked leads in a month: held, not judged.</span><span class="ln">{% if monitor.earlier %}Other months in the run: {{ monitor.earlier|join(' ') }} {% endif %}Run {{ when(monitor.run) }} log time.</span>{% endcall %}{% endif %}</h2>
   {% if monitor %}
   <p class="lede">{{ monitor.headline }}</p>
   <div class="scroll" role="region" aria-label="Channel monitor, scrolls sideways" tabindex="0">

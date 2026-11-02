@@ -285,22 +285,26 @@ def _tested_where(side: list[dict]) -> Optional[str]:
     return "Tested on different months: " + ", ".join(parts) + "."
 
 
-def _month_summary(period: str, rows: list[dict]) -> str:
-    """'September 2028: referral and website above their limits; events and webinar inside; email and paid ads under 30 worked leads.'"""
+def _month_summary(period: str, rows: list[dict], so_far: bool = False) -> str:
+    """'September 2028: referral and website above their limits; events and webinar inside; email and paid ads under 30
+    worked leads.' The month still under way reads 'November 2028 so far: ...'."""
+    name = _month(period) + (" so far" if so_far else "")
     if all(r["flag"] == "held" for r in rows):
-        return f"{_month(period)}: under {fb.MIN_GROUP} worked leads in every channel."
+        return f"{name}: under {fb.MIN_GROUP} worked leads in every channel."
     parts = []
     for flag in ("above", "below", "ok", "held"):
         chs = [r["label"].lower() for r in rows if r["flag"] == flag]
         if chs:
             parts.append(f"{_and(chs)} {FLAG_WORDS[flag]}")
-    return f"{_month(period)}: " + "; ".join(parts) + "."
+    return f"{name}: " + "; ".join(parts) + "."
 
 
 def _monitor(conn, speed: dict, effect: dict) -> Optional[dict]:
-    """The latest channel-monitor run: run (its log time), period (the newest month, 'October 2028'), rows (that
-    month's channels, each with label, booked/predicted/lcl/ucl in whole percents), earlier (one sentence per older
-    month, newest first), every (every row of the run), headline (the plain reading of the newest month)."""
+    """The latest channel-monitor run: run (its log time), period (the newest complete month by the service's clock,
+    'October 2028'; the month under way only when the run has no other), rows (that month's channels, each with label,
+    booked/predicted/lcl/ucl in whole percents), earlier (one sentence per other month in the run, newest first, the
+    month under way marked 'so far'), every (every row of the run), headline (the plain reading of the shown month).
+    A month a few days old has a handful of worked leads in each channel, so it is never the one the page leads with."""
     every = [dict(r) for r in conn.execute("SELECT * FROM channel_monitor WHERE created_at = (SELECT MAX(created_at) FROM channel_monitor) ORDER BY period, channel").fetchall()]
     if not every:
         return None
@@ -310,13 +314,16 @@ def _monitor(conn, speed: dict, effect: dict) -> Optional[dict]:
         r["booked"], r["predicted"], r["low"], r["high"] = (None if r[k] is None else round(100 * r[k])
                                                             for k in ("demo_rate", "predicted_rate", "lcl", "ucl"))
     periods = sorted({r["period"] for r in every})
-    rows = [r for r in every if r["period"] == periods[-1]]
+    current = clock(conn).strftime("%Y-%m")
+    complete = [p for p in periods if p < current]
+    shown = complete[-1] if complete else periods[-1]
+    rows = [r for r in every if r["period"] == shown]
     judged = [r for r in rows if r["flag"] != "held"]
     above, below = [r["label"].lower() for r in judged if r["flag"] == "above"], [r["label"].lower() for r in judged if r["flag"] == "below"]
     faster = (speed.get("n") and (speed.get("baseline") or {}).get("n") and speed["median_hours"] < speed["baseline"]["median_hours"]
               and (effect.get("factor") or 1) < 1)
     if not judged:
-        headline = f"No channel had {fb.MIN_GROUP} worked leads this month, so none is judged yet."
+        headline = f"No channel had {fb.MIN_GROUP} worked leads in {_month(shown)}, so none is judged yet."
     elif above and not below:
         where = "" if len(above) == len(judged) else f" in {len(above)} of the {len(judged)} channels with enough worked leads"
         headline = f"Leads now book above their scores{where}" + (", most likely because they are touched sooner." if faster else ".")
@@ -326,8 +333,10 @@ def _monitor(conn, speed: dict, effect: dict) -> Optional[dict]:
         headline = f"The scores have drifted both ways: {_and(above)} book above them, {_and(below)} below."
     else:
         headline = "Every channel with enough worked leads books within its limits: the scores still hold."
-    return {"run": every[0]["created_at"], "period": _month(periods[-1]), "rows": rows, "headline": headline,
-            "earlier": [_month_summary(p, [r for r in every if r["period"] == p]) for p in reversed(periods[:-1])], "every": every}
+    return {"run": every[0]["created_at"], "period": _month(shown) + (" so far" if shown >= current else ""), "rows": rows,
+            "headline": headline, "every": every,
+            "earlier": [_month_summary(p, [r for r in every if r["period"] == p], so_far=p >= current)
+                        for p in reversed(periods) if p != shown]}
 
 
 def _overrides(conn) -> dict:

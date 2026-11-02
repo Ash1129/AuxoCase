@@ -385,3 +385,25 @@ def test_the_queue_page_says_how_many_wait_when_the_sdr_has_no_limit(db):
         assert TestClient(create_app(path)).get("/").status_code == 200 and TestClient(create_app(path)).get("/held").status_code == 200
     finally:
         conn.execute("UPDATE hs_owners SET capacity_limit=? WHERE id=?", (limit, owner.id))
+
+
+def test_the_monitor_leads_with_the_last_complete_month_not_the_one_just_begun(tmp_path):
+    from auxocase.service.views.model import _monitor
+    from auxocase.storage.db import connect, set_setting
+    conn = connect(tmp_path / "m.db")
+    set_setting(conn, "clock", "2026-11-02T10:00:00")              # two days into November
+    rows = [("2026-10", "website", 600, 320, 0.53, 0.37, 0.31, 0.43, "above"), ("2026-10", "email", 100, 40, 0.40, 0.36, 0.22, 0.50, "ok"),
+            ("2026-11", "website", 13, 9, 0.69, 0.39, None, None, "held"), ("2026-11", "email", 3, 1, 0.33, 0.37, None, None, "held")]
+    for r in rows:
+        conn.execute("INSERT INTO channel_monitor(period, channel, n, demos, demo_rate, predicted_rate, lcl, ucl, flag, created_at) "
+                     "VALUES(?,?,?,?,?,?,?,?,?,?)", (*r, "2026-11-02T10:00:00"))
+    m = _monitor(conn, {}, {})
+    assert m["period"] == "October 2026" and {r["n"] for r in m["rows"]} == {600, 100}
+    assert m["headline"].startswith("Leads now book above their scores in 1 of the 2 channels")
+    assert m["earlier"] == ["November 2026 so far: under 30 worked leads in every channel."]
+    set_setting(conn, "clock", "2026-12-05T10:00:00")              # once November is over it leads, without "so far"
+    assert _monitor(conn, {}, {})["period"] == "November 2026"
+    conn.execute("DELETE FROM channel_monitor WHERE period='2026-10'")
+    set_setting(conn, "clock", "2026-11-02T10:00:00")              # only the month under way in the run: shown, marked
+    only = _monitor(conn, {}, {})
+    assert only["period"] == "November 2026 so far" and only["headline"].startswith("No channel had 30 worked leads in November 2026")
