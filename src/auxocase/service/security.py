@@ -188,6 +188,46 @@ document.addEventListener('toggle', function (e) {
   tick();
   setInterval(tick, 1000);
 })();
+(function () {
+  // a table marked data-sortable sorts by any column when its heading is clicked: numbers high to low first, words A to Z,
+  // a second click reverses. A cell's data-v, when it has one, is what it sorts by; an empty one always goes last.
+  Array.prototype.forEach.call(document.querySelectorAll('table[data-sortable]'), function (table) {
+    var body = table.tBodies[0], heads = table.tHead ? table.tHead.rows[0].cells : [];
+    if (!body) return;
+    function value(row, i) {
+      var cell = row.cells[i];
+      if (!cell) return '';
+      return (cell.hasAttribute('data-v') ? cell.getAttribute('data-v') : cell.textContent).trim();
+    }
+    function num(v) {
+      var t = v.replace(/[^0-9.-]/g, '');
+      return t === '' || t === '-' || t === '.' ? NaN : parseFloat(t);
+    }
+    Array.prototype.forEach.call(heads, function (th, i) {
+      if (th.hasAttribute('data-nosort')) return;
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'sort';
+      while (th.firstChild) b.appendChild(th.firstChild);
+      th.appendChild(b);
+      b.addEventListener('click', function () {
+        var rows = Array.prototype.slice.call(body.rows);
+        var numeric = rows.every(function (r) { var v = value(r, i); return v === '' || !isNaN(num(v)); });
+        var was = th.getAttribute('aria-sort');
+        var asc = was ? was === 'descending' : !numeric;
+        rows.sort(function (x, y) {
+          var a = value(x, i), c = value(y, i);
+          if (a === '' || c === '') return a === c ? 0 : (a === '' ? 1 : -1);
+          var d = numeric ? num(a) - num(c) : a.localeCompare(c);
+          return asc ? d : -d;
+        });
+        rows.forEach(function (r) { body.appendChild(r); });
+        Array.prototype.forEach.call(heads, function (h) { h.removeAttribute('aria-sort'); });
+        th.setAttribute('aria-sort', asc ? 'ascending' : 'descending');
+      });
+    });
+  });
+})();
 """
 
 

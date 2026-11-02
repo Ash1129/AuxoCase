@@ -87,6 +87,11 @@ table{width:100%;border-collapse:collapse}
 th,td{text-align:left;padding:10px 12px 10px 0;border-top:1px solid var(--line);vertical-align:top}
 th{font-size:12px;line-height:18px;font-weight:400;letter-spacing:.12em;text-transform:uppercase;color:var(--muted);border-top:0;padding-bottom:6px}
 td.r,th.r{text-align:right;padding-right:0}
+button.sort{all:unset;cursor:pointer;display:inline}
+button.sort:focus-visible{outline:2px solid var(--accent, currentColor);outline-offset:2px}
+button.sort::after{content:"\00a0\2195";opacity:.35;font-size:11px;letter-spacing:0}
+th[aria-sort=ascending] button.sort::after{content:"\00a0\2191";opacity:1}
+th[aria-sort=descending] button.sort::after{content:"\00a0\2193";opacity:1}
 
 /* badges: words with a small shape, told apart without colour */
 .badge{display:inline-flex;align-items:center;gap:6px;font-size:13px;line-height:18px;color:var(--muted);white-space:nowrap}

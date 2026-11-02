@@ -238,17 +238,17 @@ details[open]>summary{margin-bottom:8px}
   {% if monitor %}
   <p class="lede">{{ monitor.headline }}</p>
   <div class="scroll" role="region" aria-label="Channel monitor, scrolls sideways" tabindex="0">
-    <table class="num mon" aria-labelledby="md-mon">
+    <table class="num mon" aria-labelledby="md-mon" data-sortable>
       <thead><tr><th scope="col">Channel</th><th scope="col" class="r">Worked</th><th scope="col" class="r">Demos</th><th scope="col" class="r">Booked</th><th scope="col" class="r">Average score</th><th scope="col" class="r lim">Limits, 3<span class="lc">σ</span></th><th scope="col">Flag</th></tr></thead>
       <tbody>
       {% for p in monitor.rows %}<tr>
         <th scope="row">{{ p.label }}</th>
         <td class="r">{{ n(p.n) }}</td>
         <td class="r">{{ n(p.demos) }}</td>
-        <td class="r">{% if p.booked is not none %}{{ p.booked }}%{% else %}{{ nr() }}{% endif %}</td>
-        <td class="r">{% if p.predicted is not none %}{{ p.predicted }}%{% else %}{{ nr() }}{% endif %}</td>
-        <td class="r lim{% if p.low is none %} muted{% endif %}">{% if p.low is not none and p.high is not none %}{{ p.low }}–{{ p.high }}%{% else %}not set{% endif %}</td>
-        <td class="{{ {'ok': 'good', 'above': 'warn', 'below': 'bad'}.get(p.flag, 'muted') }}">{% if p.flag == 'ok' %}Inside limits{% elif p.flag == 'above' %}Above prediction, retrain due{% elif p.flag == 'below' %}Below prediction, retrain due{% else %}Too few to judge, under {{ min_group }}{% endif %}</td>
+        <td class="r" data-v="{{ p.booked if p.booked is not none else '' }}">{% if p.booked is not none %}{{ p.booked }}%{% else %}{{ nr() }}{% endif %}</td>
+        <td class="r" data-v="{{ p.predicted if p.predicted is not none else '' }}">{% if p.predicted is not none %}{{ p.predicted }}%{% else %}{{ nr() }}{% endif %}</td>
+        <td class="r lim{% if p.low is none %} muted{% endif %}" data-v="{{ p.low if p.low is not none else '' }}">{% if p.low is not none and p.high is not none %}{{ p.low }}–{{ p.high }}%{% else %}not set{% endif %}</td>
+        <td class="{{ {'ok': 'good', 'above': 'warn', 'below': 'bad'}.get(p.flag, 'muted') }}" data-v="{{ {'below': 4, 'above': 3, 'ok': 2}.get(p.flag, 1) }}">{% if p.flag == 'ok' %}Inside limits{% elif p.flag == 'above' %}Above prediction, retrain due{% elif p.flag == 'below' %}Below prediction, retrain due{% else %}Too few to judge, under {{ min_group }}{% endif %}</td>
       </tr>{% endfor %}
       </tbody>
     </table>
@@ -256,15 +256,15 @@ details[open]>summary{margin-bottom:8px}
   {% if monitor.earlier %}<details>
     <summary>Every month in this run</summary>
     <div class="scroll" role="region" aria-label="Every month of the channel monitor, scrolls sideways" tabindex="0">
-      <table class="num mon">
+      <table class="num mon" data-sortable>
         <thead><tr><th scope="col">Month</th><th scope="col">Channel</th><th scope="col" class="r">Worked</th><th scope="col" class="r">Booked</th><th scope="col" class="r">Average score</th><th scope="col" class="r lim">Limits, 3<span class="lc">σ</span></th><th scope="col">Flag</th></tr></thead>
         <tbody>
         {% for p in monitor.every|sort(attribute='period', reverse=true) %}<tr>
-          <td>{{ p.month }}</td><th scope="row">{{ p.label }}</th><td class="r">{{ n(p.n) }}</td>
-          <td class="r">{% if p.booked is not none %}{{ p.booked }}%{% else %}{{ nr() }}{% endif %}</td>
-          <td class="r">{% if p.predicted is not none %}{{ p.predicted }}%{% else %}{{ nr() }}{% endif %}</td>
-          <td class="r lim{% if p.low is none %} muted{% endif %}">{% if p.low is not none and p.high is not none %}{{ p.low }}–{{ p.high }}%{% else %}not set{% endif %}</td>
-          <td>{{ {'ok': 'inside', 'above': 'above', 'below': 'below'}.get(p.flag, 'too few') }}</td>
+          <td data-v="{{ p.period|string|replace('-', '') }}">{{ p.month }}</td><th scope="row">{{ p.label }}</th><td class="r">{{ n(p.n) }}</td>
+          <td class="r" data-v="{{ p.booked if p.booked is not none else '' }}">{% if p.booked is not none %}{{ p.booked }}%{% else %}{{ nr() }}{% endif %}</td>
+          <td class="r" data-v="{{ p.predicted if p.predicted is not none else '' }}">{% if p.predicted is not none %}{{ p.predicted }}%{% else %}{{ nr() }}{% endif %}</td>
+          <td class="r lim{% if p.low is none %} muted{% endif %}" data-v="{{ p.low if p.low is not none else '' }}">{% if p.low is not none and p.high is not none %}{{ p.low }}–{{ p.high }}%{% else %}not set{% endif %}</td>
+          <td data-v="{{ {'below': 4, 'above': 3, 'ok': 2}.get(p.flag, 1) }}">{{ {'ok': 'inside', 'above': 'above', 'below': 'below'}.get(p.flag, 'too few') }}</td>
         </tr>{% endfor %}
         </tbody>
       </table>
