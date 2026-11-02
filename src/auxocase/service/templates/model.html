@@ -62,6 +62,8 @@ details[open]>summary{margin-bottom:8px}
 
 {% macro signoff(r) %}
 {% set pick = 'sales' if r.signed.marketing and not r.signed.sales else 'marketing' %}
+{% set v = verdicts.get(r.version) %}{% if v %}<p class="lede"><b class="{{ 'good' if v.verdict == 'approve' else 'warn' }}">{{ v.word }}</b>{{ v.sentence[v.word|length:] }}</p>
+<p class="small muted" style="margin: -8px 0 0">{% if v.source == 'reader' %}Worded by {{ v.llm }} from the rules' facts{% else %}The rules' own wording{% endif %}{% call note('verdict-note-' ~ r.version, 'How the verdict is decided') %}<span class="ln">Against the live model, on each version's own test leads: send back when its numbers cannot be trusted (calibration error more than a point worse); approve when it picks better leads (lift over HubSpot's points) and learned from at least as much history (labelled rows); otherwise send back, since a reshuffle buys nothing.</span><span class="ln">The rules decide and fix every figure; the reader only words it, and a sentence with a number the facts do not hold is dropped for the rules' wording.</span>{% endcall %}</p>{% endif %}
 <div class="slots">
   {% for t in ['marketing', 'sales'] %}{% set a = r.signed[t] %}<div>
     <span class="kicker">{{ t|capitalize }}</span>

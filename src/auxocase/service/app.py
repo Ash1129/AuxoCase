@@ -32,7 +32,7 @@ from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 
-from .. import auth, flags
+from .. import auth, flags, verdicts
 from ..feedback import loop as fb
 from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
@@ -561,7 +561,9 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
     @app.post("/jobs/flags")
     def job_flags(request: Request, limit: int = 25):
         allow(request, "run_jobs")
-        return flags.run(st.hs, st.conn, st.llm, limit=limit)
+        out = flags.run(st.hs, st.conn, st.llm, limit=limit)
+        out["verdicts"] = verdicts.run(st.conn, st.llm)
+        return out
 
     @app.post("/jobs/realert")
     def job_realert(request: Request):

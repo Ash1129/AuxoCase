@@ -53,7 +53,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta
 from typing import Callable, Optional
 
-from .. import flags
+from .. import flags, verdicts
 from ..feedback import loop as fb
 from ..hubspot.client import HubSpotClient
 from ..hubspot.mock import MockHubSpot
@@ -174,7 +174,9 @@ class Scheduler:
         return prepare_outreach(self.hs, self.conn, self.llm, limit=self.outreach_batch)
 
     def _flags(self) -> dict:
-        return flags.run(self.hs, self.conn, self.llm, limit=self.outreach_batch)       # marketing's second look (flags.py)
+        out = flags.run(self.hs, self.conn, self.llm, limit=self.outreach_batch)        # marketing's second look (flags.py)
+        out["verdicts"] = verdicts.run(self.conn, self.llm)                              # and the sentence under each sign-off
+        return out
 
     def _followups(self) -> dict:
         out = followups.run(self.hs, self.conn, self.llm, limit=self.outreach_batch)

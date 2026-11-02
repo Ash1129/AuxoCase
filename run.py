@@ -225,9 +225,12 @@ def cmd_rebase(a):
 
 def cmd_flags(a):
     """Marketing's second look at scored leads (src/auxocase/flags.py): read the candidates' records and raise flags."""
-    from auxocase import flags
+    from auxocase import flags, verdicts
     conn, hs = _ctx(a.db)
-    print(json.dumps(flags.run(hs, conn, make_llm(conn=conn), limit=a.limit), indent=1))
+    llm = make_llm(conn=conn)
+    out = flags.run(hs, conn, llm, limit=a.limit)
+    out["verdicts"] = verdicts.run(conn, llm)                      # the sentence under each candidate's sign-off
+    print(json.dumps(out, indent=1))
 
 
 def cmd_staff(a):

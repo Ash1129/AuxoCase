@@ -13,6 +13,7 @@ from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
+from ... import verdicts
 from ...data.generate import LATE_TOUCH_FACTOR
 from ...feedback import loop as fb
 from ...scoring.model import CAPACITY_PER_MONTH
@@ -366,7 +367,8 @@ def model_page(st) -> dict:
     stale_lead_factor), built_in (the generator's own factor, for the mock), learned_wait (how long the live model's
     training leads waited, when it learned only from leads before routing). began: when routing began ('1 Aug 2028',
     service clock); hit: hit_rate since then. rescoring: {version, left} while a rescore is pending, else None.
-    scored: {model version: leads whose latest score it gave}. seeds_text: the simulated months' seeds, 'seeds 101 to
+    scored: {model version: leads whose latest score it gave}. verdicts: {candidate version: {verdict, word, sentence,
+    source, llm, created_at}}, the line under each sign-off (verdicts.py). seeds_text: the simulated months' seeds, 'seeds 101 to
     103'. small_band, min_group: the thresholds the page names."""
     regs = _versions(st)
     current = next((r for r in regs if r["status"] == "live"), None)
@@ -411,4 +413,5 @@ def model_page(st) -> dict:
             "shadow": shadow, "speed": speed, "effect": effect, "late_factor": get_setting(st.conn, "stale_lead_factor"),
             "built_in": LATE_TOUCH_FACTOR, "learned_wait": learned_wait, "began": _day(began_iso), "hit": hit,
             "rescoring": rescoring, "scored": scored, "seeds_text": _range(seeds) if seeds else None,
-            "small_band": SMALL_BAND, "min_group": fb.MIN_GROUP}
+            "small_band": SMALL_BAND, "min_group": fb.MIN_GROUP,
+            "verdicts": verdicts.for_page(st.conn, waiting, current)}

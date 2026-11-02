@@ -192,6 +192,11 @@ CREATE TABLE IF NOT EXISTS flags (
   channel TEXT, llm TEXT, created_at TEXT, resolved_at TEXT, resolution TEXT, resolved_by TEXT, resolution_note TEXT
 );
 CREATE INDEX IF NOT EXISTS flags_contact ON flags(contact_id);
+-- The verdict under a candidate's sign-off (verdicts.py): one a candidate against a live model and its metrics.
+CREATE TABLE IF NOT EXISTS verdicts (
+  version TEXT, live_version TEXT, input_hash TEXT, verdict TEXT, sentence TEXT, source TEXT, llm TEXT, created_at TEXT,
+  PRIMARY KEY (version, input_hash)
+);
 -- Who may open the pages (auth.py): accounts with a role, and the sessions their logins opened (a hash of each token).
 CREATE TABLE IF NOT EXISTS staff (
   username TEXT PRIMARY KEY, name TEXT, role TEXT NOT NULL, owner_id TEXT, pw_hash TEXT NOT NULL, created_at REAL,

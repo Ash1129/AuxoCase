@@ -138,6 +138,9 @@ class Offline:
         if user.startswith("TASK: flags"):
             from .flags import offline_flags
             return offline_flags(user)
+        if user.startswith("TASK: verdict"):
+            from .verdict import offline_verdict
+            return offline_verdict(user)
         return "{}"
 
 
