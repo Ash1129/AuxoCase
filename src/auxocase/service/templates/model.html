@@ -108,8 +108,12 @@ details[open]>summary{margin-bottom:8px}
 {% if stale %}<p class="notice warn"><b>Not saved.</b> {{ stale }} changed after this page loaded, so your decision was not saved. Check its state below, then decide again.</p>{% endif %}
 {% if rescoring %}<p class="notice"><b>Rescoring.</b> {{ rescoring.version }} is live; {{ n(rescoring.left) }} pool lead{{ 's' if rescoring.left != 1 }} still {{ 'carries' if rescoring.left == 1 else 'carry' }} the old score, best-ranked first.</p>{% endif %}
 
-<hr class="rule">
+<ul class="tabs">
+  <li><a href="/model?tab=work"{% if tab == 'work' %} aria-current="page"{% endif %}>What to work on{% if waiting %} <span class="n">{{ waiting|length }}</span>{% endif %}</a></li>
+  <li><a href="/model?tab=decides"{% if tab == 'decides' %} aria-current="page"{% endif %}>How it decides</a></li>
+</ul>
 
+{% if tab == 'decides' %}
 {% if not regs %}
 <section class="msec" aria-labelledby="md-none">
   <h2 id="md-none" class="kicker">No trained model yet</h2>
@@ -164,26 +168,6 @@ details[open]>summary{margin-bottom:8px}
 
 <hr class="rule">
 
-<section id="sign-off" class="msec" aria-labelledby="md-sign">
-  {% if waiting %}{% set r = waiting[0] %}
-  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
-  {{ signoff(r) }}
-  {% if waiting|length > 1 %}{% set older = waiting[1:] %}
-  <p>Also waiting{% if not (older|selectattr('approvals')|list) %}, unsigned{% endif %}: {% for o in older %}{{ o.version }} (trained {{ o.trained or '[NOT RECORDED]' }}{% if o.signed.marketing or o.signed.sales %}; {{ signed_teams(o) }}{% endif %}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}.</p>
-  {% for o in older %}<details{% if stale == o.version %} open{% endif %}>
-    <summary>Sign off {{ o.version }}</summary>
-    <div class="msec">{{ signoff(o) }}</div>
-  </details>{% endfor %}
-  {% endif %}
-  <a class="tap" href="/decisions">Every approval and send-back so far, on Decisions</a>
-  {% else %}
-  <h2 id="md-sign" class="kicker">Sign off{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
-  <p>No candidate waiting. The next appears after a retrain (<code>python run.py train</code>, or the scheduler's monthly job).</p>
-  {% endif %}
-</section>
-
-<hr class="rule">
-
 <section class="msec" aria-labelledby="md-cal">
   {% if current and calibration %}
   <h2 id="md-cal" class="kicker">Calibration · {{ current.version }} on {{ current.tested or '[NOT RECORDED]' }}{% call note('cal-note', 'How to read the bands') %}{% if calibration.ece_points is not none %}Off by {{ calibration.ece_points }} points on average across {{ n(current.test_n) }} test leads. {% endif %}Bands under {{ small_band }} leads are marked few: read loosely.{% endcall %}</h2>
@@ -219,6 +203,38 @@ details[open]>summary{margin-bottom:8px}
       <div class="scroll" style="max-width: 480px">{{ bandtable(r) }}</div>
     {% endfor %}</div>
   </details>{% endif %}
+</section>
+
+<hr class="rule">
+
+<section class="msec" aria-labelledby="md-since">
+  <h2 id="md-since" class="kicker">Since routing began{% if began %}, {{ began }}{% endif %}{{ dg() }}{% if effect.factor is not none %}{% call note('since-note', 'The first-day effect') %}{% if learned_wait %}{{ current.version }} learned from leads worked before routing, which waited {{ learned_wait }} for a first touch. {% endif %}{% if env == 'mock' %}Touched after a day: {{ (100 * effect.rate_slow)|round|int }}% booked, against {{ (100 * effect.rate_fast)|round|int }}% within a day, a factor of {{ effect.factor }} (generator's built-in {{ built_in }}).{% if late_factor and late_factor|float != built_in %} Routing discounts a lead past its first day by {{ late_factor }}.{% endif %}{{ dg() }}{% else %}Touched after a day: {{ (100 * effect.rate_slow)|round|int }}% booked, against {{ (100 * effect.rate_fast)|round|int }}% within a day, a factor of {{ effect.factor }}; routing discounts a lead past its first day by {{ late_factor or '1.0' }}. Fast touches were not random: read the factor as a range.{% endif %}{% endcall %}{% endif %}</h2>
+  {% if (hit and hit.n) or speed.n %}
+  <div class="figs">
+    {% if hit and hit.ranked.n %}<div><span class="mid num">{{ (100 * hit.ranked.booked / hit.ranked.n)|round|int }}%</span><span>of worked ranked leads booked</span><span class="small muted num">{{ n(hit.ranked.booked) }} of {{ n(hit.ranked.n) }}</span></div>{% endif %}
+    {% if hit and hit.exploration.n %}<div><span class="mid num">{{ (100 * hit.exploration.booked / hit.exploration.n)|round|int }}%</span><span>of the random exploration slice booked</span><span class="small muted num">{{ n(hit.exploration.booked) }} of {{ n(hit.exploration.n) }}</span></div>{% endif %}
+    {% if speed.n %}<div><span class="mid num">{{ speed.median_hours|round|int }}h</span><span>median wait for a first touch</span><span class="small muted num">{{ n(speed.n) }} routed leads{% if speed.baseline.n %}; {{ speed.baseline.median_hours|round|int }}h before routing{% endif %}</span></div>
+    <div><span class="mid num">{{ (100 * speed.within_24h)|round|int }}%</span><span>first touched within a day</span>{% if speed.baseline.n %}<span class="small muted num">{{ (100 * speed.baseline.within_24h)|round|int }}% of {{ n(speed.baseline.n) }} before routing</span>{% endif %}</div>{% endif %}
+  </div>
+  {% else %}<p>No handed-out lead worked yet.</p>{% endif %}
+</section>
+{% else %}
+<section id="sign-off" class="msec" aria-labelledby="md-sign">
+  {% if waiting %}{% set r = waiting[0] %}
+  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
+  {{ signoff(r) }}
+  {% if waiting|length > 1 %}{% set older = waiting[1:] %}
+  <p>Also waiting{% if not (older|selectattr('approvals')|list) %}, unsigned{% endif %}: {% for o in older %}{{ o.version }} (trained {{ o.trained or '[NOT RECORDED]' }}{% if o.signed.marketing or o.signed.sales %}; {{ signed_teams(o) }}{% endif %}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}.</p>
+  {% for o in older %}<details{% if stale == o.version %} open{% endif %}>
+    <summary>Sign off {{ o.version }}</summary>
+    <div class="msec">{{ signoff(o) }}</div>
+  </details>{% endfor %}
+  {% endif %}
+  <a class="tap" href="/decisions">Every approval and send-back so far, on Decisions</a>
+  {% else %}
+  <h2 id="md-sign" class="kicker">Sign off{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
+  <p>No candidate waiting. The next appears after a retrain (<code>python run.py train</code>, or the scheduler's monthly job).</p>
+  {% endif %}
 </section>
 
 <hr class="rule">
@@ -263,16 +279,6 @@ details[open]>summary{margin-bottom:8px}
   {% else %}
   <p>Not run yet. It runs with the scheduler, or with <code>python run.py monitor</code>.</p>
   {% endif %}
-
-  <h3 class="kicker" style="margin-top: 12px">Since routing began{% if began %}, {{ began }}{% endif %}{{ dg() }}{% if effect.factor is not none %}{% call note('since-note', 'The first-day effect') %}{% if learned_wait %}{{ current.version }} learned from leads worked before routing, which waited {{ learned_wait }} for a first touch. {% endif %}{% if env == 'mock' %}Touched after a day: {{ (100 * effect.rate_slow)|round|int }}% booked, against {{ (100 * effect.rate_fast)|round|int }}% within a day, a factor of {{ effect.factor }} (generator's built-in {{ built_in }}).{% if late_factor and late_factor|float != built_in %} Routing discounts a lead past its first day by {{ late_factor }}.{% endif %}{{ dg() }}{% else %}Touched after a day: {{ (100 * effect.rate_slow)|round|int }}% booked, against {{ (100 * effect.rate_fast)|round|int }}% within a day, a factor of {{ effect.factor }}; routing discounts a lead past its first day by {{ late_factor or '1.0' }}. Fast touches were not random: read the factor as a range.{% endif %}{% endcall %}{% endif %}</h3>
-  {% if (hit and hit.n) or speed.n %}
-  <div class="figs">
-    {% if hit and hit.ranked.n %}<div><span class="mid num">{{ (100 * hit.ranked.booked / hit.ranked.n)|round|int }}%</span><span>of worked ranked leads booked</span><span class="small muted num">{{ n(hit.ranked.booked) }} of {{ n(hit.ranked.n) }}</span></div>{% endif %}
-    {% if hit and hit.exploration.n %}<div><span class="mid num">{{ (100 * hit.exploration.booked / hit.exploration.n)|round|int }}%</span><span>of the random exploration slice booked</span><span class="small muted num">{{ n(hit.exploration.booked) }} of {{ n(hit.exploration.n) }}</span></div>{% endif %}
-    {% if speed.n %}<div><span class="mid num">{{ speed.median_hours|round|int }}h</span><span>median wait for a first touch</span><span class="small muted num">{{ n(speed.n) }} routed leads{% if speed.baseline.n %}; {{ speed.baseline.median_hours|round|int }}h before routing{% endif %}</span></div>
-    <div><span class="mid num">{{ (100 * speed.within_24h)|round|int }}%</span><span>first touched within a day</span>{% if speed.baseline.n %}<span class="small muted num">{{ (100 * speed.baseline.within_24h)|round|int }}% of {{ n(speed.baseline.n) }} before routing</span>{% endif %}</div>{% endif %}
-  </div>
-  {% else %}<p>No handed-out lead worked yet.</p>{% endif %}
 </section>
 
 <hr class="rule">
@@ -292,6 +298,16 @@ details[open]>summary{margin-bottom:8px}
   </div>
   <a class="tap" href="/decisions">Every worked, skipped and junk call, on Decisions</a>
 </section>
+{% if can.view_flags %}
+<hr class="rule">
+
+<section class="msec" aria-labelledby="md-flags">
+  <h2 id="md-flags" class="kicker">Flagged leads</h2>
+  <p>{% if flags_open %}{{ flags_open }} lead{{ 's' if flags_open != 1 }} where the record disagrees with the number, raised by the reader and waiting for marketing.{% else %}None open: the reader found nothing to raise.{% endif %}</p>
+  <a class="tap" href="/flagged">Flagged leads, with the record's own words</a>
+</section>
+{% endif %}
+{% endif %}
 
 {% if env == 'mock' %}<footer><ol class="fnotes"><li id="fn-sim">Simulated · synthetic data. Every lead comes from the mock portal. {% set sims = regs|selectattr('simulated')|list|reverse|map(attribute='version')|list %}{% if sims %}{{ names(sims) }} {{ 'was' if sims|length == 1 else 'were each' }} trained after one more simulated month{% if seeds_text %} ({{ seeds_text }}){% endif %}; every{% else %}Every{% endif %} booking and first touch is simulated. Log times are wall clock, UTC; the service clock is frozen at {{ clock_text }}.</li></ol></footer>{% endif %}
 {% endblock %}

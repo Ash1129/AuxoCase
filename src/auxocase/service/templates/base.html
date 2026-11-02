@@ -98,6 +98,12 @@ td.r,th.r{text-align:right;padding-right:0}
 .badge.seen::before{width:7px;height:7px;background:currentColor}
 .badge.seen{color:var(--good)}
 
+/* a page's tabs (the queue, the model page): links with ?tab=, the current one underlined */
+.tabs{display:flex;flex-wrap:wrap;gap:0 28px;margin:0;padding:0;list-style:none;border-bottom:1px solid var(--line)}
+.tabs a{display:inline-block;padding:12px 0 10px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
+.tabs a[aria-current]{color:var(--ink);border-bottom-color:var(--accent)}
+.tabs .n{color:var(--accentInk);font-variant-numeric:tabular-nums}
+
 /* notices: a sentence with a word in front, never a coloured box */
 .notice{margin:0;padding:12px 0;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
 .notice b{font-weight:600}

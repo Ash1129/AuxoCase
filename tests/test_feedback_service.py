@@ -85,7 +85,13 @@ def test_service_pages_and_actions(db):
     assert r.status_code == 303                                    # bounded: 40 is clipped to 5
     assert client.get(f"/lead/{lead.id}").status_code == 200
     assert client.get("/held").status_code == 200
-    assert client.get("/model").status_code == 200
+    work = client.get("/model").text                                   # the default tab is the one with the sign-off
+    assert 'href="/model?tab=work" aria-current="page"' in work and "Sign off" in work and "Channel monitor" in work
+    assert 'class="versus"' not in work and "Calibration" not in work
+    decides = client.get("/model?tab=decides").text
+    assert 'href="/model?tab=decides" aria-current="page"' in decides and "Calibration" in decides and "Since routing began" in decides
+    assert "Sign off" not in decides and 'action="/model/' not in decides
+    assert client.get("/model?tab=nonsense").text == work                    # an unknown tab is the work tab
     assert client.post("/jobs/score?mode=events").json()["model_version"].startswith("demo-v")
     assert "decisions" in client.post("/jobs/route").json()
     assert client.post("/webhooks/hubspot", json=[{"objectId": lead.id, "subscriptionType": "contact.propertyChange", "propertyName": "notes", "occurredAt": 0, "eventId": 1, "attemptNumber": 0}]).json()["accepted"] == 1

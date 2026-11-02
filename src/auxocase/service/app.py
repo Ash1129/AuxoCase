@@ -370,9 +370,13 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return RedirectResponse("/held", status_code=303)
 
     @app.get("/model", response_class=HTMLResponse)
-    def model(request: Request, stale: str = ""):
+    def model(request: Request, stale: str = "", tab: str = ""):
+        """Two tabs: what to work on (the sign-off, the channel monitor, the SDR overrides, the flags) and how it
+        decides (the evidence behind the scores: what the model adds, live against the candidates, calibration,
+        the first-day effect). The work tab is the default, so a decision comes back to its form."""
         allow(request, "view_model")
-        return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, nav="model", **model_page(st), stale=stale))
+        tab = tab if tab in ("work", "decides") else "work"
+        return TEMPLATES.TemplateResponse(request, "model.html", ctx(request, nav="model", **model_page(st), stale=stale, tab=tab))
 
     @app.get("/flagged", response_class=HTMLResponse)
     def flagged(request: Request, done: str = ""):

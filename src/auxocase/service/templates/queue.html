@@ -16,11 +16,6 @@
 .pair{display:grid;grid-template-columns:minmax(0,1fr);gap:32px}
 .pair .col{display:flex;flex-direction:column;gap:32px;min-width:0}
 .pair .col+.col{border-top:1px solid var(--line);padding-top:32px}
-/* the queue's two tabs: the leads waiting for a first touch, and the ones touched and waiting to hear back */
-.tabs{display:flex;flex-wrap:wrap;gap:0 28px;margin:0;padding:0;list-style:none;border-bottom:1px solid var(--line)}
-.tabs a{display:inline-block;padding:12px 0 10px;color:var(--muted);text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;font-weight:500}
-.tabs a[aria-current]{color:var(--ink);border-bottom-color:var(--accent)}
-.tabs .n{color:var(--accentInk);font-variant-numeric:tabular-nums}
 /* the "at a glance" tab: a pie a group, its slices and legend rows opening the list of the leads in them */
 .pies{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px 48px}
 .pie{margin:0}
