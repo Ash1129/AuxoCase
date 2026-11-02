@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% import "_lead_detail.html" as ld with context %}
 {% block title %}{{ owner.name }}'s queue{% endblock %}
+{% block page_class %} wide{% endblock %}
 {% block style %}{{ ld.css() }}
 .decide{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-start}
 .decide form{margin:0}
@@ -16,6 +17,15 @@
 .pair{display:grid;grid-template-columns:minmax(0,1fr);gap:32px}
 .pair .col{display:flex;flex-direction:column;gap:32px;min-width:0}
 .pair .col+.col{border-top:1px solid var(--line);padding-top:32px}
+/* the page runs the full width: on a wide screen "why" and "reach out" sit side by side, and the other leads in the
+   queue fill the row as a grid instead of one long column */
+@media (min-width:1100px){
+.pair{grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:0}
+.pair .col:first-child{padding-right:48px}
+.pair .col+.col{border-top:0;padding-top:0;border-left:1px solid var(--line);padding-left:48px}
+.part>.list{max-width:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));column-gap:48px}
+.part>.list li:last-child{border-bottom:0}
+}
 /* the "at a glance" tab: a pie a group, its slices and legend rows opening the list of the leads in them */
 .pies{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:32px 48px}
 .pie{margin:0}
