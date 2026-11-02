@@ -48,7 +48,7 @@ from . import tz
 from . import scheduler as sched
 from . import security
 from .email_html import BRAND, branded
-from .mailer import Mailer, SignInRefused
+from .mailer import EMAIL, Mailer, SignInRefused
 from .security import SESSION_COOKIE, approval_token, clear_session_cookie, lead_token, safe_next, set_session_cookie
 from .views.flagged import flagged_page
 from .views.held import held_page
@@ -135,7 +135,8 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         mock = isinstance(st.hs, MockHubSpot)
         frozen, now = clock_frozen(st.conn), clock(st.conn)
         base = {"request": request, "live": live, "llm": st.llm.name, "scheduler": "on" if runner and runner.running else "off",
-                "line": loads(get_setting(st.conn, "capacity_line_probability")), "nav": "", "smtp": st.mailer.configured,
+                "line": loads(get_setting(st.conn, "capacity_line_probability")), "nav": "", "smtp": st.mailer.configured, "smtp_ask": st.mailer.asks,
+                "test_to": request.cookies.get("auxo_test_to", "") if st.mailer.asks else "",
                 "held_count": st.conn.execute("SELECT COUNT(*) n FROM held_queue WHERE released_at IS NULL").fetchone()["n"],
                 "candidates": st.conn.execute("SELECT COUNT(*) n FROM model_registry WHERE status='candidate'").fetchone()["n"],
                 "flags_open": st.conn.execute("SELECT COUNT(*) n FROM flags WHERE resolved_at IS NULL").fetchone()["n"],
@@ -236,7 +237,8 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         return HTMLResponse(branded(body.strip(), owner.name if owner else BRAND))
 
     @app.post("/lead/{contact_id}/send")
-    def lead_send(request: Request, contact_id: str, subject: str = Form(""), body: str = Form(""), back: str = Form("")):
+    def lead_send(request: Request, contact_id: str, subject: str = Form(""), body: str = Form(""), back: str = Form(""),
+                  test_to: str = Form("")):
         """Send a draft to the lead from here, branded (email_html.py), over SMTP (mailer.py), with the SDR's name on
         the From line. On the mock the send is logged in HubSpot as the SDR's, so the first-touch check sees it and
         refills the slot; on a real portal HubSpot logs it from the BCC address (AUXO_SMTP_BCC). A reply is not
@@ -257,10 +259,13 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
             return failed("the draft is empty")
         if not st.mailer.configured:
             return failed("sending is not set up: AUXO_SMTP_USER and AUXO_SMTP_PASS (a Gmail app password) in the server's environment")
+        test_to = test_to.strip()
+        if st.mailer.asks and not EMAIL.fullmatch(test_to):     # ask mode: the test goes to the address typed here
+            return failed("give the address to send the test to")
         owner = next((o for o in st.hs.list_owners(active_only=False) if o.id == c.hubspot_owner_id), None)
         from_name = owner.name if owner else BRAND
         try:
-            out = st.mailer.send(c.email, subject, body, branded(body, from_name), from_name)
+            out = st.mailer.send(c.email, subject, body, branded(body, from_name), from_name, test_to)
         except SignInRefused as e:
             return failed(str(e))
         except Exception as e:                      # the mailbox could not be reached, or refused the message
@@ -272,8 +277,13 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         name = f"{c.first_name} {c.last_name}".strip() or c.email
         sent = f"mail_sent={quote(out['to'])}&mail_for={quote(name)}&mail_lead={contact_id}"
         if c.hubspot_owner_id:
-            return RedirectResponse(f"/queue/{c.hubspot_owner_id}?{sent}", status_code=303)
-        return RedirectResponse(f"{back}{sep}{sent}#draft-{contact_id}", status_code=303)
+            done = RedirectResponse(f"/queue/{c.hubspot_owner_id}?{sent}", status_code=303)
+        else:
+            done = RedirectResponse(f"{back}{sep}{sent}#draft-{contact_id}", status_code=303)
+        if st.mailer.asks:                          # the next send offers the same address
+            done.set_cookie("auxo_test_to", test_to, max_age=60 * 60 * 24 * 30, httponly=True, samesite="lax",
+                            secure=request.url.scheme == "https")
+        return done
 
     @app.post("/lead/{contact_id}/hubspot")
     def hubspot_demo(request: Request, contact_id: str, kind: str = Form(...), subject: str = Form(""), disposition: str = Form(""),

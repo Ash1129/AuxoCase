@@ -35,6 +35,7 @@
 .dot.due{border:2px solid var(--accent);background:var(--surface)}
 .placeholder{border-top:1px solid var(--line);padding:12px 0 0;display:flex;flex-direction:column;gap:4px}
 .placeholder .actions{margin-top:8px;align-items:center}
+.test-to{display:inline-flex;align-items:center;gap:8px;flex-wrap:wrap}.test-to input{min-width:220px;max-width:100%}
 .demo{border-top:1px dashed var(--muted);border-bottom:1px dashed var(--muted);padding:16px 0;display:flex;flex-direction:column;gap:12px;max-width:760px}
 .demo p,.demo form{margin:0}
 .list{list-style:none;margin:0;padding:0;max-width:760px}
@@ -203,7 +204,8 @@
   </div>
   <input type="hidden" name="back" value="{{ back }}">
   <div class="actions">
-    {% if smtp %}<button class="btn primary" type="submit" data-busy="Sending…">Send to {{ d.c.email }}</button>{% else %}<button class="btn primary" type="button" disabled title="Sending from here is not set up">Send to {{ d.c.email }}</button>{% endif %}
+    {% if smtp and smtp_ask %}<label class="test-to small">Send a test to <input type="email" name="test_to" value="{{ test_to }}" placeholder="you@example.com" autocomplete="email" required></label><button class="btn primary" type="submit" data-busy="Sending…">Send test</button>
+    {% elif smtp %}<button class="btn primary" type="submit" data-busy="Sending…">Send to {{ d.c.email }}</button>{% else %}<button class="btn primary" type="button" disabled title="Sending from here is not set up">Send to {{ d.c.email }}</button>{% endif %}
     <button class="btn" type="button" data-edit>Edit</button>
     {% if again %}<a class="btn" href="{{ again }}" data-busy="Drafting… this takes a few seconds">Draft it again</a>{% endif %}
     {% if note %}<span class="small muted">{{ note }}</span>{% endif %}
@@ -333,7 +335,7 @@
   {%- set e = d.email -%}
   <div class="block">
     <h3 class="kicker">Draft: {{ labels[e.touch] }}{{ ref('draft', d) }}</h3>
-    {% set note %}{% if smtp %}Sent from here as shown, with {{ 'your' if where == 'queue' else "the SDR's" }} name on it, after any edits.{% else %}Sending from here is not set up: AUXO_SMTP_USER and AUXO_SMTP_PASS (a Gmail app password) in the server's environment.{% endif %}{% endset %}
+    {% set note %}{% if smtp and smtp_ask %}A test: it goes to the address you give, not to {{ d.c.email }}, the subject saying who it was for.{% elif smtp %}Sent from here as shown, with {{ 'your' if where == 'queue' else "the SDR's" }} name on it, after any edits.{% else %}Sending from here is not set up: AUXO_SMTP_USER and AUXO_SMTP_PASS (a Gmail app password) in the server's environment.{% endif %}{% endset %}
     {{ draft_form('email-' ~ c.id, e.subject, e.body, d, where, note=note, again=draft_href) }}
   </div>
   {%- else -%}

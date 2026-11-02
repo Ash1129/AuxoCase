@@ -11,11 +11,14 @@ Settings, read from the environment:
   AUXO_SMTP_FROM                   the address on the From line, default the user; the SDR's name is put in front
   AUXO_SMTP_BCC                    an address copied on every send: HubSpot's logging address, so it logs the email
   AUXO_SMTP_TEST_TO                when set, every email goes here instead of to the lead, the subject saying
-                                   who it was for: for trying the demo without emailing the synthetic leads
+                                   who it was for: for trying the demo without emailing the synthetic leads.
+                                   `ask`: the person sending types the address on the page at each send (the page
+                                   remembers the last one), so whoever runs the demo gets the email themselves
 """
 from __future__ import annotations
 
 import os
+import re
 import smtplib
 from dataclasses import dataclass
 from email.message import EmailMessage
@@ -23,6 +26,8 @@ from email.utils import formataddr
 from typing import Mapping, Optional
 
 TIMEOUT_S = 20
+ASK = "ask"                  # AUXO_SMTP_TEST_TO=ask: the sender gives the test address on the page
+EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[^@\s]+")
 
 
 @dataclass
@@ -47,11 +52,20 @@ class Mailer:
     def configured(self) -> bool:
         return bool(self.user and self.password)
 
-    def message(self, to: str, subject: str, text: str, html: str, from_name: str = "") -> EmailMessage:
-        """The email as it goes: text and HTML alternatives, the sender's name on the From line."""
+    @property
+    def asks(self) -> bool:
+        """The test address comes from the page at each send, not from the environment."""
+        return self.test_to.lower() == ASK
+
+    def message(self, to: str, subject: str, text: str, html: str, from_name: str = "", test_to: str = "") -> EmailMessage:
+        """The email as it goes: text and HTML alternatives, the sender's name on the From line. In ask mode
+        `test_to` is the address the sender typed, and nothing goes without one."""
+        if self.asks and not test_to:
+            raise RuntimeError("no address to send the test to")
+        test_to = test_to if self.asks else self.test_to
         m = EmailMessage()
-        if self.test_to:
-            m["To"], m["Subject"] = self.test_to, f"[for {to}] {subject}"
+        if test_to:
+            m["To"], m["Subject"] = test_to, f"[for {to}] {subject}"
         else:
             m["To"], m["Subject"] = to, subject
         m["From"] = formataddr((from_name, self.sender)) if from_name else self.sender
@@ -61,12 +75,12 @@ class Mailer:
         m.add_alternative(html, subtype="html")
         return m
 
-    def send(self, to: str, subject: str, text: str, html: str, from_name: str = "") -> dict:
+    def send(self, to: str, subject: str, text: str, html: str, from_name: str = "", test_to: str = "") -> dict:
         """Send it; returns {to, from}: where it went (the test address when one is set) and the From line.
         Raises what smtplib raises when the mailbox refuses."""
         if not self.configured:
             raise RuntimeError("sending is not set up: AUXO_SMTP_USER and AUXO_SMTP_PASS are not in the environment")
-        m = self.message(to, subject, text, html, from_name)
+        m = self.message(to, subject, text, html, from_name, test_to)
         if self.port == 465:
             with smtplib.SMTP_SSL(self.host, self.port, timeout=TIMEOUT_S) as s:
                 self._login(s)

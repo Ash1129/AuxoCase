@@ -131,3 +131,26 @@ def test_preview_renders_the_edited_draft_branded(db):
     r = client.post(f"/lead/{c.id}/preview", data={"subject": "Payroll", "body": "Hi Laura,\n\nMy own words here.\n\nBest,\nSam"})
     assert r.status_code == 200 and r.headers["content-type"].startswith("text/html")
     assert "BrightPath Payroll</span>" in r.text and "My own words here." in r.text and "<script" not in r.text
+
+
+def test_ask_mode_sends_the_test_where_the_sender_says_and_remembers_it(db, smtp, monkeypatch):
+    monkeypatch.setenv("AUXO_SMTP_TEST_TO", "ask")
+    path, conn, hs = db
+    client = TestClient(create_app(path))
+    c = next(c for c in hs.list_contacts() if c.email and c.first_name and c.hubspot_owner_id)
+    page = client.get(f"/lead/{c.id}?draft=1").text
+    assert 'name="test_to"' in page and "Send test" in page and f"Send to {c.email}" not in page
+    data = {"subject": "Payroll", "body": "Hi", "back": f"/lead/{c.id}"}
+    r = client.post(f"/lead/{c.id}/send", data=data, follow_redirects=False)
+    assert "mail_failed=" in r.headers["location"] and smtp.sent == []          # no address, nothing goes
+    r = client.post(f"/lead/{c.id}/send", data={**data, "test_to": "me@example.com"}, follow_redirects=False)
+    assert "mail_sent=me%40example.com" in r.headers["location"]
+    assert smtp.sent[0]["To"] == "me@example.com" and smtp.sent[0]["Subject"] == f"[for {c.email}] Payroll"
+    assert 'value="me@example.com"' in client.get(f"/lead/{c.id}?draft=1").text
+
+
+def test_ask_mode_never_sends_to_the_lead_without_an_address(smtp, monkeypatch):
+    monkeypatch.setenv("AUXO_SMTP_TEST_TO", "ask")
+    with pytest.raises(RuntimeError):
+        Mailer.from_env().send("laura@granite.io", "Payroll", "Hi", "<p>Hi</p>")
+    assert smtp.sent == []
