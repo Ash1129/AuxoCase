@@ -95,7 +95,7 @@ details[open]>summary .shut,details:not([open])>summary .opened{display:none}
       </div>
       <div class="actions"><button class="btn primary" type="submit">Assign<span class="vh"> {{ h.name }}</span></button></div>
     </form>
-    <p class="small muted mw">{% if over_note %}{{ over_note }} {% endif %}Your name ({{ me.name }}) goes in the routing log; your reason on the SDR's HubSpot task, due in {{ task_due_hours }} hours.</p>
+    <p class="small muted mw">{% if over_note %}{{ over_note }} {% endif %}Your name ({{ me.name }}) goes in the routing log and on the SDR's HubSpot task, which always says you assigned the lead by hand and why it was held, with your reason when you give one; due in {{ task_due_hours }} hours.</p>
   </details>
   {% else %}
   <p class="small muted gone">{{ 'No longer in HubSpot' if not h.c else 'No longer in the pool: aged out or found an owner' }}; the next routing pass removes it.</p>

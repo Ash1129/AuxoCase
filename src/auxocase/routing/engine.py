@@ -341,12 +341,20 @@ class Router:
 
     # ---- the manager's queue and the SLA ---------------------------------------
     def release_held(self, contact_id: str, owner_id: str, released_by: str, note: str = "") -> bool:
-        """A manager assigns a held lead by hand, or raises a limit with a reason elsewhere and re-runs."""
+        """A manager assigns a held lead by hand: the SDR's HubSpot task always says who assigned it and why it was
+        held, with the manager's reason when they gave one; the routing log names the manager too."""
         with tx(self.conn):
             before = self.hs.get_contact(contact_id)
             if before is None or not self.hs.set_owner(contact_id, owner_id, expected_current=None):
                 return False
-            task = self.hs.create_task(owner_id, contact_id, "Lead released from the held queue", note, due_at=clock(self.conn) + timedelta(hours=self.task_due_hours))
+            held = self.conn.execute("SELECT reason FROM held_queue WHERE contact_id=?", (contact_id,)).fetchone()
+            body = f"{released_by} assigned this lead to you by hand from the held queue."
+            if held and held["reason"]:
+                body += f" It was held: {held['reason']}."
+            if note.strip():
+                body += f" {released_by}'s reason: {note.strip()}"
+            task = self.hs.create_task(owner_id, contact_id, f"Assigned by {released_by} from the held queue", body,
+                                       due_at=clock(self.conn) + timedelta(hours=self.task_due_hours))
             self.conn.execute("UPDATE held_queue SET released_at=?, released_by=?, released_to=? WHERE contact_id=?",
                               (clock(self.conn).isoformat(timespec="seconds"), released_by, owner_id, contact_id))
             self.hs.batch_update_contacts([(contact_id, {"auxo_route": "assigned"})])

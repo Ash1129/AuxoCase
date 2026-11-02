@@ -99,6 +99,10 @@ def test_routing_holds_a_likely_skip_with_the_reason_only_when_switched_on(world
     t = client.get("/held").text
     assert "likely skipped: an individual contributor, 20 of 20 skipped" in t and "or one like the leads the SDRs skip" in t
     assert router.release_held(ic.id, owner.id, "the manager", "worth a look")
+    task = [t for t in hs.list_tasks(owner_id=owner.id) if t.contact_id == ic.id][-1]      # the SDR is always told who assigned it
+    assert task.subject == "Assigned by the manager from the held queue"
+    assert task.body == ("the manager assigned this lead to you by hand from the held queue. It was held: likely skipped: an individual "
+                         "contributor, 20 of 20 skipped. the manager's reason: worth a look")
     conn.execute("UPDATE hs_contacts SET hubspot_owner_id=NULL, auxo_route=NULL, lifecycle_stage='marketingqualifiedlead' WHERE id=?", (ic.id,))
     conn.commit()
     conn.execute("UPDATE hs_owners SET capacity_limit=capacity_limit+1 WHERE id=?", (owner.id,))     # the pass filled every slot

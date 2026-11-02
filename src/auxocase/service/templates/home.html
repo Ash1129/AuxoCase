@@ -61,7 +61,7 @@
   </div>
   <div class="ov-fig">
     <span class="big num{{ ' warn' if held }}">{{ '{:,}'.format(held) }}</span>
-    <span>held for the manager{% call note('held-note', 'When a lead is held') %}Held: waited {{ hold_after }} above the capacity line with every SDR at their limit. The manager places it from Held &amp; overdue.{% endcall %}</span>
+    <span>held for the manager{% call note('held-note', 'When a lead is held') %}Held: waited {{ hold_after }} within the week's reach with every SDR at their limit. The manager places it from Held &amp; overdue.{% endcall %}</span>
     {% if held %}<a href="/held">Place them in Held &amp; overdue</a>{% endif %}
   </div>
   <div class="ov-fig">
@@ -70,8 +70,8 @@
     {% if team.overdue %}<a href="/held">{{ team.overdue }} first touch{{ 'es' if team.overdue != 1 }} overdue</a>{% endif %}
   </div>
   <div class="ov-fig">
-    <span class="big num">{% if cap and cap.value is not none %}{{ (100 * cap.value)|round|int }}%{% else %}[NOT SET]{% endif %}</span>
-    <span>capacity line{% call note('line-note', 'How the capacity line is drawn') %}<span class="ln">How far down the pool the team reaches in {{ horizon }}.</span><span class="ln">{% if cap %}Touch-now value at place {{ '{:,}'.format(cap.place) }} of {{ '{:,}'.format(pool_size) }}{% if cap.place < cap.k %}, the end of the pool: all of it in {{ horizon }} at {{ per_month }} leads a month{% else %}: {{ horizon_work }} at {{ per_month }} leads a month{% endif %}.{% if cap.value is none %} Routing sets it on its next run.{% elif cap.set_at %} Set by the {{ cap.set_at }} UTC route run.{% endif %}{% else %}Drawn once the pool holds a scored lead.{% endif %}</span>{% endcall %}</span>
+    <span class="big num">{% if cap %}{{ '{:,}'.format(cap.place) }}{% else %}[NOT SET]{% endif %}</span>
+    <span>leads reached in {{ horizon }}{% call note('line-note', 'How far down the pool the week goes') %}<span class="ln">{% if cap %}The pool is ranked best first and the team works its way down: {{ per_month }} leads a month is {{ '{:,}'.format(cap.k) }} in {{ horizon }}{% if cap.place < cap.k %}, more than the pool holds, so all {{ '{:,}'.format(pool_size) }} are reached{% else %}, so the first {{ '{:,}'.format(cap.place) }} of {{ '{:,}'.format(pool_size) }} are handed out and the {{ '{:,}'.format(cap.below) }} below them wait{% endif %}.</span><span class="ln">The switches on the Leadership page that take minutes off a lead make the reach longer.{% if cap.set_at %} Drawn by the {{ cap.set_at }} UTC route run.{% endif %}{% else %}Drawn once the pool holds a scored lead.{% endif %}</span>{% endcall %}</span>
   </div>
 </section>
 
@@ -110,10 +110,10 @@
         </tr>
         {% endfor %}
         {% if cap.follow_from %}
-        <tr><td colspan="6" class="num small muted"><div class="ov-pin">{% if cap.follow_from == cap.follow_to %}Place {{ cap.follow_from }} follows, above the line.{% else %}Places {{ cap.follow_from }} to {{ '{:,}'.format(cap.follow_to) }} follow, all above the line.{% endif %}</div></td></tr>
+        <tr><td colspan="6" class="num small muted"><div class="ov-pin">{% if cap.follow_from == cap.follow_to %}Place {{ cap.follow_from }} follows, within reach.{% else %}Places {{ cap.follow_from }} to {{ '{:,}'.format(cap.follow_to) }} follow, all within reach.{% endif %}</div></td></tr>
         {% endif %}
         <tr class="ov-line">
-          <td colspan="6"><div class="ov-linetext ov-pin"><b class="num">Capacity line · place {{ '{:,}'.format(cap.place) }}{% if cap.value is not none %} · {{ (100 * cap.value)|round|int }}%{% endif %}</b><span class="num muted">{% if cap.below %}Below it, {{ '{:,}'.format(cap.below) }} lead{{ 's wait' if cap.below != 1 else ' waits' }} for a slot.{% else %}No lead waits below it.{% endif %}</span></div></td>
+          <td colspan="6"><div class="ov-linetext ov-pin"><b class="num">Reach in {{ horizon }} ends here · place {{ '{:,}'.format(cap.place) }}</b><span class="num muted">{% if cap.below %}Below it, {{ '{:,}'.format(cap.below) }} lead{{ 's wait' if cap.below != 1 else ' waits' }} for a slot.{% else %}No lead waits below it.{% endif %}</span></div></td>
         </tr>
       </tbody>
     </table>
