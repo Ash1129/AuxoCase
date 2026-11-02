@@ -71,8 +71,8 @@ class Scorer:
                  llm: Optional[LLM] = None, average_acv: float = 24000.0, enricher: Optional[Enricher] = None):
         self.hs, self.conn = hs, conn
         self.model = model
-        self.enricher = enricher or make_enricher(conn)
         self.llm = llm or make_llm(conn=conn)
+        self.enricher = enricher or make_enricher(conn, llm=self.llm)
         self.average_acv = average_acv
 
     @property

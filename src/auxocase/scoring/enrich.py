@@ -70,13 +70,31 @@ def _draw(contact_id: str, what: str) -> float:
     return int(hashlib.sha256(f"{what}:{contact_id}".encode()).hexdigest()[:8], 16) / 0xFFFFFFFF
 
 
-def make_enricher(conn: sqlite3.Connection, kind: Optional[str] = None) -> Enricher:
-    kind = (kind or os.environ.get("AUXO_ENRICH", "")).lower()
-    if kind == "none":
+def make_enricher(conn: sqlite3.Connection, kind: Optional[str] = None, llm=None) -> Enricher:
+    """`AUXO_ENRICH`: none | simulated | web, or a comma-separated chain asked in order (`simulated,web`: the tool
+    first, the web for what it misses). Unset: the stand-in on generated data, else none. `web` needs a reader
+    (`llm`, else the configured one) and keeps only what `web_enrich.verify` finds on the cited page."""
+    kinds = [k.strip() for k in (kind or os.environ.get("AUXO_ENRICH", "")).lower().split(",") if k.strip()]
+    if not kinds:
+        kinds = ["simulated"] if get_setting(conn, "generated_seed") else ["none"]
+    built: list = []
+    for k in kinds:
+        if k == "none":
+            continue
+        if k == "simulated":
+            built.append(SimulatedEnricher(conn))
+        elif k == "web":
+            from ..llm.client import make_llm
+            from .web_enrich import WebEnricher
+            built.append(WebEnricher(llm or make_llm(conn=conn)))
+        else:
+            raise ValueError(f"AUXO_ENRICH: unknown enricher {k!r} (none, simulated, web)")
+    if not built:
         return NoEnricher()
-    if kind == "simulated" or (not kind and get_setting(conn, "generated_seed")):
-        return SimulatedEnricher(conn)
-    return NoEnricher()
+    if len(built) == 1:
+        return built[0]
+    from .web_enrich import ChainEnricher
+    return ChainEnricher(built)
 
 
 def enrich_lead(hs: HubSpotClient, conn: sqlite3.Connection, enricher: Enricher, contact: Contact,

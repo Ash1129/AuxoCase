@@ -37,6 +37,9 @@ class LLM(Protocol):
 
 CLI_MODELS = ("sonnet", "opus")      # the CLI runs on the owner's Claude Code plan: Sonnet for the checked, short answers, Opus for what a lead reads
 DRAFT_TASKS = ("outreach_email", "call_brief")     # what a lead reads or hears: Opus
+WEB_TASKS = ("enrich",)              # looks a lead up on the public web: search and page fetch on, nothing else; code checks the quote
+CLI_WEB_TOOLS = "WebSearch,WebFetch"
+API_WEB_TOOLS = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 4}]
 
 
 def _cli_model(value: str, what: str) -> str:
@@ -61,12 +64,14 @@ class ClaudeCLI:
         return self.draft_model if task in DRAFT_TASKS else self.model
 
     def command(self, exe: str, system: str, user: str) -> list[str]:
+        task = usage.task_of(user)
+        tools = CLI_WEB_TOOLS if task in WEB_TASKS else ""       # only the web lookup may search; every other task answers from its prompt
         if os.environ.get("ANTHROPIC_API_KEY"):
-            isolation = ["--bare"]       # API-key auth only; skips hooks, plugins, MCP, CLAUDE.md
-        else:                            # a claude.ai sign-in: same isolation, flag by flag
-            isolation = ["--restricted", "--tools", "", "--strict-mcp-config", "--disable-slash-commands"]
+            isolation = ["--bare", "--tools", tools]       # API-key auth only; skips hooks, plugins, MCP, CLAUDE.md
+        else:                                              # a claude.ai sign-in: same isolation, flag by flag
+            isolation = ["--restricted", "--tools", tools, "--strict-mcp-config", "--disable-slash-commands"]
         return [exe, "-p", "--output-format", "json", *isolation, "--no-session-persistence",
-                "--model", self.model_for(usage.task_of(user)), "--system-prompt", system, user]
+                "--model", self.model_for(task), "--system-prompt", system, user]
 
     def complete(self, system: str, user: str, max_tokens: int = 600) -> str:
         exe = shutil.which("claude")
@@ -79,8 +84,9 @@ class ClaudeCLI:
         task = usage.task_of(user)
         env = {**os.environ, "MAX_THINKING_TOKENS": "0",
                "OTEL_RESOURCE_ATTRIBUTES": usage.resource_attributes(os.environ.get("OTEL_RESOURCE_ATTRIBUTES", ""), task)}
+        timeout = self.timeout_s * 2 if task in WEB_TASKS else self.timeout_s      # a lookup searches and reads pages
         proc = subprocess.run(self.command(exe, system, user), capture_output=True, text=True,
-                              timeout=self.timeout_s, cwd=tempfile.gettempdir(), env=env)
+                              timeout=timeout, cwd=tempfile.gettempdir(), env=env)
         try:
             data = json.loads(proc.stdout.strip().splitlines()[-1])
         except (json.JSONDecodeError, IndexError) as e:
@@ -108,8 +114,9 @@ class AnthropicAPI:
         except ImportError as e:
             raise RuntimeError("pip install anthropic to use AUXO_LLM=api") from e
         client = anthropic.Anthropic()
+        extra = {"tools": API_WEB_TOOLS} if usage.task_of(user) in WEB_TASKS else {}    # the server-side web search, for the lookup only
         msg = client.messages.create(model=self.model, max_tokens=max_tokens, system=system,
-                                     messages=[{"role": "user", "content": user}])
+                                     messages=[{"role": "user", "content": user}], **extra)
         if self.conn is not None:
             # Tokens only: the API reports no price. Revenium's Anthropic middleware is the metering path for this route.
             u = getattr(msg, "usage", None)
@@ -141,6 +148,8 @@ class Offline:
         if user.startswith("TASK: verdict"):
             from .verdict import offline_verdict
             return offline_verdict(user)
+        if user.startswith("TASK: enrich"):
+            return "{}"          # no web offline: nothing found, the lead stays blank
         return "{}"
 
 

@@ -7,7 +7,7 @@ HubSpot (mock in development, real API in production)
    │ contact created / property changed (webhook or search polling, H04)
    ▼
 ┌───────────────────────────── Job 1: score ─────────────────────────────┐
-│ enrichment: fill a blank title or size once, from the licensed tool      │
+│ enrichment: fill a blank title or size once, tool first, then the web    │
 │ completeness check → features (channel, firmographics, behaviour)       │
 │ → calibrated p(demo) from the live model (points table before one exists)│
 │ → free-text reading: Claude lists buying signals with exact quotes;      │
@@ -71,6 +71,7 @@ HubSpot (mock in development, real API in production)
 | `data/rebase.py` | dev | shifts the mock's demo-clock dates onto the present by whole years, leaves wall-time logs, and sets `clock_live` so `storage/db.clock` is the wall clock |
 | `pool.py` | 1, 2 | the pool both jobs share: unowned leads in the pool stages, inside the age window |
 | `scoring/enrich.py` | 1 | one enrichment lookup per lead missing a title or size, written back and logged |
+| `scoring/web_enrich.py` | 1 | the web lookup behind the tool: the reader searches and cites a page and a quote; code fetches the page and keeps the value only if the quote is on it and names the person (title) or the number (size); public hosts only |
 | `scoring/features.py` | 1 | the feature row; no names, emails or note text |
 | `scoring/points.py` | 1 | cold-start points table (channel-aware) and the lift baseline |
 | `scoring/model.py` | 1, 3 | train/evaluate/calibrate/persist; close model on post-demo rows |
@@ -135,7 +136,7 @@ BrightPath noted HubSpot has MCP servers. They suit read-only assistant use, suc
 
 ## Personal data
 
-The model sees role, company and behaviour, never names, emails or note text (features.py). The enrichment step should send the tool only what it needs to match a lead (email domain, company) and ask only for title and size. The LLM sees note text only, returns quotes, and the quotes are the only part kept. Reasons never contain contact details (reason.py rejects them). Logs hold contact ids, not names. The real client needs only `crm.objects.contacts.read/write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.owners.read`, `crm.schemas.contacts.write` and task scopes (H08), plus `crm.objects.emails.read` and `crm.objects.calls.read` to see the first touch, `automation.sequences.enrollments.write` to enrol leads in a sequence and `scheduler.meetings.meeting-link.read` for booking links. Drafts carry no score, rank or note text beyond what the checker allows, and nothing is sent without an SDR. A lead's score and reason are HubSpot properties, so HubSpot's own GDPR deletion removes them with the contact (H10); the service's `scores` and `overrides` tables are keyed by contact id and should be purged on the same signal in production.
+The model sees role, company and behaviour, never names, emails or note text (features.py). The enrichment step should send the tool only what it needs to match a lead (email domain, company) and ask only for title and size. The web lookup sends the person's name, the company's name and its domain, asks only for a business role and a headcount, and keeps nothing the cited page does not say; the page it kept is logged with the value (`enrichment_log.filled`). The LLM sees note text only, returns quotes, and the quotes are the only part kept. Reasons never contain contact details (reason.py rejects them). Logs hold contact ids, not names. The real client needs only `crm.objects.contacts.read/write`, `crm.objects.companies.read`, `crm.objects.deals.read`, `crm.objects.owners.read`, `crm.schemas.contacts.write` and task scopes (H08), plus `crm.objects.emails.read` and `crm.objects.calls.read` to see the first touch, `automation.sequences.enrollments.write` to enrol leads in a sequence and `scheduler.meetings.meeting-link.read` for booking links. Drafts carry no score, rank or note text beyond what the checker allows, and nothing is sent without an SDR. A lead's score and reason are HubSpot properties, so HubSpot's own GDPR deletion removes them with the contact (H10); the service's `scores` and `overrides` tables are keyed by contact id and should be purged on the same signal in production.
 
 ## The service's own surface
 
