@@ -137,6 +137,69 @@ function shotsSlide(pres, C, section) {
   return slide;
 }
 
+
+function costSlide(pres, C, section) {
+  const s = pres.addSlide({ masterName: "LIGHT", sectionTitle: section });
+  s.addText("What it costs: about $65,000 to go live, then about $180 a month", { placeholder: "title" });
+  story(s, C, [
+    { text: "The software is built: 13,000 lines, 175 tests, a mock portal with HubSpot's semantics. The one-off cost is the work of putting it on BrightPath's portal and running it for a measured month, about 470 hours.", bold: true },
+    "At $120 an hour for a senior engineer that is $52,000; with a 25% contingency for what a live portal turns up, about $65,000, well under the brief's $100,000 to $300,000. BrightPath's own time is the HubSpot admin, the sales manager and marketing for the setup and two hours of training an SDR.",
+    "Running it is one small server and the model calls: about 10 million tokens a month, metered by the Claude CLI on the demo's 1,550 calls so far at the same per-call cost it reports to Revenium, scaled to 1,128 leads worked a month. Drafting on Opus is most of it; HubSpot needs no new seats and the enrichment tool is already licensed.",
+    { text: "Model spend is about 12 cents a demo against $26 of SDR time and $4,800 a demo is worth. One month of the simulated gain ($2.3 M of first-year contract value) covers the build thirty times over; at a tenth of that gain, once.", color: C.text2, size: 12 },
+  ]);
+  table(s, C, [
+    ["One-off: going live on BrightPath's portal", "Hours", "Cost"],
+    ["Live HubSpot integration: properties, webhooks, batch writes, sequences, meetings, calendars checked against the portal", "120", "$14,400"],
+    ["First model on three years of history, outcome fields mapped, enrichment tool and loss reasons connected", "100", "$12,000"],
+    ["Hosting, secrets, backups, monitoring, security review", "40", "$4,800"],
+    ["The SDRs' sequence, saved views or CRM card, onboarding and docs", "40", "$4,800"],
+    ["The measured month: support, fixes, AI steps on one at a time, first retrain and sign-off", "80", "$9,600"],
+    ["BrightPath's own time: HubSpot admin 40 h, manager and marketing 20 h, SDR training 24 h", "84", "$6,000"],
+    [{ text: "Total, with a 25% contingency on the engineering", options: { bold: true } }, { text: "464", options: { bold: true } }, { text: "about $65,000", options: { bold: true } }],
+  ], { x: VIS_X, y: TOP_BODY, w: VIS_W, colW: [5.3, 0.7, 1.2], fontSize: 10.5, rowH: 0.28 });
+  table(s, C, [
+    ["Running, a month", "Model", "Calls", "Tokens a call", "Cost"],
+    ["First email, follow-up, last email", "Opus", "2,800", "1,260", "$44"],
+    ["Call briefs, demos booked, replies triaged, call notes", "Opus, Sonnet", "2,660", "1,500", "$26"],
+    ["Signals, reasons and flags on scored leads", "Sonnet", "4,130", "850", "$13"],
+    ["Verdicts, loss reasons; likely skips need no model", "Sonnet", "120", "1,000", "under $1"],
+    ["Hosting, one small server (HubSpot seats and enrichment already paid)", "", "", "", "$100"],
+    [{ text: "Total", options: { bold: true } }, "", { text: "9,700", options: { bold: true } }, { text: "~10 M a month", options: { bold: true } }, { text: "about $180", options: { bold: true } }],
+  ], { x: VIS_X, y: TOP_BODY + 3.05, w: VIS_W, colW: [3.5, 1.0, 0.7, 1.0, 1.0], fontSize: 10.5, rowH: 0.28 });
+  return s;
+}
+
+
+function appendixSlide(pres, C) {
+  pres.addSection({ title: "Appendix" });
+  const s = pres.addSlide({ masterName: "LIGHT", sectionTitle: "Appendix" });
+  s.addText("Appendix: HubSpot's points against AuxoCase's points table", { placeholder: "title" });
+  const half = (W - 2 * LEFT - 0.4) / 2;
+  s.addText("HubSpot's points model, as the brief describes it: title, size and pages, nothing for channel, nothing for a blank", { x: LEFT, y: 1.4, w: half, h: 0.5, fontSize: 13, bold: true, color: C.text1, margin: 0, isTextBox: true, valign: "top", objectName: "HubSpot heading" });
+  table(s, C, [
+    ["What HubSpot scores", "Points"],
+    ["Job title: C-level", "30"], ["Job title: VP", "26"], ["Job title: Director", "20"], ["Job title: Manager", "12"], ["Job title: individual contributor", "3"],
+    ["Job title left blank", "0"],
+    ["Company size 50 to 500 employees", "18"], ["Company size 20 to 49 or 501 to 1,500", "10"], ["Company size outside that, or blank", "0"],
+    ["Page views: 12 or more · 7 · 4 · 2", "25 · 18 · 10 · 5"], ["Viewed the pricing page", "10"],
+    ["Channel (referral, webinar, event, website, email, paid ads)", "nothing"],
+    [{ text: "MQL at 47 points or more", options: { bold: true } }, { text: "the gate", options: { bold: true } }],
+  ], { x: LEFT, y: 1.95, w: half, colW: [half - 1.4, 1.4], fontSize: 10.5, rowH: 0.3 });
+  const x2 = LEFT + half + 0.4;
+  s.addText("AuxoCase's points table (points-v2): the cold start before a model is approved, and the baseline every model is measured against", { x: x2, y: 1.4, w: half, h: 0.5, fontSize: 13, bold: true, color: C.text1, margin: 0, isTextBox: true, valign: "top", objectName: "AuxoCase heading" });
+  table(s, C, [
+    ["What AuxoCase scores", "Points"],
+    ["Channel: referral · webinar · events", "25 · 18 · 10"], ["Channel: website · email · paid ads", "8 · 5 · 4"],
+    ["Job title: C-level · VP · Director", "15 · 14 · 12"], ["Job title: Manager · individual · blank", "8 · 2 · 0"],
+    ["Company size 150 to 299", "15"], ["Company size 50 to 149 · 300 to 500", "12 · 12"], ["Company size over 500 · blank · under 50", "4 · 3 · 2"],
+    ["Attended a webinar", "8"], ["Pricing page, a view (capped at 12)", "4"], ["Form submitted, each (capped at 9)", "3"], ["Page views, per 5 (capped at 6)", "1"],
+    ["Competing payroll vendor in place", "−6"], ["Student or intern title", "−20"],
+    [{ text: "Kept between 0 and 100; a blank is not a zero", options: { bold: true } }, ""],
+  ], { x: x2, y: 1.95, w: half, colW: [half - 1.4, 1.4], fontSize: 10.5, rowH: 0.3 });
+  caption(s, C, "Once a model is approved it replaces the table: a calibrated probability from 17 features, with Claude's reading of the notes capped at ±10 points. On the test leads the live model finds 23% more demos in its top K than HubSpot's points and about as many as this table; the table's edge over HubSpot is the channel row.", LEFT, 6.5, W - 2 * LEFT);
+  return s;
+}
+
 function demoSlide(pres, C, section, extraRows) {
   shotsSlide(pres, C, section);
   const slide = pres.addSlide({ masterName: "LIGHT", sectionTitle: section });
@@ -310,6 +373,8 @@ async function ceo() {
     ["Demos booked", "An interested reply gets three free times from the SDR's calendar; the pick is booked in HubSpot and confirmed", "850 leads a month"],
   ], { x: VIS_X, y: TOP_BODY, w: VIS_W, colW: [1.6, 4.0, 1.6], fontSize: 12, rowH: 0.8 });
 
+  costSlide(pres, C, "The mechanism");
+
   pres.addSection({ title: "Trust" });
   // 10 Better picks
   s = pres.addSlide({ masterName: "LIGHT", sectionTitle: "Trust" });
@@ -385,6 +450,8 @@ async function ceo() {
     s.addText(t[2], { x: x + 0.05, y: ty + 0.75, w: tw - 0.1, h: 3.4, fontSize: 12, color: C.text1, valign: "top", margin: 0, isTextBox: true, objectName: "Timeline text " + (i + 1) });
     if (i < 2) arrow(s, C, x + tw + 0.02, ty + 0.3, x + tw + 0.28, ty + 0.3);
   });
+
+  appendixSlide(pres, C);
 
   // 15 Closing
   s = pres.addSlide({ masterName: "DARK", sectionTitle: "Next" });
@@ -700,6 +767,8 @@ async function cto() {
     ["scheduling_auto", "routing/scheduling.py, llm/scheduling.py", "an interested reply", "three free times from the SDR's calendar offered; a named time booked in HubSpot, confirmed, follow-ups stopped", "8 → 1 a booking"],
   ], { x: VIS_X, y: TOP_BODY, w: VIS_W, colW: [1.2, 1.5, 1.3, 2.3, 0.9], fontSize: 11, rowH: 0.85 });
 
+  costSlide(pres, C, "The reader");
+
   pres.addSection({ title: "Operations" });
   // 16 Roles & security
   s = pres.addSlide({ masterName: "LIGHT", sectionTitle: "Operations" });
@@ -769,6 +838,8 @@ async function cto() {
     ["6", "Create the SDRs' sequence: step one a manual email task from the auxo_email tokens; later steps automated from the same tokens; set AUXO_SEQUENCE_ID and connect each SDR's inbox"],
     ["7", "Put the queue in a HubSpot CRM card or a saved view sorted by auxo_rank with auxo_reason as a column; the service's pages do the same standalone"],
   ], { x: VIS_X, y: TOP_BODY, w: VIS_W, colW: [0.6, 6.6], fontSize: 11.5, rowH: 0.6 });
+
+  appendixSlide(pres, C);
 
   s = pres.addSlide({ masterName: "DARK", sectionTitle: "Operations" });
   s.addText("Deterministic where it decides, generative only where it reads", { placeholder: "title" });
