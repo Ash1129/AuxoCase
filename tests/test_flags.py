@@ -92,7 +92,6 @@ def world(tmp_path, monkeypatch):
                                createdate=datetime.utcnow() - timedelta(days=5 - int(cid)), hs_analytics_source="OFFLINE"), emit_event=False)
     Scorer(hs, conn, None, Offline()).rescore_pool()
     auth.create_staff(conn, "nadia", PW, "marketing", name="Nadia Reyes")
-    auth.create_staff(conn, "dana", PW, "leadership", name="Dana Whitfield")
     return path, conn, hs
 
 
@@ -145,7 +144,7 @@ def test_the_comparison_sets_flagged_against_unflagged_leads_at_the_same_odds(wo
     assert band["flagged_rate"] in (0.0, 0.5, 1.0) and 0.0 <= p["1"] < 1.01
 
 
-def test_the_flagged_page_is_marketings_to_resolve_and_leaderships_to_read(world):
+def test_the_flagged_page_is_marketings_to_resolve(world):
     path, conn, hs = world
     flags.run(hs, conn, Offline(), limit=10)
     client = TestClient(create_app(path, scheduler=False))
@@ -162,8 +161,3 @@ def test_the_flagged_page_is_marketings_to_resolve_and_leaderships_to_read(world
     assert client.post(f"/flagged/{fid}/resolve", data={"resolution": "form_fix"}, follow_redirects=False).headers["location"] == "/flagged?done=0#fl-open"
     assert client.post(f"/flagged/{fid}/resolve", data={"resolution": "nope"}).status_code == 400
     assert client.post("/jobs/flags").status_code == 403                                 # the jobs are the manager's
-    conn.execute("INSERT INTO flags(contact_id, kind, quote, note, probability, channel, llm, created_at) VALUES('1', 'intent_buried', 'budget is approved', 'n', 0.05, 'referral', 'offline', ?)", (now_iso(),))
-    log_in(client, "dana", PW)
-    page = client.get("/flagged").text
-    assert page.count('action="/flagged/') == 0 and "Marketing resolves these." in page   # leadership reads, does not resolve
-    assert client.post("/flagged/1/resolve", data={"resolution": "dismissed"}).status_code == 403

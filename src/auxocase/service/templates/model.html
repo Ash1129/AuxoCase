@@ -76,7 +76,7 @@ details[open]>summary{margin-bottom:8px}
 {% if can.approve_marketing or can.approve_sales %}<form class="signoff" method="post" action="/model/{{ r.version }}/approve">
   <input type="hidden" name="seen" value="{{ r.token }}">
   <div class="fields">
-    {% if me.role == 'admin' %}<div class="field">
+    {% if can.approve_marketing and can.approve_sales %}<div class="field">
       <label for="team-{{ r.version }}">Team</label>
       <select id="team-{{ r.version }}" name="team">{% for t in ['marketing', 'sales'] %}<option value="{{ t }}"{% if t == pick %} selected{% endif %}>{{ t|capitalize }}</option>{% endfor %}</select>
     </div>{% else %}<div class="field">

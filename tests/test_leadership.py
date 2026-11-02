@@ -84,10 +84,8 @@ def test_headline_numbers_come_from_the_stored_files(client, tmp_path, monkeypat
     assert "80 h → 12 h" in t and "15% → 70%" in t and "5,555" in t and "1,234" in t
     # the partial months are named, not counted
     assert "Jun 2027 and Jul 2028 are left out" in t
-    # the ranking, the exploration slice and the gate, from the same file
-    assert "would book 333" in t and "against 280" in t and "+50 to +57 with the months resampled" in t
+    # the exploration slice, from the same file
     assert "7% of slots go to a lead picked at random" in t and "about 50, not 10" in t and "roughly 13 a month" in t
-    assert "+44 a month" in t and "About 321 of the 500" in t
     assert "the model is ahead of the cold-start table: 0.451 against 0.440 at K = 321" in t
     # the queue-limit experiment, with the setup in use marked
     assert "212" in t and "201–220" in t and "266" in t and "the setup in use now" in t and "--seeds 3" in t

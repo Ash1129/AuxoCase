@@ -318,7 +318,7 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
         <div class="field"><label for="cap-followups">The follow-up and the last email</label><select id="cap-followups" name="followups"><option value="sdr"{% if not cap.auto %} selected{% endif %}>Written and sent by the SDR</option><option value="auto"{% if cap.auto %} selected{% endif %}>Sent for the SDR, unless the lead answers</option></select></div>
       </div>
       <div class="actions"><button class="btn primary" type="submit">Set the capacity</button><span class="small muted">Sent for the SDR: drafted from the lead's activity on its day (3 and 7 days after the first email), from the SDR's inbox. A reply, a booking or the SDR stops them. Triaged: each reply read as it lands, interested or a question with the answer drafted, not now with when, not interested or wrong person closed, out of office waited out. Written up: the SDR's fragments in HubSpot's call log become the summary on the lead, the size on the company, the next step as a task, and the follow-up drafted from the call. Held: a lead whose kind the SDRs skipped more often than not goes to the held queue with the reason, where the manager can still release it. Demos booked for the SDR: an interested reply gets three free times from the SDR's calendar, sent for them; a reply naming a time books the meeting in HubSpot and the confirmation goes out.</span></div>
-    </form>{% else %}<p class="small muted">Leadership and the sales manager set these; your role reads them.</p>{% endif %}
+    </form>{% else %}<p class="small muted">The sales manager sets these; your role reads them.</p>{% endif %}
   </div>
 </section>
 

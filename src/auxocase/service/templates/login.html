@@ -40,7 +40,7 @@ code{font-size:14px}
   <p class="brand">AuxoCase</p>
   <section aria-labelledby="login-title">
     <h1 id="login-title">Log in</h1>
-    <p class="lede">What you see depends on your role: an SDR their own queue, the sales manager every queue and the held list, marketing and leadership the model and the results.</p>
+    <p class="lede">What you see depends on your role: an SDR their own queue, the sales manager everything, marketing the lead scoring and the leads to check.</p>
     {% if error %}<p class="error" role="alert"><b>Not signed in.</b> {{ error }}</p>{% endif %}
     <form method="post" action="/login" autocomplete="on">
       <input type="hidden" name="next" value="{{ next }}">
@@ -58,7 +58,7 @@ code{font-size:14px}
       <tbody>{% for d in demo %}<tr>
         <td><code>{{ d.username }}</code></td>
         <td>{{ d.name }}</td>
-        <td class="muted">{% if d.role == 'sdr' %}their own queue{% elif d.role == 'manager' %}sales manager: overview, every queue, held &amp; overdue, decisions, the jobs{% elif d.role == 'marketing' %}marketing: lead scoring, leads to check{% elif d.role == 'leadership' %}leadership: capacity, overview, model, decisions{% else %}admin: everything, and adds accounts{% endif %}</td>
+        <td class="muted">{% if d.role == 'sdr' %}their own queue{% elif d.role == 'manager' %}sales manager: everything, from the overview to the capacity inputs{% else %}marketing: lead scoring, leads to check{% endif %}</td>
       </tr>{% endfor %}</tbody>
     </table>
   </section>{% endif %}

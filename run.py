@@ -286,7 +286,7 @@ def main(argv=None):
     s = sub.add_parser("flags", help="read scored leads' records for marketing's flags"); s.add_argument("--limit", type=int, default=25); s.set_defaults(fn=cmd_flags)
     s = sub.add_parser("staff", help="accounts for the pages: add | list | password | disable | enable | demo")
     s.add_argument("what", choices=["add", "list", "password", "disable", "enable", "demo"]); s.add_argument("username", nargs="?", default="")
-    s.add_argument("--role", choices=["sdr", "manager", "marketing", "leadership", "admin"], default="sdr"); s.add_argument("--name", default="")
+    s.add_argument("--role", choices=["sdr", "manager", "marketing"], default="sdr"); s.add_argument("--name", default="")
     s.add_argument("--owner", default=None, help="an SDR's HubSpot owner id"); s.add_argument("--password", default=None, help="prompted for when not given")
     s.set_defaults(fn=cmd_staff)
     s = sub.add_parser("serve"); s.add_argument("--port", type=int, default=8000); s.set_defaults(fn=cmd_serve)

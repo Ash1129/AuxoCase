@@ -6,14 +6,13 @@ role, and the role decides what the sidebar offers and what a request may do:
 - an SDR sees their own queue and the leads on it, and nothing else; their
   account is bound to their HubSpot owner id, so the queue is theirs by
   identity, not by URL;
-- the sales manager sees the overview, every queue, the held and overdue
-  list and the decisions, runs the jobs, and signs a model off for sales;
+- the sales manager sees everything: the overview, every queue, the held and
+  overdue list, the decisions, the leadership page and its capacity inputs,
+  the automatic sign-off switch, the jobs, and signs a model off for either
+  team; the first account on a real portal is one (`bootstrap_from_env`), and
+  `run.py staff` adds the rest;
 - marketing sees the model page and signs off for marketing, and the flagged
-  leads (and resolves them);
-- leadership sees the leadership page, sets the capacity inputs, throws the
-  automatic sign-off switch, and reads the overview, the model page and the
-  decisions;
-- an admin may do all of it and adds accounts (`run.py staff`).
+  leads (and resolves them).
 
 A write records who made it from the session, never from a typed name: the
 approver on a sign-off, who released a held lead, who threw a switch.
@@ -45,14 +44,10 @@ PERMISSIONS = frozenset({
 })
 ROLES: dict[str, frozenset[str]] = {
     "sdr": frozenset({"view_own_queue", "act_on_leads"}),
-    "manager": frozenset({"view_overview", "view_any_queue", "act_on_leads", "view_held", "release_held", "view_decisions",
-                          "view_leadership", "set_capacity", "view_model", "approve_sales", "run_jobs", "view_flags"}),
+    "manager": PERMISSIONS,
     "marketing": frozenset({"view_model", "approve_marketing", "throw_switches", "view_flags", "resolve_flags"}),
-    "leadership": frozenset({"view_overview", "view_decisions", "view_leadership", "set_capacity", "view_model",
-                             "throw_switches", "view_flags"}),
-    "admin": PERMISSIONS,
 }
-ROLE_WORDS = {"sdr": "SDR", "manager": "Sales manager", "marketing": "Marketing", "leadership": "Leadership", "admin": "Admin"}
+ROLE_WORDS = {"sdr": "SDR", "manager": "Sales manager", "marketing": "Marketing"}
 IDLE_SECONDS = 12 * 3600
 MAX_SECONDS = 7 * 24 * 3600
 LOCK_AFTER, LOCK_SECONDS = 5, 15 * 60
@@ -85,9 +80,7 @@ class Principal:
             return f"/queue/{self.owner_id}"
         if self.can("view_overview"):
             return "/"
-        if self.can("view_model"):
-            return "/model"
-        return "/leadership"
+        return "/model"
 
     def owns(self, owner_id: Optional[str]) -> bool:
         """Whether a queue, or a lead on it, is this person's to see and act on."""
@@ -166,22 +159,21 @@ def staff_count(conn: sqlite3.Connection) -> int:
 
 
 def bootstrap_from_env(conn: sqlite3.Connection, env: Optional[dict] = None) -> bool:
-    """The first admin, from AUXO_ADMIN_USER and AUXO_ADMIN_PASSWORD, when no account exists yet."""
+    """The first account, a sales manager, from AUXO_ADMIN_USER and AUXO_ADMIN_PASSWORD, when no account exists yet."""
     env = os.environ if env is None else env
     user, password = (env.get("AUXO_ADMIN_USER") or "").strip(), env.get("AUXO_ADMIN_PASSWORD") or ""
     if not user or not password or staff_count(conn):
         return False
-    create_staff(conn, user, password, "admin", name=user)
+    create_staff(conn, user, password, "manager", name=user)
     return True
 
 
 def seed_demo_accounts(conn: sqlite3.Connection, owners) -> list[str]:
-    """The mock portal's logins, one an SDR (sdr1..sdrN, bound to their owner) and one each for the sales manager,
-    marketing, leadership and the admin, all with DEMO_PASSWORD. Accounts that exist are left as they are."""
+    """The mock portal's logins, one an SDR (sdr1..sdrN, bound to their owner) and one each for the sales manager and
+    marketing, all with DEMO_PASSWORD. Accounts that exist are left as they are."""
     made = []
     people = [(o.email.split("@")[0] if o.email else f"sdr{o.id}", DEMO_PASSWORD, "sdr", o.name, o.id) for o in owners]
-    people += [("manager", DEMO_PASSWORD, "manager", "Sam Okafor", None), ("marketing", DEMO_PASSWORD, "marketing", "Nadia Reyes", None),
-               ("leadership", DEMO_PASSWORD, "leadership", "Dana Whitfield", None), ("admin", DEMO_PASSWORD, "admin", "Admin", None)]
+    people += [("manager", DEMO_PASSWORD, "manager", "Sam Okafor", None), ("marketing", DEMO_PASSWORD, "marketing", "Nadia Reyes", None)]
     for username, password, role, name, owner_id in people:
         try:
             made.append(create_staff(conn, username, password, role, name=name, owner_id=owner_id))
@@ -197,7 +189,7 @@ def demo_logins(conn: sqlite3.Connection) -> list[dict]:
     if not row or row["value"] != "1":
         return []
     return [dict(r) for r in conn.execute("SELECT username, name, role, owner_id FROM staff WHERE disabled=0 ORDER BY "
-                                          "CASE role WHEN 'sdr' THEN 0 WHEN 'manager' THEN 1 WHEN 'marketing' THEN 2 WHEN 'leadership' THEN 3 ELSE 4 END, username")]
+                                          "CASE role WHEN 'sdr' THEN 0 WHEN 'manager' THEN 1 ELSE 2 END, username")]
 
 
 # ---------------------------------------------------------------- logging in

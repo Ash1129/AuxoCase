@@ -5,12 +5,12 @@ Who sees what (each logs in; auth.py has the roles):
   plain-English reason and the signals' quoted words; actions are bounded
   (worked / skipped with a reason / junk / promote or demote by a few places)
   and every action is logged with the explanation that was on screen (L12).
-- Sales manager: the overview, every queue, the held queue and the
-  stale-assignment list (speed to lead), the decisions, the jobs, and the
-  sales sign-off on a model.
+- Sales manager: everything: the overview, every queue, the held queue and
+  the stale-assignment list (speed to lead), the decisions, the leadership
+  page and its capacity inputs, the jobs, and the sign-off on a model for
+  either team.
 - Marketing: the model page (live vs candidate metrics, the calibration table,
-  the channel p-chart) and the marketing sign-off; leadership: the capacity
-  inputs and the phase switches. Both read the leadership page and the log.
+  the channel p-chart), the marketing sign-off and the flagged leads.
 
 In production HubSpot calls `/webhooks/hubspot` (signature checked, H04) and
 the SDR pages would be embedded as a HubSpot CRM card; here the same pages
@@ -447,11 +447,11 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
 
     @app.post("/model/{version}/approve")
     def approve(request: Request, version: str, decision: str = Form(...), note: str = Form(""), seen: str = Form(""), team: str = Form("")):
-        """A sign-off or a send-back, for the team the person's role speaks for (an admin picks the team); the approver
-        is the person logged in."""
+        """A sign-off or a send-back, for the team the person's role speaks for (a role that signs for both picks the
+        team, sales unless it says); the approver is the person logged in."""
         me = me_of(request)
-        if me.role == "admin":
-            team = team or "sales"
+        if me.can("approve_marketing") and me.can("approve_sales"):
+            team = team if team in ("marketing", "sales") else "sales"
         elif me.can("approve_marketing"):
             team = "marketing"
         elif me.can("approve_sales"):

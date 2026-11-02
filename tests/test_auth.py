@@ -35,7 +35,7 @@ def world(tmp_path, monkeypatch):
     hs.add_contact(Contact(id="3", email="lead3@granite.example", first_name="Lead3", lifecycle_stage="salesqualifiedlead", hs_lead_status="NEW"), emit_event=False)
     conn.execute("INSERT INTO held_queue(contact_id, held_at, reason) VALUES('3', ?, 'capacity')", (now_iso(),))
     for username, role, name, owner in (("alex", "sdr", "Alex Novak", "900"), ("bea", "sdr", "Bea Ortiz", "901"), ("sam", "manager", "Sam Okafor", None),
-                                        ("priya", "marketing", "Priya Natarajan", None), ("dana", "leadership", "Dana Whitfield", None)):
+                                        ("priya", "marketing", "Priya Natarajan", None)):
         auth.create_staff(conn, username, PW, role, name=name, owner_id=owner)
     return path, conn, hs
 
@@ -44,7 +44,7 @@ def test_passwords_lockout_and_sessions(tmp_path):
     conn = connect(tmp_path / "a.db")
     assert auth.verify_password("secret-enough", auth.hash_password("secret-enough")) and not auth.verify_password("x", auth.hash_password("secret-enough"))
     with pytest.raises(auth.AuthError):
-        auth.create_staff(conn, "x", "short", "admin")
+        auth.create_staff(conn, "x", "short", "manager")
     with pytest.raises(auth.AuthError):
         auth.create_staff(conn, "x", PW, "sdr")                                 # an SDR needs an owner id
     with pytest.raises(auth.AuthError):
@@ -72,7 +72,7 @@ def test_passwords_lockout_and_sessions(tmp_path):
     assert auth.load_session(conn, token) is None                               # a new password ends the sessions
     assert auth.bootstrap_from_env(conn, {"AUXO_ADMIN_USER": "root", "AUXO_ADMIN_PASSWORD": PW}) is False   # accounts exist already
     fresh = connect(tmp_path / "b.db")
-    assert auth.bootstrap_from_env(fresh, {"AUXO_ADMIN_USER": "root", "AUXO_ADMIN_PASSWORD": PW}) and auth.authenticate(fresh, "root", PW).role == "admin"
+    assert auth.bootstrap_from_env(fresh, {"AUXO_ADMIN_USER": "root", "AUXO_ADMIN_PASSWORD": PW}) and auth.authenticate(fresh, "root", PW).role == "manager"
 
 
 def test_without_a_session_pages_go_to_the_login_page_and_writes_are_refused(world):
@@ -122,17 +122,17 @@ def test_an_sdr_sees_their_own_queue_and_nothing_else(world):
     assert (row["owner_id"], row["actor"]) == ("900", "alex")
 
 
-def test_the_manager_sees_every_queue_and_signs_for_sales(world):
+def test_the_manager_sees_every_queue_and_signs_for_either_team(world):
     path, conn, hs = world
     client = TestClient(create_app(path))
     log_in(client, "sam", PW)
     assert client.get("/").status_code == 200 and client.get("/queue/901").status_code == 200 and client.get("/held").status_code == 200
     page = client.get("/model").text
-    assert "Signing for" in page and "sales · Sam Okafor" in page and 'name="approver"' not in page
-    # The team comes from the role, whatever the form says; the approver is the person logged in.
+    assert 'name="team"' in page and 'name="approver"' not in page              # the manager signs for either team
+    # The team is the one picked, sales unless the form says; the approver is the person logged in.
     r = client.post("/model/demo-v9/approve", data={"team": "marketing", "decision": "approve", "seen": approval_token(conn, "demo-v9")}, follow_redirects=False)
     assert r.status_code == 303
-    assert [tuple(a) for a in conn.execute("SELECT team, approver FROM approvals")] == [("sales", "Sam Okafor")]
+    assert [tuple(a) for a in conn.execute("SELECT team, approver FROM approvals")] == [("marketing", "Sam Okafor")]
     # Releasing a held lead records the manager by name, from the session.
     r = client.post("/held/3/release", data={"owner_id": "901", "note": "take it"}, follow_redirects=False)
     assert r.status_code == 303 and conn.execute("SELECT released_by FROM held_queue WHERE contact_id='3'").fetchone()["released_by"] == "Sam Okafor"
@@ -142,7 +142,7 @@ def test_the_manager_sees_every_queue_and_signs_for_sales(world):
     assert "by Sam Okafor" in client.get("/decisions").text
 
 
-def test_marketing_and_leadership_see_the_model_and_results_only(world):
+def test_marketing_sees_the_model_and_the_flags_only(world):
     path, conn, hs = world
     client = TestClient(create_app(path))
     log_in(client, "priya", PW)
@@ -159,20 +159,17 @@ def test_marketing_and_leadership_see_the_model_and_results_only(world):
     assert client.post("/jobs/route").status_code == 403
     r = client.post("/model/demo-v9/approve", data={"team": "sales", "decision": "approve", "seen": approval_token(conn, "demo-v9")}, follow_redirects=False)
     assert r.status_code == 303 and conn.execute("SELECT team, approver FROM approvals").fetchone()["team"] == "marketing"
-    assert client.post("/leadership/capacity", data={"hours": "30"}).status_code == 403   # capacity is leadership's
-    log_in(client, "dana", PW)
-    r = client.get("/", follow_redirects=False)
-    assert r.status_code == 200                                                   # leadership reads the overview
-    page = client.get("/model").text
-    assert "your role reads" in page and 'action="/model/demo-v9/approve"' not in page
-    assert client.post("/model/demo-v9/approve", data={"decision": "approve", "seen": approval_token(conn, "demo-v9")}).status_code == 403
+    assert client.post("/leadership/capacity", data={"hours": "30"}).status_code == 403   # capacity is the manager's
+    log_in(client, "sam", PW)
+    assert client.get("/", follow_redirects=False).status_code == 200            # the manager reads everything
     assert client.post("/leadership/capacity", data={"hours": "30"}, follow_redirects=False).status_code == 303
+    assert 'name="team"' in client.get("/model").text                            # and signs for either team
 
 
 def test_the_demo_portal_lists_its_logins(world):
     path, conn, hs = world
     made = auth.seed_demo_accounts(conn, hs.list_owners())
-    assert set(made) == {"sdr1", "sdr2", "manager", "marketing", "leadership", "admin"}
+    assert set(made) == {"sdr1", "sdr2", "manager", "marketing"}
     assert auth.seed_demo_accounts(conn, hs.list_owners()) == []                  # a second time adds nothing
     client = TestClient(create_app(path))
     client.post("/logout", follow_redirects=False)

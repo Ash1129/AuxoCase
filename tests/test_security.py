@@ -135,7 +135,7 @@ def test_a_stale_approval_is_refused_not_applied(world):
     # A colleague with the same page open sends it back, not knowing it was just approved.
     r = client.post("/model/demo-v9/approve", data=dict(form, approver="Sam", decision="send_back"), follow_redirects=False)
     assert r.headers["location"] == "/model?stale=demo-v9"
-    assert [(a["approver"], a["decision"]) for a in conn.execute("SELECT approver, decision FROM approvals")] == [("Test Admin", "approve")]   # the person logged in, not the typed name
+    assert [(a["approver"], a["decision"]) for a in conn.execute("SELECT approver, decision FROM approvals")] == [("Test Manager", "approve")]   # the person logged in, not the typed name
     assert conn.execute("SELECT status FROM model_registry WHERE version='demo-v9'").fetchone()["status"] == "candidate"
     assert "not saved" in client.get("/model?stale=demo-v9").text
     assert client.post("/model/demo-v9/approve", data={k: v for k, v in form.items() if k != "seen"}).status_code == 400
