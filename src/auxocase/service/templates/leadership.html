@@ -221,65 +221,6 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
 
 <hr class="rule">
 
-{# ---- the capacity head to head ---- #}
-<section class="ld-sec" aria-labelledby="ld-rank">
-  <h2 id="ld-rank" class="kicker">How good is the ranking · simulated{% if report and ranking %}{% call note('rank-how', 'How the ranking was tested') %}<span class="ln">Test: {{ ranking.months_word }} held-out month{{ '' if ranking.months == 1 else 's' }}, {{ ranking.span }}, on the generator's hidden demo chances, every lead worked on its first day.</span><span class="ln">Over HubSpot's points: {{ '{:+d}'.format(ranking.vs_hubspot.mean) }} a month, {{ '{:+d}'.format(ranking.vs_hubspot.lo) }} to {{ '{:+d}'.format(ranking.vs_hubspot.hi) }} with the months resampled.</span><span class="ln">Over AuxoCase's cold-start table: {{ '{:+d}'.format(ranking.vs_points) }}.</span><span class="ln">{% if ranking.ece is not none %}Expected calibration error: {{ '%.3f'|format(ranking.ece) }} on the test months.{% endif %}</span><span class="ln">Bars: 0 to {{ ranking.scale }}. Solid AuxoCase, outlined the comparisons, dashed phase 2.</span><span class="ln">Source: <code>{{ report_path }}</code>.</span>{% endcall %}{% endif %}</h2>
-  {% if not report %}{{ no_report() }}
-  {% elif not ranking %}<p class="empty">No capacity head to head in <code>{{ report_path }}</code>. It needs a live model, held-out test months and, on the mock, the generator's hidden demo chances.</p>
-  {% else %}
-  <p class="lede">Picking {{ ranking.capacity }} MQLs a month, each worked on its first day, the model would book {{ ranking.model }} against {{ ranking.hubspot }} for HubSpot's points.</p>
-  <div class="ld-rows" role="table" aria-label="Demos a month from each ranker's {{ ranking.capacity }} leads">
-    <div class="ld-row hd" role="row">
-      <span role="columnheader" class="lbl">Who picks the {{ ranking.capacity }}</span>
-      <span role="columnheader" class="w3">Demos a month</span>
-      <span role="columnheader" class="barcol">0 to {{ ranking.scale }}</span>
-    </div>
-    {% for r in ranking.rows %}
-    <div class="ld-row{{ ' on' if r.live }}" role="row">
-      <span role="cell" class="lbl">{{ r.label }}{% if r.live %} ({{ 'live' if live and live.version == ranking.version else 'live when evaluated' }}){% endif %}</span>
-      <span role="cell" class="w3 num">{{ r.v }}</span>
-      <span role="cell" class="barcol">{{ bar(r) }}</span>
-    </div>
-    {% endfor %}
-    <div class="ld-row split" role="row">
-      <span role="cell" aria-colspan="3">Phase 2 · {{ 'on' if ranking.phase2_on else 'off by default' }} · {{ 'enough outcomes below the gate to judge it' if ranking.phase2_ready else 'not yet tested below the gate' }}</span>
-    </div>
-    {% for r in ranking.phase2 %}
-    <div class="ld-row{{ ' end' if loop.last }}" role="row">
-      <span role="cell" class="lbl">{{ r.label }}</span>
-      <span role="cell" class="w3 num">{{ r.v }}</span>
-      <span role="cell" class="barcol">{{ bar(r) }}</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% endif %}
-</section>
-
-<hr class="rule">
-
-{# ---- why the two numbers differ ---- #}
-<section class="ld-sec" aria-labelledby="ld-gap" style="gap: 16px">
-  {% if ranking and shared %}
-  <h2 id="ld-gap" class="kicker">Why ranking alone says {{ ranking.model }} and the month says {{ shared.after.demos_a_month }}</h2>
-  <p class="lede">Different questions, so they do not add: the ranking is inside both.</p>
-  <div class="ld-grid cards">
-    <div class="ld-card">
-      <span class="mid num">{{ ranking.model }}</span>
-      <span>demos a month from ranking alone{% call note('gap-rank', 'How this is counted') %}<span class="ln">The model's best {{ ranking.capacity }} MQLs each month, picked from the whole month at once.</span><span class="ln">Each counts as worked on its first day: the generator's hidden demo chances, added up.</span><span class="ln">Perfect timing: it tests the picks and nothing else.</span>{% endcall %}</span>
-    </div>
-    <div class="ld-card">
-      <span class="mid num">{{ shared.after.demos_a_month }}</span>
-      <span>demos a month from {{ 'simulated ' if mock }}SDRs{% call note('gap-month', 'How this is counted') %}<span class="ln">Leads arrive through the month and go out as they come{% if desk %}, {{ desk }}{% endif %}.</span><span class="ln">{% if shared.late_share is not none %}{{ shared.late_share }}% of first touches land after the first day, when a lead books {{ late_as_often }}.{% endif %}</span><span class="ln">{% if explore and explore.share is not none %}{{ explore.share }}% of slots go to random leads: the exploration slice.{% endif %}</span><span class="ln">It counts the demos the {{ 'simulation' if mock else 'SDRs' }} booked.</span>{% endcall %}</span>
-    </div>
-  </div>
-  {% else %}
-  <h2 id="ld-gap" class="kicker">Why ranking alone and the month give different numbers</h2>
-  {% if not report %}{{ no_report() }}{% else %}<p class="empty">Needs both the capacity head to head and a routed month in <code>{{ report_path }}</code>; one is missing.</p>{% endif %}
-  {% endif %}
-</section>
-
-<hr class="rule">
-
 <div class="ld-grid">
   {# ---- the exploration slice ---- #}
   <section class="ld-sec" aria-labelledby="ld-explore">
@@ -308,37 +249,7 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
     {% endif %}
   </section>
 
-  {# ---- below the gate ---- #}
-  <section class="ld-sec" aria-labelledby="ld-gate">
-    <h2 id="ld-gate" class="kicker">Below HubSpot's gate · phase 2, {{ 'on' if gate and gate.ranks_below_gate else 'off' }}{% if mock %} · simulated{% endif %}{% if report and ranking %}{% call note('gate-how', 'What ranking below the gate would add') %}<span class="ln">{{ '{:+d}'.format(ranking.all_vs_mql.lo) }} to {{ '{:+d}'.format(ranking.all_vs_mql.hi) }} with the {{ ranking.months_word }} months resampled, on the same {{ ranking.capacity }} touches.</span><span class="ln">About {{ ranking.below_gate_picked }} of the {{ ranking.capacity }} would be leads the gate keeps out today{% if ranking.below_gate_by_channel %}: {% for c, n in ranking.below_gate_by_channel %}{{ c }} {{ n }}{{ ', ' if not loop.last }}{% endfor %}{% endif %}.</span><span class="ln">Never tested there yet: the switches, matured labels and where the gate loses leads are on Next phases.</span>{% endcall %}{% endif %}</h2>
-    {% if not report %}{{ no_report() }}
-    {% else %}
-    {% if not ranking %}<p class="empty">No capacity head to head in <code>{{ report_path }}</code>, so no estimate for ranking below the gate.</p>
-    {% else %}
-    <div class="ld-fig" style="flex: none">
-      <span class="mid num">{{ '{:+d}'.format(ranking.all_vs_mql.mean) }} a month</span>
-      <span>if the model ranked every lead, not only the MQLs</span>
-    </div>
-    {% endif %}
-    {% endif %}
-    <a class="tap" href="/phases#ph-gate">{% if gate and gate.matured %}{{ gate.matured }} of {{ gate.needed }} matured labels below the gate{% else %}The switches and the readiness bar{% endif %}, on Next phases</a>
-  </section>
-</div>
-
-<hr class="rule">
-
-{# ---- phase 3: the automated band and what a demo costs ---- #}
-<div class="ld-grid">
-  <section class="ld-sec" aria-labelledby="ld-tier2">
-    <h2 id="ld-tier2" class="kicker">Automated outreach below the line · phase 3, {{ tier2.state if tier2 else 'off' }}{% if mock %} · simulated{% endif %}{% if report and tier2 %}{% call note('tier2-how', 'How the lift is read') %}<span class="ln">{% if tier2.lift is not none %}Lift: {{ tier2.lift }} points, the emailed arm's booking rate against the control arm's, on matured leads from the same slice.{% endif %}</span><span class="ln">{% if tier2.ready %}Enough matured labels to judge the band.{% else %}The band waits for {{ tier2.needed }} matured emailed leads; {{ tier2.matured }} so far.{% endif %}</span><span class="ln">The two arms and the switches are on Next phases.</span>{% endcall %}{% endif %}</h2>
-    {% if not report %}{{ no_report() }}
-    {% elif not tier2 %}<p class="empty">Off, and no lead has been drawn yet.</p>
-    {% else %}
-    <p class="lede">{% if tier2.on %}Every lead below the line but a {{ tier2.holdback }}% holdback gets the sequence{% else %}{{ tier2.explore }}% of the leads below the line get the sequence{% endif %}, at most {{ tier2.daily_limit }} a day{% if tier2.lift is not none %}: {{ '{:+g}'.format(tier2.lift) }} points of demo rate over the control arm{% endif %}.</p>
-    {% endif %}
-    <a class="tap" href="/phases#ph-line">The two arms and the switches, on Next phases</a>
-  </section>
-
+  {# ---- what a demo costs ---- #}
   <section class="ld-sec" aria-labelledby="ld-costs">
     <h2 id="ld-costs" class="kicker">What a demo costs, by the way the lead was reached{% if mock %} · simulated{% endif %}{% if report and costs %}{% call note('costs-how', 'How the costs are set') %}<span class="ln">Units: an SDR hour {{ '{:.0f}'.format(costs.units.cost_sdr_hour) }} dollars, a cold touch {{ '{:.0f}'.format(costs.units.sdr_minutes_touch) }} minutes, a reply {{ '{:.0f}'.format(costs.units.sdr_minutes_reply) }}. Settings, not facts.</span><span class="ln">{% if costs.automated.emailed %}Per 100 emails: {{ costs.reply_rate }} replies, {{ costs.automated.demos_per_100_emails }} demos{% if costs.automated.demos_added is not none %}; about {{ costs.automated.demos_added }} demos in all the control arm says would not have come otherwise, worth about {{ '{:,}'.format(costs.automated.value_added) }} dollars{% endif %}.{% endif %}</span><span class="ln">{% if costs.since %}Both routes counted from {{ costs.since[:10] }}, the sequence's first day.{% endif %}</span><span class="ln">Drafting: {% if costs.draft_cost_metered %}priced from the service's own Claude calls as Revenium meters them, {{ '{:,}'.format(costs.automated.drafts_metered) }} of {{ '{:,}'.format(costs.automated.emailed) }} drafts at their own cost and the rest at their mean of {{ '%.4f'|format(costs.automated.draft_unit_cost) }} dollars. Service calls so far: {{ '{:,}'.format(costs.ai.calls) }}, {{ '%.2f'|format(costs.ai.cost_usd) }} dollars.{% else %}no priced model call yet, so a draft is costed at {{ '%.2f'|format(costs.units.cost_draft) }} dollars; with the Claude CLI reader on, each call's metered cost takes over.{% endif %}</span><span class="ln">The 12 SDRs are fixed, so demos an SDR hour is the number to compare.</span><span class="ln">{% if costs.automated.demos_net is not none %}Replies took SDR time from ranked leads: at {{ '{:.0f}'.format(costs.units.sdr_minutes_reply) }} minutes a reply against {{ '{:.0f}'.format(costs.units.sdr_minutes_touch) }} a cold touch, {{ '{:,}'.format(costs.automated.replied) }} replies displaced about {{ costs.automated.demos_forgone }} ranked demos, net about {{ '{:+}'.format(costs.automated.demos_net) }}{% if costs.automated.break_even_reply_minutes %}. Break-even: a {{ costs.automated.break_even_reply_minutes }}-minute reply, so measure how long a reply really takes{% endif %}.{% endif %}</span>{% endcall %}{% endif %}</h2>
     {% if not report %}{{ no_report() }}
@@ -424,7 +335,7 @@ form.switches{display:flex;flex-direction:column;gap:16px;margin:0}
     {% if precision %}<li>Precision on worked leads depends on which leads the SDRs chose. On worked test leads {% if precision.level %}the model and the cold-start table are level: {{ '%.3f'|format(precision.model) }} each{% elif precision.points_ahead %}the cold-start table is {{ 'a hair ' if precision.hair }}ahead of the model: {{ '%.3f'|format(precision.points) }} against {{ '%.3f'|format(precision.model) }}{% else %}the model is {{ 'a hair ' if precision.hair }}ahead of the cold-start table: {{ '%.3f'|format(precision.model) }} against {{ '%.3f'|format(precision.points) }}{% endif %} at K = {{ precision.k }}.</li>{% endif %}
     {% if ranking %}<li>Ranges resample the {{ ranking.months_word }} held-out months: how steady a gap is on this generator, not how sure a real portal would be.</li>{% endif %}
     {% if mock and months %}<li>The months are the generator's clock, {{ months.span }}, not real dates.</li>{% endif %}
-    {% if gate and not gate.matured %}<li>Phase 2 has no outcomes yet.</li>{% endif %}
+    {% if gate and not gate.matured %}<li>Ranking below the gate has no outcomes yet.</li>{% endif %}
     {% if tier2 and mock %}<li>On the mock, replies to the automated email and bookings after a reply are the generator's fixed rates, not measurements. On a real portal both are measured.</li>{% endif %}
     {% if costs %}<li>Unit costs (an SDR's hour, minutes a touch) are settings. The counts are {{ 'simulated' if mock else "HubSpot's" }}.</li>{% endif %}
   </ul>

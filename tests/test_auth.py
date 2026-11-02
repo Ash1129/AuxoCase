@@ -110,7 +110,7 @@ def test_an_sdr_sees_their_own_queue_and_nothing_else(world):
     r = client.get("/queue/901", follow_redirects=False)
     assert r.status_code == 303 and r.headers["location"] == "/queue/900"       # Bea's queue: back to their own
     assert client.get("/lead/1").status_code == 200 and client.get("/lead/2").status_code == 403
-    for url in ("/held", "/model", "/leadership", "/phases", "/decisions"):
+    for url in ("/held", "/model", "/leadership", "/decisions"):
         assert client.get(url).status_code == 403, url
     assert client.post("/jobs/route").status_code == 403
     # Acting on Bea's lead, or from Bea's queue, is refused; on their own it lands with them as the actor.
@@ -136,7 +136,6 @@ def test_the_manager_sees_every_queue_and_signs_for_sales(world):
     # Releasing a held lead records the manager by name, from the session.
     r = client.post("/held/3/release", data={"owner_id": "901", "note": "take it"}, follow_redirects=False)
     assert r.status_code == 303 and conn.execute("SELECT released_by FROM held_queue WHERE contact_id='3'").fetchone()["released_by"] == "Sam Okafor"
-    assert client.post("/phases/gate", data={"explore": "0.5"}).status_code == 403    # the switches are leadership's and marketing's
     # A manager's call from Bea's queue is logged on Bea's queue with the manager as the actor, and Decisions says so.
     r = client.post("/lead/2/action", data={"owner_id": "901", "action": "junk", "seen": lead_token(conn, hs.get_contact("2"))}, follow_redirects=False)
     assert r.status_code == 303
@@ -151,18 +150,16 @@ def test_marketing_and_leadership_see_the_model_and_results_only(world):
     assert r.headers["location"] == "/model"
     page = client.get("/model").text
     assert "marketing · Priya Natarajan" in page and ">Queues<" not in page and ">Held" not in page and ">Overview<" not in page
-    # Marketing has only the three scoring pages, in its own words; leadership and decisions are not its.
-    assert ">Lead scoring" in page and ">Leads to check" in page and ">Leads left out<" in page
+    # Marketing has only its two scoring pages, in its own words; leadership and decisions are not its.
+    assert ">Lead scoring" in page and ">Leads to check" in page and "/phases" not in page
     assert 'href="/leadership"' not in page and 'href="/decisions"' not in page and ">Results<" not in page
     assert client.get("/leadership").status_code == 403 and client.get("/decisions").status_code == 403
     assert client.get("/queue/900").status_code == 403 and client.get("/held").status_code == 403 and client.get("/lead/1").status_code == 403
-    assert client.get("/phases").status_code == 200 and client.get("/flagged").status_code == 200
+    assert client.get("/flagged").status_code == 200
     assert client.post("/jobs/route").status_code == 403
     r = client.post("/model/demo-v9/approve", data={"team": "sales", "decision": "approve", "seen": approval_token(conn, "demo-v9")}, follow_redirects=False)
     assert r.status_code == 303 and conn.execute("SELECT team, approver FROM approvals").fetchone()["team"] == "marketing"
     assert client.post("/leadership/capacity", data={"hours": "30"}).status_code == 403   # capacity is leadership's
-    assert client.post("/phases/gate", data={"explore": "0.5"}, follow_redirects=False).status_code == 303
-    assert conn.execute("SELECT who FROM phase_decisions").fetchone()["who"] == "Priya Natarajan"
     log_in(client, "dana", PW)
     r = client.get("/", follow_redirects=False)
     assert r.status_code == 200                                                   # leadership reads the overview

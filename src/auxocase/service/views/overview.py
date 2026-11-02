@@ -171,6 +171,51 @@ def _waiting_by_owner(st, now: datetime) -> dict[str, list]:
     return out
 
 
+def _sdr_rows(st, sdrs: list, counts: dict, waiting: dict, now: datetime) -> list[dict]:
+    """One row an SDR for the manager's table, most worked first: {o, href, waiting, limit, oldest (the age of the
+    oldest waiting lead, or None), late (waiting leads past their first day), received (handed out in the last
+    QUEUE_DAYS), worked (their leads with a first touch in the window, from the outcomes synced), booked (of those,
+    the demos booked), rate (booked per 100 worked, or None), skipped, junk (their own calls in the window), hours
+    (the median hours from hand-out to first touch, or None)}."""
+    conn = st.conn
+    since = (now - timedelta(days=QUEUE_DAYS)).isoformat(timespec="seconds")
+    received = {r["owner_id"]: r["n"] for r in conn.execute(
+        "SELECT owner_id, COUNT(DISTINCT contact_id) n FROM routing_log WHERE decision IN ('assigned','holdout_assigned') AND created_at >= ? "
+        "GROUP BY owner_id", (since,))}
+    worked = {r["owner_id"]: dict(r) for r in conn.execute(
+        "SELECT c.hubspot_owner_id owner_id, COUNT(*) worked, COALESCE(SUM(o.demo_booked), 0) booked FROM outcomes o "
+        "JOIN hs_contacts c ON c.id = o.contact_id WHERE o.worked = 1 AND o.first_touch_at >= ? AND c.hubspot_owner_id IS NOT NULL "
+        "GROUP BY c.hubspot_owner_id", (since,))}
+    calls = {(r["owner_id"], r["action"]): r["n"] for r in conn.execute(
+        "SELECT owner_id, action, COUNT(DISTINCT contact_id) n FROM overrides WHERE created_at >= ? AND action IN ('skipped','junk') "
+        "GROUP BY owner_id, action", (since,))}
+    speed: dict[str, list[float]] = {}
+    for r in conn.execute(
+            "SELECT r.owner_id, r.created_at handed, COALESCE(t.touched_at, o.first_touch_at) touched FROM routing_log r "
+            "LEFT JOIN touches t ON t.contact_id = r.contact_id LEFT JOIN outcomes o ON o.contact_id = r.contact_id "
+            "WHERE r.decision IN ('assigned','holdout_assigned') AND r.created_at >= ?", (since,)):
+        if r["touched"] and r["touched"] >= r["handed"]:
+            try:
+                speed.setdefault(r["owner_id"], []).append(
+                    (datetime.fromisoformat(r["touched"][:19]) - datetime.fromisoformat(r["handed"][:19])).total_seconds() / 3600)
+            except ValueError:
+                pass
+    rows = []
+    for o in sdrs:
+        mine = waiting.get(o.id, [])
+        w = worked.get(o.id) or {"worked": 0, "booked": 0}
+        hours = sorted(speed.get(o.id, []))
+        rows.append({"o": o, "href": f"/queue/{o.id}", "waiting": counts.get(o.id, 0), "limit": o.capacity_limit,
+                     "oldest": _age((now - mine[0].createdate).total_seconds() / 3600) if mine else None,
+                     "late": sum(1 for c in mine if first_day(c.createdate, now)["state"] == "late"),
+                     "received": received.get(o.id, 0), "worked": w["worked"], "booked": w["booked"],
+                     "rate": round(100 * w["booked"] / w["worked"]) if w["worked"] else None,
+                     "skipped": calls.get((o.id, "skipped"), 0), "junk": calls.get((o.id, "junk"), 0),
+                     "hours": round(hours[len(hours) // 2], 1) if hours else None})
+    rows.sort(key=lambda r: (-r["worked"], -r["booked"], r["o"].name))
+    return rows
+
+
 def _bands(metrics: Optional[dict], rows: list[dict]) -> list[dict]:
     """The live model's calibration bands the shown rows fall in, in order of first appearance, with how many."""
     out: dict[tuple, dict] = {}
@@ -289,6 +334,7 @@ def overview_page(st) -> dict:
                      holdout=c.auxo_holdout, below_gate=not passed_gate(c), href=f"/queue/{o.id}?lead={c.id}")
         desks.append(d)
     desks.sort(key=lambda d: (d["lead"] is None, d["lead"].createdate if d["lead"] else datetime.max))
+    sdr_rows = _sdr_rows(st, sdrs, counts, waiting, now)
 
     frozen = clock_frozen(conn)
     return {"now_text": now.strftime("%a %d %b %Y, %H:%M") if frozen else tz.clock_text(now, weekday=True),
@@ -303,5 +349,5 @@ def overview_page(st) -> dict:
             "ranked_at": _wall(scored["finished_at"], run_day) if scored else None,
             "bands": _bands(metrics, top), "band_model": live["version"] if live else None,
             "gate_shown": sum(1 for r in top if r["below_gate"]), "below_gate_on": ranks_below_gate(conn),
-            "fresh": fresh, "speed": speed, "gen_factor": LATE_TOUCH_FACTOR, "desks": desks, "runs": runs, "words": words,
+            "fresh": fresh, "speed": speed, "gen_factor": LATE_TOUCH_FACTOR, "desks": desks, "sdr_rows": sdr_rows, "runs": runs, "words": words,
             "queue_days": QUEUE_DAYS}

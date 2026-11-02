@@ -315,7 +315,7 @@ def test_the_pages_show_where_a_lead_stands_and_the_route_job_runs_the_band(worl
         c2 = connect(path)
         sent = _rows(c2, status="sent")
         page = client.get(f"/lead/{sent[0]['contact_id']}").text
-        assert "In the automated sequence since" in page and "phase 3" in page
+        assert "In the automated sequence since" in page and "phase 3" not in page
         # The mock's "lead replies" button is the reply: the lead lands with the sender.
         c2.execute("UPDATE hs_owners SET capacity_limit=99")
         resp = client.post(f"/lead/{sent[0]['contact_id']}/hubspot", data={"kind": "reply"}, follow_redirects=False)
@@ -323,4 +323,4 @@ def test_the_pages_show_where_a_lead_stands_and_the_route_job_runs_the_band(worl
         page = client.get(f"/lead/{sent[0]['contact_id']}").text
         assert "Replied to the automated email" in page and _rows(c2, contact_id=sent[0]["contact_id"])[0]["status"] == "replied"
         lead = client.get("/leadership").text
-        assert "phase 3" in lead
+        assert "phase 3" not in lead and "Next phases" not in lead

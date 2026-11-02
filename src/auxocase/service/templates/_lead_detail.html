@@ -227,7 +227,7 @@
   <section class="demo" aria-labelledby="demo-{{ c.id }}">
     <h3 class="kicker" id="demo-{{ c.id }}">Demo only · mock portal</h3>
     {% if automated -%}
-    <p class="small muted"><b>Demo: the lead answers.</b> In the automated sequence (phase 3). On a real portal the reply lands in the sender's HubSpot inbox; AuxoCase sees it within a minute and hands the lead to that SDR.</p>
+    <p class="small muted"><b>Demo: the lead answers.</b> In the automated sequence. On a real portal the reply lands in the sender's HubSpot inbox; AuxoCase sees it within a minute and hands the lead to that SDR.</p>
     <form class="actions" method="post" action="/lead/{{ c.id }}/hubspot"><input type="hidden" name="back" value="{{ back }}">
       <input type="hidden" name="subject" value="{{ d.get('tier2').subject or '' }}">
       <span class="outcome"><label class="vh" for="reply-kind-{{ c.id }}">What the lead says</label><select id="reply-kind-{{ c.id }}" name="reply">{% for k, v in d.demo_replies %}<option value="{{ k }}">{{ v }}</option>{% endfor %}</select><button class="btn" type="submit" name="kind" value="reply">The lead replies</button></span>

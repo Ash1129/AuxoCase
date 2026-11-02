@@ -8,11 +8,11 @@ role, and the role decides what the sidebar offers and what a request may do:
   identity, not by URL;
 - the sales manager sees the overview, every queue, the held and overdue
   list and the decisions, runs the jobs, and signs a model off for sales;
-- marketing sees the model page and signs off for marketing, the flagged
-  leads (and resolves them), the leadership page, the next phases and the
-  decisions;
+- marketing sees the model page and signs off for marketing, and the flagged
+  leads (and resolves them);
 - leadership sees the leadership page, sets the capacity inputs, throws the
-  phase switches, and reads the overview, the model page and the decisions;
+  automatic sign-off switch, and reads the overview, the model page and the
+  decisions;
 - an admin may do all of it and adds accounts (`run.py staff`).
 
 A write records who made it from the session, never from a typed name: the
@@ -40,15 +40,15 @@ from typing import Optional
 
 PERMISSIONS = frozenset({
     "view_overview", "view_any_queue", "view_own_queue", "act_on_leads", "view_held", "release_held", "view_decisions",
-    "view_leadership", "set_capacity", "view_model", "approve_marketing", "approve_sales", "view_phases", "throw_switches",
+    "view_leadership", "set_capacity", "view_model", "approve_marketing", "approve_sales", "throw_switches",
     "run_jobs", "manage_staff", "view_flags", "resolve_flags",
 })
 ROLES: dict[str, frozenset[str]] = {
     "sdr": frozenset({"view_own_queue", "act_on_leads"}),
     "manager": frozenset({"view_overview", "view_any_queue", "act_on_leads", "view_held", "release_held", "view_decisions",
-                          "view_leadership", "set_capacity", "view_model", "approve_sales", "view_phases", "run_jobs", "view_flags"}),
-    "marketing": frozenset({"view_model", "approve_marketing", "view_phases", "throw_switches", "view_flags", "resolve_flags"}),
-    "leadership": frozenset({"view_overview", "view_decisions", "view_leadership", "set_capacity", "view_model", "view_phases",
+                          "view_leadership", "set_capacity", "view_model", "approve_sales", "run_jobs", "view_flags"}),
+    "marketing": frozenset({"view_model", "approve_marketing", "throw_switches", "view_flags", "resolve_flags"}),
+    "leadership": frozenset({"view_overview", "view_decisions", "view_leadership", "set_capacity", "view_model",
                              "throw_switches", "view_flags"}),
     "admin": PERMISSIONS,
 }

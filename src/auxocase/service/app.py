@@ -56,7 +56,6 @@ from .views.lead import lead_detail
 from .views.leadership import leadership_page
 from .views.model import model_page
 from .views.overview import overview_page
-from .views.phases import phases_page, throw_switches
 from ..capacity import set_assumptions
 from ..llm.replies import DEMO_REPLIES
 from ..routing import callnotes, followups, replies
@@ -422,41 +421,6 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         except ValueError as e:
             return RedirectResponse(f"/leadership?refused={quote(str(e))}#ld-capacity", status_code=303)
         return RedirectResponse(f"/leadership?set={len(changed)}#ld-capacity", status_code=303)
-
-    @app.get("/phases", response_class=HTMLResponse)
-    def phases(request: Request, phase: str = "", refused: str = "", set: str = "", explore: str = "", switch: str = "",
-               force: str = "", who: str = "", note: str = ""):
-        """Phase 2 and phase 3: their switches, readiness and results in one place. After a post, `phase` names the
-        section the notice belongs in: `refused` a switch's refusal, `set` how many switches changed (0: none). After a
-        refusal the rest carry the choices back into that phase's form, so a refused submit is not a blank form."""
-        allow(request, "view_phases")
-        notice = {"phase": phase if phase in ("gate", "line") else "", "refused": refused[:300], "set": set[:3],
-                  "keep": {"explore": explore[:8], "switch": switch[:3], "force": force[:1], "who": who[:80], "note": note[:200]}}
-        return TEMPLATES.TemplateResponse(request, "phases.html", ctx(request, nav="phases", **phases_page(st), notice=notice))
-
-    @app.post("/phases/{phase}")
-    def phase_switch(request: Request, phase: str, note: str = Form(""), explore: str = Form(""), switch: str = Form(""),
-                     force: str = Form("")):
-        """Throw a phase's switches: `explore` a share (blank leaves it), `switch` on/off for the second switch (blank
-        leaves it), `force` to pass the readiness check. A refusal comes back to the page as a notice, nothing set.
-        The switch is recorded as thrown by the person logged in."""
-        if phase not in ("gate", "line"):
-            raise HTTPException(404)
-        who = allow(request, "throw_switches").name
-        try:
-            share = float(explore) if explore.strip() else None
-            on = {"on": True, "off": False}.get(switch.strip().lower()) if switch.strip() else None
-            changed = throw_switches(st.conn, phase, share, on, bool(force), who.strip(), note.strip())
-        except ValueError as e:
-            keep = "".join(f"&{k}={quote(v.strip()[:200])}" for k, v in
-                           (("explore", explore), ("switch", switch), ("force", force), ("note", note)) if v.strip())
-            return RedirectResponse(f"/phases?phase={phase}&refused={quote(str(e))}{keep}#ph-{phase}-log", status_code=303)
-        if phase == "gate" and any(c["switch"] == "on" and c["value"] == "on" for c in changed) and not (runner and runner.running):
-            # Plain leads already waiting were never scored. With the scheduler on, its rescore job scores them within
-            # a minute; without it, score them in the background here, as a model going live does.
-            app.state.rescore_thread = threading.Thread(target=_rescore_in_background, args=(db_path, st.hs), daemon=True)
-            app.state.rescore_thread.start()
-        return RedirectResponse(f"/phases?phase={phase}&set={len(changed)}#ph-{phase}-log", status_code=303)
 
     @app.get("/decisions", response_class=HTMLResponse)
     def decisions(request: Request, limit: int = 500):

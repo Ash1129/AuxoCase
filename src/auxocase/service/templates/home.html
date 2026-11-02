@@ -28,19 +28,16 @@
 .ov-linetext{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:14px;line-height:20px}
 /* the line and the places-follow rows stay in view while the wide table scrolls on a phone */
 .ov-pin{position:sticky;left:0;max-width:min(100%,calc(100vw - 32px))}
-.ov-desks{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(260px,100%),1fr));column-gap:32px}
-.ov-desk{display:flex;flex-direction:column;gap:2px;min-height:44px;padding:12px 0;border-top:1px solid var(--line);text-decoration:none}
-.ov-deskhead{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.ov-sdrs th[scope=row]{font-weight:400;white-space:nowrap}
 .ov-name{font-weight:600;text-decoration:underline;text-underline-offset:3px}
 .ov-count{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.ov-desk .ov-who{color:var(--ink)}
 .slot-on{fill:var(--accent)}.slot-off{fill:none;stroke:var(--muted);stroke-width:1}
 .ov-runs td{padding:9px 16px 9px 0}.ov-runs td:last-child{padding-right:0}
 {% endblock %}
 {% block body %}
 {%- set mock = env == 'mock' -%}
 {#- numbered footnotes: 1 the simulated age effect (mock, where the page uses it), then the clocks -#}
-{%- set sim_note = mock and ((cap and fresh.discounted) or (desks and speed.words)) -%}
+{%- set sim_note = mock and ((cap and fresh.discounted) or (sdr_rows and speed.words)) -%}
 {%- set clocks_note = frozen or runs -%}
 {%- macro ref(key) -%}
   {%- set n = 1 if key == 'sim' else (2 if sim_note else 1) -%}
@@ -124,25 +121,31 @@
 <hr class="rule">
 
 <section class="ov-sec" aria-labelledby="ov-desks">
-  <h2 id="ov-desks" class="kicker">SDR desks · {{ team.sdrs }} active · oldest arrival first{% if desks %}{% call note('desks-note', 'How the desks are filled') %}<span class="ln">{% if team.unlimited %}No limit per SDR: routing keeps up to {{ team.reach }} untouched leads across the team, its reach in {{ horizon }}, handed out round robin.{% else %}Limit: {% if team.limit is not none %}{{ words(team.limit) }} lead{{ 's' if team.limit != 1 }} waiting for a first touch per SDR{% else %}each SDR's own count of leads waiting for a first touch{% endif %}; {% if team.at_limit == team.sdrs %}{% if team.sdrs == 1 %}reached{% elif team.sdrs == 2 %}both at it{% else %}all {{ team.sdrs }} at it{% endif %}{% elif team.at_limit == 0 %}none at it{% else %}{{ team.at_limit }} of {{ team.sdrs }} at it{% endif %}.{% endif %}</span><span class="ln">A touch frees the {{ 'room' if team.unlimited else 'slot' }}; routing refills it from the top of the pool.</span><span class="ln">{% if speed.words %}Leads touched {{ fresh.first }} booked {{ speed.words }}{{ ref('sim') }}.{% endif %}</span>{% endcall %}{% endif %}</h2>
-  {% if not desks %}
+  <h2 id="ov-desks" class="kicker">SDRs · {{ team.sdrs }} active · the last {{ queue_days }} days{% if sdr_rows %}{% call note('desks-note', 'What the columns count') %}<span class="ln">Waiting: leads handed out and not yet touched{% if team.unlimited %}; no limit per SDR, routing keeps up to {{ team.reach }} across the team, its reach in {{ horizon }}, handed out round robin{% else %}, against the SDR's limit{% endif %}. Oldest: how long the oldest of them has been in HubSpot; late: how many are past their first day.</span><span class="ln">Received: leads handed to the SDR in the last {{ queue_days }} days. Worked: their leads with a first touch in that time, from the outcomes synced; booked: those that booked a demo, and the share. Skipped and junk: the SDR's own calls. Hours to first touch: the middle lead, from hand-out to the first email or call.</span><span class="ln">A touch frees the {{ 'room' if team.unlimited else 'slot' }}; routing refills it from the top of the pool.{% if speed.words %} Leads touched {{ fresh.first }} booked {{ speed.words }}{{ ref('sim') }}.{% endif %}</span>{% endcall %}{% endif %}</h2>
+  {% if not sdr_rows %}
   <p class="ov-text">No SDR is active: nobody to hand leads to.</p>
   {% else %}
-  <div class="ov-desks">
-    {% for d in desks %}
-    <a class="ov-desk" href="{{ d.href }}">
-      <span class="ov-deskhead"><span class="ov-name">{{ d.o.name }}</span><span class="num small muted ov-count">{% if d.marks %}<svg width="{{ 14 * (d.marks|length) - 4 }}" height="10" aria-hidden="true">{% for on in d.marks %}{% if on %}<rect class="slot-on" x="{{ 14 * loop.index0 }}" y="0" width="10" height="10" rx="1"></rect>{% else %}<rect class="slot-off" x="{{ 14 * loop.index0 + 0.5 }}" y="0.5" width="9" height="9" rx="1"></rect>{% endif %}{% endfor %}</svg>{% endif %}{% if d.limit is none %}{{ d.waiting }}<span class="vh"> waiting</span>{% else %}{{ d.waiting }} of {{ d.limit }}<span class="vh"> slots in use</span>{% endif %}</span></span>
-      {% if d.lead %}
-      <span class="small ov-who">{{ d.who.name }}{% if d.who.title %}, {{ d.who.title }}{% endif %}{% if d.who.company %} at {{ d.who.company }}{% endif %}</span>
-      <span class="num small {{ 'muted' if d.holdout or d.state == 'fresh' else ('bad' if d.state == 'late' else 'warn') }}">{{ d.age }} since arrival · {% if d.holdout %}a calibration lead, drawn at random from {{ "below HubSpot's MQL gate" if d.below_gate else 'the rest of the pool' }}{% elif d.state == 'late' %}past its first day{% else %}touch by {{ d.touch_by }}{% endif %}</span>
-      {% if d.more %}<span class="small muted">and {{ d.more }} more waiting</span>{% endif %}
-      {% elif d.waiting %}
-      <span class="small muted">{{ d.waiting }} waiting in HubSpot, none handed out by AuxoCase in the last {{ queue_days }} days</span>
-      {% else %}
-      <span class="small muted">No lead waiting: the next free slot goes to the top of the pool.</span>
-      {% endif %}
-    </a>
-    {% endfor %}
+  <div class="scroll">
+    <table class="num ov-sdrs" aria-labelledby="ov-desks">
+      <thead><tr><th scope="col">SDR</th><th scope="col" class="r">Waiting</th><th scope="col" class="r">Oldest</th><th scope="col" class="r">Late</th><th scope="col" class="r">Received</th><th scope="col" class="r">Worked</th><th scope="col" class="r">Booked</th><th scope="col" class="r">Booked %</th><th scope="col" class="r">Skipped</th><th scope="col" class="r">Junk</th><th scope="col" class="r">Hours to first touch</th></tr></thead>
+      <tbody>
+      {% for r in sdr_rows %}
+      <tr>
+        <th scope="row"><a class="ov-name" href="{{ r.href }}">{{ r.o.name }}</a></th>
+        <td class="r">{{ r.waiting }}{% if r.limit is not none %} <span class="muted">of {{ r.limit }}</span>{% endif %}</td>
+        <td class="r{% if r.late %} warn{% endif %}">{{ r.oldest if r.oldest else '—' }}</td>
+        <td class="r{% if r.late %} bad{% endif %}">{{ r.late if r.late else '—' }}</td>
+        <td class="r">{{ r.received }}</td>
+        <td class="r">{{ r.worked }}</td>
+        <td class="r">{{ r.booked }}</td>
+        <td class="r">{% if r.rate is not none %}{{ r.rate }}%{% else %}—{% endif %}</td>
+        <td class="r">{{ r.skipped if r.skipped else '—' }}</td>
+        <td class="r">{{ r.junk if r.junk else '—' }}</td>
+        <td class="r">{% if r.hours is not none %}{{ r.hours }}{% else %}—{% endif %}</td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
   </div>
   {% endif %}
 </section>

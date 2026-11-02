@@ -58,7 +58,7 @@ code{font-size:14px}
       <tbody>{% for d in demo %}<tr>
         <td><code>{{ d.username }}</code></td>
         <td>{{ d.name }}</td>
-        <td class="muted">{% if d.role == 'sdr' %}their own queue{% elif d.role == 'manager' %}sales manager: overview, every queue, held &amp; overdue, decisions, the jobs{% elif d.role == 'marketing' %}marketing: model &amp; approvals, leadership, next phases, decisions{% elif d.role == 'leadership' %}leadership: capacity and the phase switches, overview, model, decisions{% else %}admin: everything, and adds accounts{% endif %}</td>
+        <td class="muted">{% if d.role == 'sdr' %}their own queue{% elif d.role == 'manager' %}sales manager: overview, every queue, held &amp; overdue, decisions, the jobs{% elif d.role == 'marketing' %}marketing: lead scoring, leads to check{% elif d.role == 'leadership' %}leadership: capacity, overview, model, decisions{% else %}admin: everything, and adds accounts{% endif %}</td>
       </tr>{% endfor %}</tbody>
     </table>
   </section>{% endif %}
