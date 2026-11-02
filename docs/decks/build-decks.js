@@ -116,9 +116,31 @@ function box(slide, C, { x, y, w, h, text, fill, color, size = 12, bold = false,
   slide.addText(text, { x: x + 0.08, y: y + 0.05, w: w - 0.16, h: h - 0.1, fontSize: size, bold, color: color || C.text1, align, valign: "middle", margin: 0, isTextBox: true, objectName: "Box text" });
 }
 
-function demoSlide(pres, C, section, extraRows) {
+function shotsSlide(pres, C, section) {
   const slide = pres.addSlide({ masterName: "LIGHT", sectionTitle: section });
-  slide.addText("See it running: the demo pages", { placeholder: "title" });
+  slide.addText("See it running: one page a role, each a link to the demo", { placeholder: "title" });
+  const shots = [
+    ["manager", "/", "Sales manager · Overview", "Logged in as manager: the pool, leads reached in a week, every SDR's numbers; held queue, decisions and leadership in the sidebar."],
+    ["marketing", "/model", "Marketing · Lead scoring", "Logged in as marketing: what to work on, the live model and its sign-off; How it decides and Leads to check beside it."],
+    ["sdr", "/queue/900", "SDR · Alex Novak's queue", "Logged in as sdr1: one lead at a time with its odds, rank and reason, the drafted email and the call brief."],
+  ];
+  const iw = 3.9, ih = iw / 1.6, gap = 0.22;
+  shots.forEach((t, i) => {
+    const x = LEFT + i * (iw + gap), y = 1.55;
+    slide.addImage({ path: OUT + "shots/" + t[0] + ".png", x, y, w: iw, h: ih, hyperlink: { url: BASE + t[1], tooltip: BASE + t[1] }, objectName: t[2] + " screenshot" });
+    slide.addText([
+      { text: t[2], options: { bold: true, fontSize: 14, color: H.accent4, hyperlink: { url: BASE + t[1] }, breakLine: true, paraSpaceAfter: 4 } },
+      { text: t[3], options: { fontSize: 12, color: C.text1 } },
+    ], { x, y: y + ih + 0.15, w: iw, h: 1.6, valign: "top", margin: 0, isTextBox: true, objectName: t[2] + " label" });
+  });
+  caption(slide, C, "Click a screenshot or its title to open the page on the machine running the service (localhost:8002); the accounts and password are on the login page. Every page is also listed on the next slide.", LEFT, 5.3, W - 2 * LEFT);
+  return slide;
+}
+
+function demoSlide(pres, C, section, extraRows) {
+  shotsSlide(pres, C, section);
+  const slide = pres.addSlide({ masterName: "LIGHT", sectionTitle: section });
+  slide.addText("Every demo page, by role", { placeholder: "title" });
   story(slide, C, [
     { text: "The mock portal runs on this machine at localhost:8002. Every page is behind a login; the demo accounts and the password are listed on the login page.", bold: false },
     "Log in as manager to see everything, as marketing for the scoring pages, and as sdr1 (Alex Novak) for one SDR's queue. Logging in as another account replaces the session.",
