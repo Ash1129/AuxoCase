@@ -563,7 +563,20 @@ def create_app(db_path=DEFAULT_DB, scheduler: Optional[bool] = None) -> FastAPI:
         allow(request, "run_jobs")
         out = flags.run(st.hs, st.conn, st.llm, limit=limit)
         out["verdicts"] = verdicts.run(st.conn, st.llm)
+        if out["verdicts"].get("went_live") and not (runner and runner.running):
+            app.state.rescore_thread = threading.Thread(target=_rescore_in_background, args=(db_path, st.hs), daemon=True)
+            app.state.rescore_thread.start()
         return out
+
+    @app.post("/model/auto")
+    def model_auto(request: Request, switch: str = Form(...)):
+        """Automatic sign-off on or off, recorded with who threw it."""
+        who = allow(request, "throw_switches").name
+        on = {"on": True, "off": False}.get(switch.strip().lower())
+        if on is None:
+            raise HTTPException(400, "switch must be on or off")
+        verdicts.set_auto(st.conn, on, who)
+        return RedirectResponse("/model#sign-off", status_code=303)
 
     @app.post("/jobs/realert")
     def job_realert(request: Request):

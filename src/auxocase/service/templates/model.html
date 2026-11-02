@@ -64,7 +64,8 @@ details[open]>summary{margin-bottom:8px}
 {% set pick = 'sales' if r.signed.marketing and not r.signed.sales else 'marketing' %}
 {% set v = verdicts.get(r.version) %}{% if v %}<p class="lede"><b class="{{ 'good' if v.verdict == 'approve' else 'warn' }}">{{ v.word }}</b>{{ v.sentence[v.word|length:] }}</p>
 <p class="small muted" style="margin: -8px 0 0">{% if v.source == 'reader' %}Worded by {{ v.llm }} from the rules' facts{% else %}The rules' own wording{% endif %}{% call note('verdict-note-' ~ r.version, 'How the verdict is decided') %}<span class="ln">Against the live version, each on its own test leads: send back when the number on a lead cannot be believed (off by more than a point more than the live one's); approve when its top picks book more demos than HubSpot's list would, by more than the live one's, and it learned from at least as many worked leads; otherwise send back, since a change reshuffles every queue for nothing.</span><span class="ln">The rules decide and fix every figure; the reader only words it, and a sentence with a modelling word or a figure the facts do not hold is dropped for the rules' wording.</span>{% endcall %}</p>{% endif %}
-<div class="slots">
+{% if auto.on %}<p>Decided by the next automatic check, within {{ every }} minutes{% if v %}: {{ v.word|lower }}{% endif %}.{% if r.signed.marketing or r.signed.sales %} {{ signed_teams(r)|capitalize }} by hand meanwhile.{% endif %}</p>
+{% else %}<div class="slots">
   {% for t in ['marketing', 'sales'] %}{% set a = r.signed[t] %}<div>
     <span class="kicker">{{ t|capitalize }}</span>
     {% if a %}<span class="serif slot">Approved by {{ a.approver }}</span>
@@ -91,7 +92,17 @@ details[open]>summary{margin-bottom:8px}
     <button class="btn primary" type="submit" name="decision" value="approve">Approve {{ r.version }}</button>
     <button class="btn" type="submit" name="decision" value="send_back">Send back</button>
   </div>
-</form>{% else %}<p class="small muted">Marketing and the sales manager sign a version off; your role reads.</p>{% endif %}
+</form>{% else %}<p class="small muted">Marketing and the sales manager sign a version off; your role reads.</p>{% endif %}{% endif %}
+{% endmacro %}
+
+{% macro autoline() %}
+<p class="lede">{% if auto.on %}Automatic: every {{ every }} minutes the rules keep the best candidate and send the rest back, so nobody has to read the table.{% else %}By hand: marketing and sales sign each candidate off{% if auto.by %}, since {{ auto.by }} switched the automatic sign-off off, {{ when(auto.at) }} log time{% endif %}.{% endif %}</p>
+{% if auto.recent %}<p class="small muted">Decided automatically: {% for d in auto.recent[:4] %}{{ d.version }} {{ 'went live' if d.decision == 'approve' else 'sent back' }}, {{ when(d.created_at) }}{{ '; ' if not loop.last }}{% endfor %}. <a href="/decisions">Every one, with its reason, on Decisions</a>.</p>{% endif %}
+{% if can.throw_switches %}<form method="post" action="/model/auto" class="actions" style="align-items: center; gap: 12px">
+  <label for="auto-switch" class="small muted">Automatic sign-off</label>
+  <select id="auto-switch" name="switch"><option value="on"{% if auto.on %} selected{% endif %}>On</option><option value="off"{% if not auto.on %} selected{% endif %}>Off</option></select>
+  <button class="btn" type="submit">Set</button>
+</form>{% endif %}
 {% endmacro %}
 
 <header class="mhead">
@@ -223,7 +234,8 @@ details[open]>summary{margin-bottom:8px}
 {% else %}
 <section id="sign-off" class="msec" aria-labelledby="md-sign">
   {% if waiting %}{% set r = waiting[0] %}
-  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
+  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when the automatic sign-off approves it as the best candidate of the round, or, with that switched off, when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
+  {{ autoline() }}
   {{ signoff(r) }}
   {% if waiting|length > 1 %}{% set older = waiting[1:] %}
   <p>Also waiting{% if not (older|selectattr('approvals')|list) %}, unsigned{% endif %}: {% for o in older %}{{ o.version }} (trained {{ o.trained or '[NOT RECORDED]' }}{% if o.signed.marketing or o.signed.sales %}; {{ signed_teams(o) }}{% endif %}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}.</p>
@@ -234,7 +246,8 @@ details[open]>summary{margin-bottom:8px}
   {% endif %}
   <a class="tap" href="/decisions">Every approval and send-back so far, on Decisions</a>
   {% else %}
-  <h2 id="md-sign" class="kicker">Sign off{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
+  <h2 id="md-sign" class="kicker">Sign off{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when the automatic sign-off approves it as the best candidate of the round, or, with that switched off, when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
+  {{ autoline() }}
   <p>No candidate waiting. The next appears after a retrain (<code>python run.py train</code>, or the scheduler's monthly job).</p>
   {% endif %}
 </section>

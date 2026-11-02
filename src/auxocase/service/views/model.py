@@ -14,6 +14,7 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Optional
 
 from ... import verdicts
+from ..scheduler import jobs_from_env
 from ...data.generate import LATE_TOUCH_FACTOR
 from ...feedback import loop as fb
 from ...scoring.model import CAPACITY_PER_MONTH
@@ -368,7 +369,8 @@ def model_page(st) -> dict:
     training leads waited, when it learned only from leads before routing). began: when routing began ('1 Aug 2028',
     service clock); hit: hit_rate since then. rescoring: {version, left} while a rescore is pending, else None.
     scored: {model version: leads whose latest score it gave}. verdicts: {candidate version: {verdict, word, sentence,
-    source, llm, created_at}}, the line under each sign-off (verdicts.py). seeds_text: the simulated months' seeds, 'seeds 101 to
+    source, llm, created_at}}, the line under each sign-off (verdicts.py); auto: the automatic sign-off {on, by, at, recent
+    [{version, decision, note, created_at}]}; every: minutes between its runs. seeds_text: the simulated months' seeds, 'seeds 101 to
     103'. small_band, min_group: the thresholds the page names."""
     regs = _versions(st)
     current = next((r for r in regs if r["status"] == "live"), None)
@@ -414,4 +416,5 @@ def model_page(st) -> dict:
             "built_in": LATE_TOUCH_FACTOR, "learned_wait": learned_wait, "began": _day(began_iso), "hit": hit,
             "rescoring": rescoring, "scored": scored, "seeds_text": _range(seeds) if seeds else None,
             "small_band": SMALL_BAND, "min_group": fb.MIN_GROUP,
-            "verdicts": verdicts.for_page(st.conn, waiting, current)}
+            "verdicts": verdicts.for_page(st.conn, waiting, current), "auto": verdicts.auto_state(st.conn),
+            "every": next((j.every_min for j in jobs_from_env() if j.name == "flags"), 10)}

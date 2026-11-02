@@ -5,6 +5,7 @@ import json
 import pytest
 from fastapi.testclient import TestClient
 
+from auxocase import verdicts
 from auxocase.hubspot.mock import MockHubSpot
 from auxocase.hubspot.models import Contact, Owner
 from auxocase.service.app import create_app
@@ -18,6 +19,7 @@ def world(tmp_path, monkeypatch):
         monkeypatch.delenv(var, raising=False)
     path = tmp_path / "s.db"
     conn = connect(path)
+    verdicts.set_auto(conn, False, "test")        # these tests sign off by hand
     hs = MockHubSpot(conn, faithful_delivery=True)
     hs.ensure_properties()
     hs.add_owner(Owner(id="900", name="Alex Novak", email="sdr1@brightpath.example", capacity_limit=1))

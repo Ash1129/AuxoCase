@@ -84,6 +84,7 @@ def test_a_run_reads_each_candidate_once_and_the_page_words_the_rules_until_then
     _registry(conn, [("demo-v1", "live", LIVE, "2026-05-03T00:00:00"), ("demo-v6", "candidate", GOOD, "2026-10-02T00:00:00"),
                      ("demo-v7", "candidate", OFF, "2026-11-01T00:00:00")])
     conn.commit()
+    verdicts.set_auto(conn, False, "test")                                 # reading only, here; the automation has its own test
     live = {"version": "demo-v1", "metrics": LIVE}
     waiting = [{"version": "demo-v7", "metrics": OFF}, {"version": "demo-v6", "metrics": GOOD}]
     before = verdicts.for_page(conn, waiting, live)
@@ -102,6 +103,7 @@ def test_a_run_reads_each_candidate_once_and_the_page_words_the_rules_until_then
 
     conn.execute("UPDATE model_registry SET metrics=? WHERE version='demo-v6'", (dumps(GOOD),))      # back to the read facts
     conn.commit()
+    verdicts.set_auto(conn, True, "test")
     auth.create_staff(conn, "nadia", "a-long-enough-password", "marketing", name="Nadia Reyes")
     client = TestClient(create_app(path, scheduler=False))
     log_in(client, "nadia", "a-long-enough-password")
@@ -109,3 +111,43 @@ def test_a_run_reads_each_candidate_once_and_the_page_words_the_rules_until_then
     assert "Send back</b>: when it says a lead is 45 percent, about 59 percent of those leads actually book" in page
     assert "Approve</b>: its top picks book 23 percent more demos" in page and "How the verdict is decided" in page
     assert "The rules' own wording" not in page and page.count("Worded by offline from the rules' facts") == 2
+    # Automatic sign-off is on: the page says the next check decides, and offers no form; marketing can switch it off.
+    assert "Decided by the next automatic check, within 10 minutes: approve." in page and 'action="/model/demo-v6/approve"' not in page
+    assert "Automatic: every 10 minutes the rules keep the best candidate" in page and 'action="/model/auto"' in page
+    r = client.post("/model/auto", data={"switch": "off"}, follow_redirects=False)
+    assert r.status_code == 303 and not verdicts.auto_on(conn)
+    page = client.get("/model").text
+    assert "By hand: marketing and sales sign each candidate off, since Nadia Reyes switched the automatic sign-off off" in page
+    assert 'action="/model/demo-v6/approve"' in page
+
+
+def test_the_automatic_signoff_keeps_the_best_candidate_and_sends_the_rest_back(tmp_path, monkeypatch):
+    for var in ("HUBSPOT_PRIVATE_APP_TOKEN", "AUXO_LLM"):
+        monkeypatch.delenv(var, raising=False)
+    path = tmp_path / "a.db"
+    conn = connect(path)
+    MockHubSpot(conn).ensure_properties()
+    better = dict(GOOD, lift_at_k=1.25, rows=5600)                         # also approvable, picks book more: the best
+    _registry(conn, [("demo-v1", "live", LIVE, "2026-05-03T00:00:00"), ("demo-v6", "candidate", GOOD, "2026-10-02T00:00:00"),
+                     ("demo-v7", "candidate", OFF, "2026-11-01T00:00:00"), ("demo-v8", "candidate", better, "2026-11-02T00:00:00")])
+    conn.commit()
+    assert verdicts.auto_on(conn)                                          # on unless switched off
+    out = verdicts.run(conn, Offline())
+    assert out["auto"] and out["went_live"] == "demo-v8" and sorted(out["sent_back"]) == ["demo-v6", "demo-v7"]
+    status = {r["version"]: r["status"] for r in conn.execute("SELECT version, status FROM model_registry")}
+    assert status == {"demo-v1": "shadow", "demo-v6": "sent_back", "demo-v7": "sent_back", "demo-v8": "live"}
+    rows = [tuple(r) for r in conn.execute("SELECT version, team, approver, decision FROM approvals ORDER BY id")]
+    assert (("demo-v8", "marketing", verdicts.AUTO_NAME, "approve") in rows and ("demo-v8", "sales", verdicts.AUTO_NAME, "approve") in rows
+            and ("demo-v7", "marketing", verdicts.AUTO_NAME, "send_back") in rows)
+    notes = {r["version"]: r["note"] for r in conn.execute("SELECT version, note FROM approvals WHERE decision='send_back'")}
+    assert notes["demo-v7"].startswith("Send back: when it says a lead is 45 percent") and notes["demo-v6"].startswith("Not the best of this round: demo-v8 went live instead.")
+    assert conn.execute("SELECT value FROM settings WHERE key='rescore_pending'").fetchone()["value"] == "demo-v8"
+    assert verdicts.run(conn, Offline())["went_live"] is None             # nothing left to decide
+    state = verdicts.auto_state(conn)
+    assert [d["version"] for d in state["recent"]] == ["demo-v6", "demo-v8", "demo-v7"] and state["on"]
+    # Switched off, a run reads sentences and changes nothing.
+    _registry(conn, [("demo-v9", "candidate", better, "2026-11-03T00:00:00")])
+    verdicts.set_auto(conn, False, "Dana Whitfield")
+    out = verdicts.run(conn, Offline())
+    assert out["read"] == 1 and not out["auto"] and out["went_live"] is None
+    assert conn.execute("SELECT status FROM model_registry WHERE version='demo-v9'").fetchone()["status"] == "candidate"
