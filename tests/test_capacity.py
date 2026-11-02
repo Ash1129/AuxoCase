@@ -58,3 +58,46 @@ def test_the_leadership_page_sets_the_capacity_and_the_line_follows(world):
     assert get_setting(conn, "sdr_minutes_touch") == "10"
     r = client.post("/leadership/capacity", data={"minutes_touch": "10"}, follow_redirects=False)
     assert r.headers["location"] == "/leadership?set=0#ld-capacity" and "Nothing changed." in client.get(r.headers["location"]).text
+
+
+def _touch(conn, contact_id, owner_id, at):
+    conn.execute("INSERT INTO touches(contact_id, owner_id, engagement_id, type, touched_at, status_set, detected_at) VALUES(?,?,?,?,?,?,?)",
+                 (contact_id, owner_id, f"e-{contact_id}", "EMAIL", at, "ATTEMPTED_TO_CONTACT", at))
+
+
+def test_the_minutes_and_hours_are_read_from_the_sdrs_first_touches_once_there_are_enough(world):
+    conn, client = world
+    assert capacity.measured(conn)["touches"] == 0 and capacity.source(conn, "sdr_minutes_touch") == "assumed"
+    assert "Read from the SDRs' own work, once there is some." in client.get("/leadership").text
+    # One SDR, a morning of four touches 15 minutes apart: measured so far, the assumption stays.
+    for i, hm in enumerate(("10:00", "10:15", "10:30", "10:45")):
+        _touch(conn, f"c-0-{i}", "900", f"2026-09-01T{hm}:00")
+    conn.commit()
+    m = capacity.measured(conn)
+    assert (m["touches"], m["sdrs"], m["days"], m["gaps"], m["minutes_touch"], m["minutes_in_force"], m["hours"]) == (4, 1, 1, 3, 15.0, False, None)
+    assert capacity.unit(conn, "sdr_minutes_touch") == 20.0 and round(capacity.touches_per_month(conn, 12)) == 500
+    t = client.get("/leadership").text
+    assert "Read from the SDRs' own work so far:</b> 4 first touches by 1 SDR on 1 day since 2026-08-02, 15 minutes between one first touch and the next (the middle of 3 gaps)." in t
+    assert "The 20 minutes a cold touch stays assumed until 2 SDRs have 30 gaps between them." in t and "(measured)" not in t
+    # Three SDRs, twelve days each of the same morning: enough gaps and enough days, so both figures take over.
+    for d in range(1, 13):
+        for o in ("900", "901", "902"):
+            for i, hm in enumerate(("10:00", "10:15", "10:30", "10:45")):
+                if not (d == 1 and o == "900"):
+                    _touch(conn, f"c-{d}-{o}-{i}", o, f"2026-09-{d:02d}T{hm}:00")
+    _touch(conn, "c-lunch", "900", "2026-09-12T13:00:00")              # 2h15 later: a new session, no gap counted
+    _touch(conn, "c-same-a", "901", "2026-09-13T00:00:00")             # a day with no time: a day, not a gap
+    _touch(conn, "c-same-b", "901", "2026-09-13T00:00:00")
+    conn.commit()
+    m = capacity.measured(conn)
+    assert (m["touches"], m["sdrs"], m["gaps"], m["minutes_touch"], m["minutes_in_force"]) == (147, 3, 108, 15.0, True)
+    assert (m["hours"], m["hours_sdrs"], m["hours_in_force"]) == (12.3, 3, True)         # 12 mornings of 45 + 15 minutes (900 and 901 one more session of a touch), in a 30-day window, scaled to 30.4
+    assert capacity.unit(conn, "sdr_minutes_touch") == 15.0 and capacity.unit(conn, "sdr_touch_hours_month") == 12.3
+    assert capacity.source(conn, "sdr_minutes_touch") == "measured" and round(capacity.touches_per_month(conn, 12)) == 354   # 12 × 12.3 h ÷ 25 min
+    t = client.get("/leadership").text
+    assert "15 the cold touch (measured)" in t and "12.3 h (measured)" in t and "The measured minutes are in force. The measured hours are in force." in t
+    # A typed figure wins; typing the measured figure back drops it.
+    assert capacity.set_assumptions(conn, minutes_touch=20) == ["sdr_minutes_touch"] and capacity.source(conn, "sdr_minutes_touch") == "typed"
+    assert "The typed 20 minutes a cold touch wins; type the measured 15 to let the measured figure rule." in client.get("/leadership").text
+    assert capacity.set_assumptions(conn, minutes_touch=15) == ["sdr_minutes_touch"] and get_setting(conn, "sdr_minutes_touch") is None
+    assert capacity.source(conn, "sdr_minutes_touch") == "measured" and capacity.set_assumptions(conn, minutes_touch=15) == []

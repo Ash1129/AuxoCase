@@ -42,28 +42,6 @@
 
 <hr class="rule">
 
-<section class="dsec" aria-labelledby="hd-models">
-  <h2 id="hd-models" class="kicker">Model versions{% call note('models-note', 'How a version goes live') %}<span class="ln">Approvals and send-backs, newest first.</span><span class="ln">Live: one person from marketing and one from sales approved it.</span><span class="ln">Sent back: the version is retired.</span>{% endcall %}</h2>
-  <div class="scroll" role="region" aria-label="Model decisions, scrolls sideways" tabindex="0">
-    <table aria-labelledby="hd-models">
-      <thead><tr><th scope="col">When{{ ref('clocks') }}</th><th scope="col">Version</th><th scope="col">Team</th><th scope="col">Who</th><th scope="col">Decision</th><th scope="col">Note</th><th scope="col">Version now</th></tr></thead>
-      <tbody>
-      {% for a in models %}<tr>
-        <td class="small">{{ when(a.created_at) }}</td>
-        <td><a href="/model">{{ a.version }}</a></td>
-        <td>{{ a.team }}</td>
-        <td>{{ a.approver or nr() }}</td>
-        <td>{% if a.decision == 'approve' %}<span class="badge yes">Approved</span>{% else %}<span class="badge no">Sent back</span>{% endif %}</td>
-        <td class="small">{% if a.note %}<span class="quote">{{ a.note }}</span>{% else %}{{ none_given('No note') }}{% endif %}</td>
-        <td><span class="badge {{ 'live' if a.status == 'live' else ('cand' if a.status == 'candidate' else 'past') }}">{{ (a.status or 'unknown')|replace('_', ' ') }}</span></td>
-      </tr>{% else %}<tr><td colspan="7" class="muted">No model decisions yet.</td></tr>{% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<hr class="rule">
-
 <section class="dsec" aria-labelledby="hd-leads">
   <h2 id="hd-leads" class="kicker">Leads{% call note('leads-note', 'What these calls mean') %}<span class="ln">SDR calls logged in AuxoCase, newest first. Score and rank: what the SDR saw at the time.</span><span class="ln">Worked: the SDR made first contact.</span><span class="ln">Junk, skipped: turned down, with the reason.</span><span class="ln">A first touch seen only in HubSpot shows on the lead's page.</span>{% endcall %}</h2>
   {% if leads|length >= limit %}<p class="small muted">The latest {{ limit }}.</p>{% endif %}
@@ -80,6 +58,28 @@
         <td class="r num">{% if o.score_at_time is not none %}{{ o.score_at_time|round|int }}%{% else %}{{ nr() }}{% endif %}</td>
         <td class="r num">{% if o.rank_at_time is not none %}{{ o.rank_at_time }}{% else %}{{ nr() }}{% endif %}</td>
       </tr>{% else %}<tr><td colspan="7" class="muted">No lead decisions yet.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<hr class="rule">
+
+<section class="dsec" aria-labelledby="hd-models">
+  <h2 id="hd-models" class="kicker">Model versions{% call note('models-note', 'How a version goes live') %}<span class="ln">Approvals and send-backs, newest first.</span><span class="ln">Live: one person from marketing and one from sales approved it.</span><span class="ln">Sent back: the version is retired.</span>{% endcall %}</h2>
+  <div class="scroll" role="region" aria-label="Model decisions, scrolls sideways" tabindex="0">
+    <table aria-labelledby="hd-models">
+      <thead><tr><th scope="col">When{{ ref('clocks') }}</th><th scope="col">Version</th><th scope="col">Team</th><th scope="col">Who</th><th scope="col">Decision</th><th scope="col">Note</th><th scope="col">Version now</th></tr></thead>
+      <tbody>
+      {% for a in models %}<tr>
+        <td class="small">{{ when(a.created_at) }}</td>
+        <td><a href="/model">{{ a.version }}</a></td>
+        <td>{{ a.team }}</td>
+        <td>{{ a.approver or nr() }}</td>
+        <td>{% if a.decision == 'approve' %}<span class="badge yes">Approved</span>{% else %}<span class="badge no">Sent back</span>{% endif %}</td>
+        <td class="small">{% if a.note %}<span class="quote">{{ a.note }}</span>{% else %}{{ none_given('No note') }}{% endif %}</td>
+        <td><span class="badge {{ 'live' if a.status == 'live' else ('cand' if a.status == 'candidate' else 'past') }}">{{ (a.status or 'unknown')|replace('_', ' ') }}</span></td>
+      </tr>{% else %}<tr><td colspan="7" class="muted">No model decisions yet.</td></tr>{% endfor %}
       </tbody>
     </table>
   </div>

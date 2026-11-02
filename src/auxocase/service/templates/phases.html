@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% from "_notes.html" import note %}
-{% block title %}Next phases{% endblock %}
+{% block title %}Leads left out{% endblock %}
 {% block style %}
 .ph-head{display:flex;flex-direction:column;gap:8px;max-width:760px}
 .ph-sec{display:flex;flex-direction:column;gap:16px;min-width:0}
@@ -82,7 +82,7 @@ code{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:
 {% endmacro %}
 
 <header class="ph-head">
-  <p class="kicker">Next phases · phase 2 {{ gate.state }} · phase 3 {{ seq.state }}{{ ref() }}{% call note('phases-note', 'What the phases are') %}<span class="ln">Routing works the top of the MQL pool; two groups of leads never reach an SDR.</span><span class="ln">Phase 2: the leads HubSpot's gate keeps out of the pool.</span><span class="ln">Phase 3: the MQLs below the capacity line.</span><span class="ln">Each tries a few first, counts what they book, and only then can be switched on for all of them.</span>{% endcall %}</p>
+  <p class="kicker">Leads left out · phase 2 {{ gate.state }} · phase 3 {{ seq.state }}{{ ref() }}{% call note('phases-note', 'What the phases are') %}<span class="ln">Routing works the top of the MQL pool; two groups of leads never reach an SDR.</span><span class="ln">Phase 2: the leads HubSpot's gate keeps out of the pool.</span><span class="ln">Phase 3: the MQLs below the capacity line.</span><span class="ln">Each tries a few first, counts what they book, and only then can be switched on for all of them.</span>{% endcall %}</p>
   <h1 class="title">The leads nobody works</h1>
   <p class="lede">Two groups the SDRs never see. Each phase tries a few first and counts what they book; the second switch waits for that count.</p>
 </header>

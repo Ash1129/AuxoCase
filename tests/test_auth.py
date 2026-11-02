@@ -151,8 +151,12 @@ def test_marketing_and_leadership_see_the_model_and_results_only(world):
     assert r.headers["location"] == "/model"
     page = client.get("/model").text
     assert "marketing · Priya Natarajan" in page and ">Queues<" not in page and ">Held" not in page and ">Overview<" not in page
+    # Marketing has only the three scoring pages, in its own words; leadership and decisions are not its.
+    assert ">Lead scoring" in page and ">Leads to check" in page and ">Leads left out<" in page
+    assert 'href="/leadership"' not in page and 'href="/decisions"' not in page and ">Results<" not in page
+    assert client.get("/leadership").status_code == 403 and client.get("/decisions").status_code == 403
     assert client.get("/queue/900").status_code == 403 and client.get("/held").status_code == 403 and client.get("/lead/1").status_code == 403
-    assert client.get("/leadership").status_code == 200 and client.get("/phases").status_code == 200 and client.get("/decisions").status_code == 200
+    assert client.get("/phases").status_code == 200 and client.get("/flagged").status_code == 200
     assert client.post("/jobs/route").status_code == 403
     r = client.post("/model/demo-v9/approve", data={"team": "sales", "decision": "approve", "seen": approval_token(conn, "demo-v9")}, follow_redirects=False)
     assert r.status_code == 303 and conn.execute("SELECT team, approver FROM approvals").fetchone()["team"] == "marketing"

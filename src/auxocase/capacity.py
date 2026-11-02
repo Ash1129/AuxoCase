@@ -23,11 +23,21 @@ forth to fix a time and create the meeting), for the share of worked leads that 
 the service offer times, book the pick and confirm it (routing/scheduling.py), and the SDR spends
 `sdr_minutes_booking_auto` (1) checking the invite instead. `team_capacity_per_month`, when set, overrides the
 arithmetic with a plain number.
+
+Two of the inputs are read from the SDRs' own work once there is enough of it (`measured`): the minutes a cold
+touch is the median gap between one first touch and the next in a working session (the touches table, which the
+first-touch poll fills from HubSpot's engagements, real or mock), and the hours an SDR gives leads a month is
+the time in those sessions, scaled to a month. Each replaces its default when the evidence is there (MIN_GAPS
+gaps across MIN_SDRS SDRs; MIN_ACTIVE_DAYS days with a touch for MIN_SDRS SDRs) and a typed figure wins over
+both; typing the measured figure back drops the typed one.
 """
 from __future__ import annotations
 
 import sqlite3
 from typing import Optional
+
+from datetime import datetime, timedelta
+from statistics import median
 
 from .storage.db import get_setting, now_iso, set_setting
 
@@ -64,12 +74,91 @@ SCHEDULING_AUTO = "scheduling_auto"
 DEFAULT_DEMO_SHARE = 0.35               # of worked leads, booking a demo, until the outcomes say
 DEFAULT_SKIP_SHARE = 0.2                # skips per worked lead, until the SDRs' decisions say
 DEFAULT_CALL_SHARE = 0.5                # of first touches, when none has been seen yet
+SESSION_GAP_MINUTES = 45                # a longer gap between two first touches ends a working session
+MEASURE_WINDOW_DAYS = 30                # the touches read: the month up to the latest one
+MIN_GAPS = 30                           # gaps between first touches, across MIN_SDRS SDRs, before the measured minutes count
+MIN_SDRS = 2
+MIN_ACTIVE_DAYS = 10                    # days with a touch, for each SDR whose hours count
+MEASURED = ("sdr_minutes_touch", "sdr_touch_hours_month")
 AUTO_SINCE = "followups_since"      # when the switch went on: only leads first emailed after it get automatic follow-ups
 
 
 def unit(conn: sqlite3.Connection, key: str) -> float:
+    """The figure in force: typed, else measured from the SDRs' touches when there is enough, else the default."""
     v = get_setting(conn, key)
-    return float(v) if v else DEFAULTS[key]
+    if v:
+        return float(v)
+    if key in MEASURED:
+        m = measured(conn)
+        if key == "sdr_minutes_touch" and m["minutes_in_force"]:
+            return m["minutes_touch"]
+        if key == "sdr_touch_hours_month" and m["hours_in_force"]:
+            return m["hours"]
+    return DEFAULTS[key]
+
+
+def source(conn: sqlite3.Connection, key: str) -> str:
+    """Where the figure in force comes from: 'typed', 'measured' or 'assumed'."""
+    if get_setting(conn, key):
+        return "typed"
+    if key in MEASURED:
+        m = measured(conn)
+        if (key == "sdr_minutes_touch" and m["minutes_in_force"]) or (key == "sdr_touch_hours_month" and m["hours_in_force"]):
+            return "measured"
+    return "assumed"
+
+
+def measured(conn: sqlite3.Connection) -> dict:
+    """What the SDRs' first touches say, over the month up to the latest one: touches, sdrs (with a touch), days (with
+    a touch), since (the window's first day, 'YYYY-MM-DD'), gaps (between consecutive touches in a session),
+    minutes_touch (the median gap, None without one), minutes_in_force (MIN_GAPS gaps across MIN_SDRS SDRs), hours
+    (the mean over the SDRs with MIN_ACTIVE_DAYS active days of their session time scaled to a month, None without
+    one), hours_sdrs (how many), hours_in_force (MIN_SDRS of them). A session is a run of touches less than
+    SESSION_GAP_MINUTES apart; its time is first to last plus one touch (the median gap, or the default until then).
+    Touches with the same timestamp (a day with no time) give no gap but count as a day."""
+    out = {"touches": 0, "sdrs": 0, "days": 0, "since": None, "gaps": 0, "minutes_touch": None, "minutes_in_force": False,
+           "hours": None, "hours_sdrs": 0, "hours_in_force": False}
+    rows = conn.execute("SELECT owner_id, touched_at FROM touches WHERE owner_id IS NOT NULL AND touched_at IS NOT NULL "
+                        "ORDER BY owner_id, touched_at").fetchall()
+    if not rows:
+        return out
+    stamps = [(r["owner_id"], datetime.fromisoformat(str(r["touched_at"])[:26].replace("Z", ""))) for r in rows]
+    latest = max(t for _, t in stamps)
+    start = latest - timedelta(days=MEASURE_WINDOW_DAYS)
+    stamps = [(o, t) for o, t in stamps if t >= start]
+    by_owner: dict[str, list[datetime]] = {}
+    for o, t in stamps:
+        by_owner.setdefault(o, []).append(t)
+    gaps: list[float] = []
+    sessions: dict[str, list[tuple[datetime, datetime]]] = {}
+    for o, ts in by_owner.items():
+        ts.sort()
+        first = prev = ts[0]
+        for t in ts[1:]:
+            gap = (t - prev).total_seconds() / 60
+            if gap > SESSION_GAP_MINUTES:
+                sessions.setdefault(o, []).append((first, prev))
+                first = t
+            elif gap > 0:
+                gaps.append(gap)
+            prev = t
+        sessions.setdefault(o, []).append((first, prev))
+    out.update(touches=len(stamps), sdrs=len(by_owner), days=len({t.date() for _, t in stamps}), since=start.date().isoformat(), gaps=len(gaps))
+    if gaps:
+        out["minutes_touch"] = round(median(gaps), 1)
+        out["minutes_in_force"] = len(gaps) >= MIN_GAPS and len(by_owner) >= MIN_SDRS
+    one_touch = out["minutes_touch"] if out["minutes_in_force"] else DEFAULTS["sdr_minutes_touch"]
+    hours = []
+    for o, ts in by_owner.items():
+        if len({t.date() for t in ts}) < MIN_ACTIVE_DAYS:
+            continue
+        minutes = sum((b - a).total_seconds() / 60 + one_touch for a, b in sessions[o])
+        hours.append(minutes / 60 * 30.4 / MEASURE_WINDOW_DAYS)
+    if hours:
+        out["hours"] = round(sum(hours) / len(hours), 1)
+        out["hours_sdrs"] = len(hours)
+        out["hours_in_force"] = len(hours) >= MIN_SDRS
+    return out
 
 
 def followups_auto(conn: sqlite3.Connection) -> bool:
@@ -177,7 +266,9 @@ def breakdown(conn: sqlite3.Connection, sdrs: Optional[int] = None) -> dict:
             "booking_saving": round(booking_saving(conn), 1),
             "auto": followups_auto(conn), "minutes_lead": minutes_per_lead(conn),
             "hours": unit(conn, "sdr_touch_hours_month"), "per_month": round(per_month), "per_sdr": round(per_month / n, 1) if n else 0.0,
-            "override": float(override) if override else None, "brief": BRIEF_TOUCHES_PER_MONTH}
+            "override": float(override) if override else None, "brief": BRIEF_TOUCHES_PER_MONTH,
+            "measured": measured(conn), "minutes_touch_source": source(conn, "sdr_minutes_touch"),
+            "hours_source": source(conn, "sdr_touch_hours_month"), "min_gaps": MIN_GAPS, "min_sdrs": MIN_SDRS, "min_days": MIN_ACTIVE_DAYS}
 
 
 def set_assumptions(conn: sqlite3.Connection, minutes_touch: Optional[float] = None, minutes_followup: Optional[float] = None,
@@ -202,8 +293,17 @@ def set_assumptions(conn: sqlite3.Connection, minutes_touch: Optional[float] = N
         if not (lo <= v <= hi):
             raise ValueError(f"{LABELS[key]} must be between {lo:g} and {hi:g}, not {v:g}")
     changed = []
+    m = measured(conn)
     for key, v in wanted.items():
-        if v is not None and round(v, 1) != round(unit(conn, key), 1):     # the page shows one decimal: 20.8 is 20.833...
+        if v is None:
+            continue
+        in_force = m["minutes_touch"] if key == "sdr_minutes_touch" and m["minutes_in_force"] else (
+            m["hours"] if key == "sdr_touch_hours_month" and m["hours_in_force"] else None)
+        if in_force is not None and round(v, 1) == round(in_force, 1) and get_setting(conn, key):
+            conn.execute("DELETE FROM settings WHERE key = ?", (key,))      # back to the measured figure
+            conn.commit()
+            changed.append(key)
+        elif round(v, 1) != round(unit(conn, key), 1):                     # the page shows one decimal: 20.8 is 20.833...
             set_setting(conn, key, f"{v:g}")
             changed.append(key)
     if auto is not None and auto != followups_auto(conn):

@@ -36,6 +36,7 @@ METRIC_KEYS = ("rows", "positives", "base_rate", "precision_at_k", "hubspot_prec
                "lift_at_k", "lift_over_points", "auc_pr", "ece", "k", "test_rows", "challenger")
 OVERRIDES = (("skipped", "Skipped"), ("promote", "Moved up"), ("demote", "Moved down"), ("worked", "Marked worked"),
              ("junk", "Junk"))
+STATUS_WORDS = {"live": "live", "candidate": "candidate", "sent_back": "sent back", "shadow": "previous live", "retired": "retired"}
 FLAG_WORDS = {"above": "above their limits", "below": "below their limits", "ok": "inside",
               "held": f"under {fb.MIN_GROUP} worked leads"}
 MONTHS = ("January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
@@ -359,7 +360,7 @@ def model_page(st) -> dict:
     {word, text} or None; None on other versions).
 
     current: the live version or None; waiting: the candidates, newest first; side: the side-by-side's columns (live,
-    then candidates oldest first); sent_back, shadow_reg, retired (version names): the versions not in it.
+    then every other version oldest first, each with status_word); sent_back, shadow_reg, retired (version names): the versions not in it.
     adds: [{version, live, k, hub, pts}], hub/pts {word, effect, bar} or None; bar_scale (a full bar); plainly (the
     plain answer to what the model adds); tested_where; families; capacity (touches a month). calibration: the live
     version's typical band, ece_points, plot label (see _calibration). monitor: see _monitor, or None. overrides: see
@@ -375,13 +376,18 @@ def model_page(st) -> dict:
     regs = _versions(st)
     current = next((r for r in regs if r["status"] == "live"), None)
     waiting = [r for r in regs if r["status"] == "candidate"]
-    side = ([current] if current else []) + list(reversed(waiting))
+    # Every version, the live one first, then the rest oldest first: a sent-back or retired version keeps its column, so
+    # the comparison that decided it stays readable.
+    others = sorted((r for r in regs if r is not current), key=lambda r: r["trained_at"] or "")
+    side = ([current] if current else []) + others
+    for r in regs:
+        r["status_word"] = STATUS_WORDS.get(r["status"], r["status"])
     ds = [abs(d) for r in side for d in (r["d_hub"], r["d_pts"]) if d is not None]
     scale = max(FULL_BAR, math.ceil(round(max(ds, default=0) / 0.05, 6)) * 0.05)
     adds = [{"version": r["version"], "live": r is current, "k": r["metrics"]["k"],
              "hub": _effect(r["d_hub"], scale), "pts": _effect(r["d_pts"], scale)} for r in side]
     lm = current["metrics"] if current else {}
-    for r in waiting:
+    for r in others:
         r["vs"] = {"lift_hub": _change(_diff(r["metrics"]["lift_at_k"], lm.get("lift_at_k"))),
                    "lift_pts": _change(_diff(r["metrics"]["lift_over_points"], lm.get("lift_over_points"))),
                    "ece": _change(_diff(r["metrics"]["ece"], lm.get("ece")), higher_is_better=False)}

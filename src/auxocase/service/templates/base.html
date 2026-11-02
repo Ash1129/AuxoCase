@@ -152,10 +152,10 @@ h2.kicker[id]{scroll-margin-top:24px}
     {% if can.view_leadership or can.view_decisions %}<p class="glabel">Results</p>{% endif %}
     {% if can.view_leadership %}<a class="nav" href="/leadership"{% if nav == 'leadership' %} aria-current="page"{% endif %}>Leadership</a>{% endif %}
     {% if can.view_decisions %}<a class="nav" href="/decisions"{% if nav == 'decisions' %} aria-current="page"{% endif %}>Decisions</a>{% endif %}
-    {% if can.view_model or can.view_phases or can.view_flags %}<p class="glabel">Model</p>{% endif %}
-    {% if can.view_model %}<a class="nav" href="/model"{% if nav == 'model' %} aria-current="page"{% endif %}>Model &amp; approvals{% if candidates %} <span class="num" style="color: var(--accentInk)">{{ candidates }}</span>{% endif %}</a>{% endif %}
-    {% if can.view_flags %}<a class="nav" href="/flagged"{% if nav == 'flagged' %} aria-current="page"{% endif %}>Flagged leads{% if flags_open %} <span class="warn num">{{ flags_open }}</span>{% endif %}</a>{% endif %}
-    {% if can.view_phases %}<a class="nav" href="/phases"{% if nav == 'phases' %} aria-current="page"{% endif %}>Next phases</a>{% endif %}
+    {% if can.view_model or can.view_phases or can.view_flags %}<p class="glabel">Scoring</p>{% endif %}
+    {% if can.view_model %}<a class="nav" href="/model"{% if nav == 'model' %} aria-current="page"{% endif %}>Lead scoring{% if candidates %} <span class="num" style="color: var(--accentInk)">{{ candidates }}</span>{% endif %}</a>{% endif %}
+    {% if can.view_flags %}<a class="nav" href="/flagged"{% if nav == 'flagged' %} aria-current="page"{% endif %}>Leads to check{% if flags_open %} <span class="warn num">{{ flags_open }}</span>{% endif %}</a>{% endif %}
+    {% if can.view_phases %}<a class="nav" href="/phases"{% if nav == 'phases' %} aria-current="page"{% endif %}>Leads left out</a>{% endif %}
     <dl class="system" data-scheduler="{{ scheduler }}">
       <dt>Live model</dt><dd>{{ live.version if live else 'points table' }}</dd>
       <dt>Reader</dt><dd>{{ 'Claude' if llm != 'offline' else 'rules' }}</dd>

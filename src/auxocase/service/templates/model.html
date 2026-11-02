@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "_notes.html" import note %}{% block title %}Model &amp; approvals{% endblock %}
+{% from "_notes.html" import note %}{% block title %}Lead scoring{% endblock %}
 {% block style %}
 .mhead{display:flex;flex-direction:column;gap:8px}
 .facts{margin:8px 0 0;display:grid;grid-template-columns:max-content minmax(0,1fr);gap:6px 16px}
@@ -97,7 +97,7 @@ details[open]>summary{margin-bottom:8px}
 
 {% macro autoline() %}
 <p class="lede">{% if auto.on %}Automatic: every {{ every }} minutes the rules keep the best candidate and send the rest back, so nobody has to read the table.{% else %}By hand: marketing and sales sign each candidate off{% if auto.by %}, since {{ auto.by }} switched the automatic sign-off off, {{ when(auto.at) }} log time{% endif %}.{% endif %}</p>
-{% if auto.recent %}<p class="small muted">Decided automatically: {% for d in auto.recent[:4] %}{{ d.version }} {{ 'went live' if d.decision == 'approve' else 'sent back' }}, {{ when(d.created_at) }}{{ '; ' if not loop.last }}{% endfor %}. <a href="/decisions">Every one, with its reason, on Decisions</a>.</p>{% endif %}
+{% if auto.recent %}<p class="small muted">Decided automatically: {% for d in auto.recent[:4] %}{{ d.version }} {{ 'went live' if d.decision == 'approve' else 'sent back' }}, {{ when(d.created_at) }}{{ '; ' if not loop.last }}{% endfor %}.{% if can.view_decisions %} <a href="/decisions">Every one, with its reason, on Decisions</a>.{% endif %}</p>{% endif %}
 {% if can.throw_switches %}<form method="post" action="/model/auto" class="actions" style="align-items: center; gap: 12px">
   <label for="auto-switch" class="small muted">Automatic sign-off</label>
   <select id="auto-switch" name="switch"><option value="on"{% if auto.on %} selected{% endif %}>On</option><option value="off"{% if not auto.on %} selected{% endif %}>Off</option></select>
@@ -106,7 +106,7 @@ details[open]>summary{margin-bottom:8px}
 {% endmacro %}
 
 <header class="mhead">
-  <p class="kicker">Model &amp; approvals · {% if waiting %}{{ waiting|length }} candidate{{ 's' if waiting|length != 1 }} waiting{% else %}no candidate waiting{% endif %}</p>
+  <p class="kicker">Lead scoring · {% if waiting %}{{ waiting|length }} candidate{{ 's' if waiting|length != 1 }} waiting{% else %}no candidate waiting{% endif %}</p>
   <h1 class="title">One shared model</h1>
   <dl class="facts">
     <dt>Live</dt>
@@ -159,10 +159,10 @@ details[open]>summary{margin-bottom:8px}
 
 <section class="msec" aria-labelledby="md-side">
   {% set unsplit = side|rejectattr('split')|map(attribute='version')|list %}
-  <h2 id="md-side" class="kicker">{% if current and waiting %}Live against the candidates{% elif waiting %}The candidates{% else %}The live model{% endif %}{% if tested_where or side|length > 1 or unsplit %}{% call note('side-note', 'How to read the columns') %}{% if tested_where %}<span class="ln">{{ tested_where }}</span>{% endif %}{% if side|length > 1 %}<span class="ln">Compare: lifts and calibration error across columns; precision only within a column.{% if current %} Changes are against {{ current.version }}.{% endif %}</span>{% endif %}{% if unsplit %}<span class="ln">Months trained and calibrated on: [NOT RECORDED] for {{ names(unsplit) }}; only the test months are kept.</span>{% if side|selectattr('test_n')|rejectattr('metrics.test_rows')|list %}<span class="ln">Test leads: the sum of the calibration bands.</span>{% endif %}{% if families %}<span class="ln">{{ families }}</span>{% endif %}<span class="ln">{% if sent_back %}Sent back: {% for r in sent_back %}{{ r.version }}{% if r.sent_back %} by {{ r.sent_back.approver }} ({{ r.sent_back.team }}){% if r.sent_back.note %}, <span class="quote">“{{ r.sent_back.note }}”</span>{% endif %}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}.{% else %}No version sent back.{% endif %}</span>{% if shadow_reg %}<span class="ln">Shadow (previous live): {{ shadow_reg.version }}{% if shadow %}; on {{ n(shadow.n) }} recent labelled leads, {{ shadow.live.version }} found {{ f3(shadow.live.precision_at_k) }} precision in its top {{ shadow.k }} against {{ f3(shadow.shadow.precision_at_k) }} for {{ shadow.shadow.version }}{% endif %}.</span>{% endif %}{% if retired %}<span class="ln">Retired: {{ names(retired) }}.</span>{% endif %}{% endif %}{% endcall %}{% endif %}</h2>
-  <div class="scroll" role="region" aria-label="{% if current and waiting %}Live against the candidates{% else %}Measures by version{% endif %}, scrolls sideways" tabindex="0">
+  <h2 id="md-side" class="kicker">{% if current and side|length > 1 %}Every version, live against the rest{% elif side|length > 1 %}Every version{% else %}The live model{% endif %}{% if tested_where or side|length > 1 or unsplit %}{% call note('side-note', 'How to read the columns') %}{% if tested_where %}<span class="ln">{{ tested_where }}</span>{% endif %}{% if side|length > 1 %}<span class="ln">Compare: lifts and calibration error across columns; precision only within a column.{% if current %} Changes are against {{ current.version }}.{% endif %}</span>{% endif %}{% if unsplit %}<span class="ln">Months trained and calibrated on: [NOT RECORDED] for {{ names(unsplit) }}; only the test months are kept.</span>{% if side|selectattr('test_n')|rejectattr('metrics.test_rows')|list %}<span class="ln">Test leads: the sum of the calibration bands.</span>{% endif %}{% if families %}<span class="ln">{{ families }}</span>{% endif %}<span class="ln">{% if sent_back %}Sent back: {% for r in sent_back %}{{ r.version }}{% if r.sent_back %} by {{ r.sent_back.approver }} ({{ r.sent_back.team }}){% if r.sent_back.note %}, <span class="quote">“{{ r.sent_back.note }}”</span>{% endif %}{% endif %}{% if not loop.last %}; {% endif %}{% endfor %}.{% else %}No version sent back.{% endif %}</span>{% if shadow_reg %}<span class="ln">Shadow (previous live): {{ shadow_reg.version }}{% if shadow %}; on {{ n(shadow.n) }} recent labelled leads, {{ shadow.live.version }} found {{ f3(shadow.live.precision_at_k) }} precision in its top {{ shadow.k }} against {{ f3(shadow.shadow.precision_at_k) }} for {{ shadow.shadow.version }}{% endif %}.</span>{% endif %}{% if retired %}<span class="ln">Retired: {{ names(retired) }}.</span>{% endif %}{% endif %}{% endcall %}{% endif %}</h2>
+  <div class="scroll" role="region" aria-label="Measures by version, scrolls sideways" tabindex="0">
     <table class="versus" aria-labelledby="md-side">
-      <thead><tr><th scope="col">Measure</th>{% for r in side %}<th scope="col" class="vcol">{{ r.version }}<span class="sub {{ 'good' if r.status == 'live' else 'acc' }}">{{ r.status }}{% if r.simulated %}{{ dg() }}{% endif %}</span></th>{% endfor %}</tr></thead>
+      <thead><tr><th scope="col">Measure</th>{% for r in side %}<th scope="col" class="vcol">{{ r.version }}<span class="sub {{ 'good' if r.status == 'live' else ('acc' if r.status == 'candidate' else '') }}">{{ r.status_word }}{% if r.simulated %}{{ dg() }}{% endif %}</span></th>{% endfor %}</tr></thead>
       <tbody class="num">
         <tr><th scope="row">Trained</th>{% for r in side %}<td>{{ r.trained or nr() }}{% if r.notes %}<span class="sub">{{ r.notes }}{% if r.simulated %}{{ dg() }}{% endif %}</span>{% endif %}</td>{% endfor %}</tr>
         {% if side|selectattr('split')|list %}<tr><th scope="row">Trained on<span class="sub">then calibrated on</span></th>{% for r in side %}<td>{% if r.split %}{{ r.split.train or nr() }}<span class="sub">{{ r.split.calibration or '[NOT RECORDED]' }}</span>{% else %}{{ nr() }}{% endif %}</td>{% endfor %}</tr>{% endif %}
@@ -232,27 +232,6 @@ details[open]>summary{margin-bottom:8px}
   {% else %}<p>No handed-out lead worked yet.</p>{% endif %}
 </section>
 {% else %}
-<section id="sign-off" class="msec" aria-labelledby="md-sign">
-  {% if waiting %}{% set r = waiting[0] %}
-  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when the automatic sign-off approves it as the best candidate of the round, or, with that switched off, when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
-  {{ autoline() }}
-  {{ signoff(r) }}
-  {% if waiting|length > 1 %}{% set older = waiting[1:] %}
-  <p>Also waiting{% if not (older|selectattr('approvals')|list) %}, unsigned{% endif %}: {% for o in older %}{{ o.version }} (trained {{ o.trained or '[NOT RECORDED]' }}{% if o.signed.marketing or o.signed.sales %}; {{ signed_teams(o) }}{% endif %}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}.</p>
-  {% for o in older %}<details{% if stale == o.version %} open{% endif %}>
-    <summary>Sign off {{ o.version }}</summary>
-    <div class="msec">{{ signoff(o) }}</div>
-  </details>{% endfor %}
-  {% endif %}
-  <a class="tap" href="/decisions">Every approval and send-back so far, on Decisions</a>
-  {% else %}
-  <h2 id="md-sign" class="kicker">Sign off{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when the automatic sign-off approves it as the best candidate of the round, or, with that switched off, when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
-  {{ autoline() }}
-  <p>No candidate waiting. The next appears after a retrain (<code>python run.py train</code>, or the scheduler's monthly job).</p>
-  {% endif %}
-</section>
-
-<hr class="rule">
 
 <section class="msec" aria-labelledby="md-mon">
   <h2 id="md-mon" class="kicker">Channel monitor{% if monitor %} · {{ monitor.period }}{% endif %}, worked leads {{ 'in the mock portal' if env == 'mock' else 'in HubSpot' }}{{ dg() }}{% if monitor %}{% call note('mon-note', 'How the limits work') %}<span class="ln">Share booked against the leads' average score, limits three standard errors either side: inside is noise, outside a real shift.</span><span class="ln">Under {{ min_group }} worked leads in a month: held, not judged.</span><span class="ln">{% if monitor.earlier %}Earlier months in the run: {{ monitor.earlier|join(' ') }} {% endif %}Run {{ when(monitor.run) }} log time.</span>{% endcall %}{% endif %}</h2>
@@ -311,17 +290,39 @@ details[open]>summary{margin-bottom:8px}
       </tbody>
     </table>
   </div>
-  <a class="tap" href="/decisions">Every worked, skipped and junk call, on Decisions</a>
+  {% if can.view_decisions %}<a class="tap" href="/decisions">Every worked, skipped and junk call, on Decisions</a>{% endif %}
 </section>
 {% if can.view_flags %}
 <hr class="rule">
 
 <section class="msec" aria-labelledby="md-flags">
-  <h2 id="md-flags" class="kicker">Flagged leads</h2>
+  <h2 id="md-flags" class="kicker">Leads to check</h2>
   <p>{% if flags_open %}{{ flags_open }} lead{{ 's' if flags_open != 1 }} where the record disagrees with the number, raised by the reader and waiting for marketing.{% else %}None open: the reader found nothing to raise.{% endif %}</p>
-  <a class="tap" href="/flagged">Flagged leads, with the record's own words</a>
+  <a class="tap" href="/flagged">Leads to check, with the record's own words</a>
 </section>
 {% endif %}
+
+<hr class="rule">
+
+<section id="sign-off" class="msec" aria-labelledby="md-sign">
+  {% if waiting %}{% set r = waiting[0] %}
+  <h2 id="md-sign" class="kicker">Sign off {{ r.version }}{% if waiting|length > 1 %}, the newest candidate{% endif %}{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when the automatic sign-off approves it as the best candidate of the round, or, with that switched off, when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
+  {{ autoline() }}
+  {{ signoff(r) }}
+  {% if waiting|length > 1 %}{% set older = waiting[1:] %}
+  <p>Also waiting{% if not (older|selectattr('approvals')|list) %}, unsigned{% endif %}: {% for o in older %}{{ o.version }} (trained {{ o.trained or '[NOT RECORDED]' }}{% if o.signed.marketing or o.signed.sales %}; {{ signed_teams(o) }}{% endif %}){% if not loop.last %}{{ ' and ' if loop.revindex == 2 else ', ' }}{% endif %}{% endfor %}.</p>
+  {% for o in older %}<details{% if stale == o.version %} open{% endif %}>
+    <summary>Sign off {{ o.version }}</summary>
+    <div class="msec">{{ signoff(o) }}</div>
+  </details>{% endfor %}
+  {% endif %}
+  {% if can.view_decisions %}<a class="tap" href="/decisions">Every approval and send-back so far, on Decisions</a>{% endif %}
+  {% else %}
+  <h2 id="md-sign" class="kicker">Sign off{% call note('sign-note', 'How a version goes live') %}<span class="ln">Live: when the automatic sign-off approves it as the best candidate of the round, or, with that switched off, when one named person from marketing and one from sales approve it. Until then routing keeps {{ current.version if current else 'the cold-start points table' }}.</span><span class="ln">Going live rescores the pool, best-ranked leads first.</span><span class="ln">Sent back: retired.</span>{% endcall %}</h2>
+  {{ autoline() }}
+  <p>No candidate waiting. The next appears after a retrain (<code>python run.py train</code>, or the scheduler's monthly job).</p>
+  {% endif %}
+</section>
 {% endif %}
 
 {% if env == 'mock' %}<footer><ol class="fnotes"><li id="fn-sim">Simulated · synthetic data. Every lead comes from the mock portal. {% set sims = regs|selectattr('simulated')|list|reverse|map(attribute='version')|list %}{% if sims %}{{ names(sims) }} {{ 'was' if sims|length == 1 else 'were each' }} trained after one more simulated month{% if seeds_text %} ({{ seeds_text }}){% endif %}; every{% else %}Every{% endif %} booking and first touch is simulated. Log times are wall clock, UTC; the service clock is frozen at {{ clock_text }}.</li></ol></footer>{% endif %}
