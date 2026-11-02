@@ -1,0 +1,12 @@
+# What `vercel deploy` from this folder leaves out (the data comes from Blob at run time, see asgi.py).
+# Anchored with / so a code folder of the same name (src/auxocase/data) still goes.
+/.venv
+/data
+/outputs
+/tests
+/docs/decks
+/scripts
+/knowledge
+/.env*
+!/.env.example
+**/__pycache__

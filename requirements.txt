@@ -1,9 +1,13 @@
-numpy>=2.0
-pandas>=2.2
-scikit-learn>=1.5
-fastapi>=0.115
-uvicorn>=0.30
-jinja2>=3.1
-httpx>=0.27
-python-multipart>=0.0.9
+# Runtime pins match the versions the model pickles were written with (another scikit-learn may not load them).
+numpy==2.4.6
+pandas==3.1.0
+scipy==1.17.1
+scikit-learn==1.9.1
+fastapi==0.162.0
+starlette==1.10.0
+uvicorn==0.54.0
+jinja2==3.1.6
+httpx==0.28.1
+python-multipart==0.0.32
+anthropic
 pytest>=8.0

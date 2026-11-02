@@ -13,3 +13,4 @@ data/*.db-wal
 data/models/
 data/backups/
 .vercel
+.env*
