@@ -64,6 +64,9 @@ from .views.stats import hit_rate
 
 TEMPLATES = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
 TEMPLATES.env.globals["email_html"] = branded        # a draft as the lead will see it: the lead page's preview, and what is sent
+# Vercel Web Analytics: on Vercel the host serves its script and takes its page views at /_vercel/insights on the
+# page's own origin, so the CSP's 'self' admits both; anywhere else the path does not exist and the tag is left out.
+TEMPLATES.env.globals["vercel_analytics"] = bool(os.environ.get("VERCEL"))
 MAX_RANK_MOVE = 5    # L12: a bounded override buys adoption without handing the queue back to gut feel
 
 

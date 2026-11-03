@@ -177,3 +177,16 @@ def test_the_demo_portal_lists_its_logins(world):
     assert "Demo logins" in page and "<code>sdr1</code>" in page and auth.DEMO_PASSWORD in page and "their own queue" in page
     r = client.post("/login", data={"username": "sdr2", "password": auth.DEMO_PASSWORD}, follow_redirects=False)
     assert r.headers["location"] == "/queue/901"
+
+
+def test_vercel_analytics_rides_on_vercel_only(world, monkeypatch):
+    from auxocase.service.app import TEMPLATES
+    path, conn, hs = world
+    client = TestClient(create_app(path))
+    tag = '<script src="/_vercel/insights/script.js" defer></script>'
+    assert tag not in client.get("/login").text                                # off Vercel the path does not exist
+    monkeypatch.setitem(TEMPLATES.env.globals, "vercel_analytics", True)
+    assert tag in client.get("/login").text
+    log_in(client, "alex", PW)
+    r = client.get("/queue/900")
+    assert tag in r.text and "script-src 'self'" in r.headers["content-security-policy"]    # same origin: the CSP admits it

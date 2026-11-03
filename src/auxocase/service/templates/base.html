@@ -143,6 +143,7 @@ h2.kicker[id]{scroll-margin-top:24px}
 {% block style %}{% endblock %}
 </style>
 <script src="/assets/app.js" defer></script>
+{% if vercel_analytics %}<script src="/_vercel/insights/script.js" defer></script>{% endif %}
 </head>
 <body>
 <div class="shell">
